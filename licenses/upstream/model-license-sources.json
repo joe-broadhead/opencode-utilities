@@ -1,0 +1,8 @@
+{
+  "KittenTTS-Apache-2.0.txt": "https://raw.githubusercontent.com/KittenML/KittenTTS/b9517e3050adced306219f8bea5f117d87ecfaa7/LICENSE",
+  "Whisper-MIT.txt": "https://raw.githubusercontent.com/openai/whisper/86098128c0b4f24f0e2aa2994de830614b474227/LICENSE",
+  "kitten-model-card.md": "https://huggingface.co/KittenML/kitten-tts-nano-0.8-int8/raw/84781d74e29ee25217551556398b42f80593a813/README.md",
+  "whisper-model-card.md": "https://huggingface.co/ggerganov/whisper.cpp/raw/5359861c739e955e79d9a303bcbc70fb988958b1/README.md",
+  "misaki-original-LICENSE.txt": "https://raw.githubusercontent.com/hexgrad/misaki/fba1236595f2d2bf21d414ba6e57d25256afada3/LICENSE",
+  "misaki-original-README.md.txt": "https://raw.githubusercontent.com/hexgrad/misaki/fba1236595f2d2bf21d414ba6e57d25256afada3/README.md"
+}

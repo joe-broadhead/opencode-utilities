@@ -1,0 +1,7 @@
+{
+  "rust": "1.96.0",
+  "binaries": {
+    "time-keep": { "module": "time", "repo": "https://github.com/joe-broadhead/time-keep", "commit": "0dfc8892f43c7ad36d9fe204f9510e8a3cc3fec8" },
+    "weather-signal": { "module": "weather", "repo": "https://github.com/joe-broadhead/weather-signal", "commit": "ae1dc3b644a37bc566e7d1d0de56576aa6ff45c5" }
+  }
+}

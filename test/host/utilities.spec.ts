@@ -1,0 +1,254 @@
+// Utilities on the public @opencode/sdk host (no private host imports), with a fake runtime that makes
+// the real runtime's permission requests. This is where V3 is recorded: the shipped permission mechanism
+// is the default-ask agent rules, and user rules and saved approvals win over them.
+import { HOST_VERSION, project, removeRoot, startHost } from "./harness.js"
+import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
+import { readFileSync } from "node:fs"
+import { fileURLToPath } from "node:url"
+import { z } from "zod"
+import { DEFAULT_ASK, TOOLS, type ToolName } from "../../src/domain/contract.js"
+import type { Plugin } from "@opencode/plugin"
+import { createPlugin } from "../../src/host/plugin.js"
+import { DEFAULT_RULES } from "../../src/host/permissions.js"
+import { formatStatus, Utilities } from "../../src/rpc.js"
+import { fakeRuntimes, failure, type FakeRuntime } from "./runtime.js"
+import { INPUTS } from "./samples.js"
+
+setDefaultTimeout(60_000)
+const packageRoot = fileURLToPath(new URL("../../", import.meta.url))
+const version = (JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }).version
+const NAMES = Object.keys(TOOLS) as ToolName[]
+const allow = (action: string) => ({ action, resource: "*", effect: "allow" })
+
+type Rule = { action: string; resource: string; effect: string }
+const contexts = new Map<string, Pick<Plugin.Context, "tool">>()
+const observer: Plugin.Plugin = { id: "test.observer", setup(ctx) { contexts.set(ctx.location.directory, ctx) } }
+const runtimes = fakeRuntimes({ speech: "SPEECH_ASSETS_MISSING" })
+const dirs = {
+  main: project("main", { experimental: { schedules: true }, agents: { reviewer: { mode: "primary", description: "Defined only in config" } } }),
+  allowed: project("allowed", { experimental: { schedules: true }, permissions: ["utilities_weather_*", "utilities_timer_*", "utilities_speech_*"].map(allow) }),
+  denied: project("denied", { experimental: { schedules: true }, permissions: [{ action: "utilities_speech_*", resource: "*", effect: "deny" }] }),
+  install: project("install", {}),
+}
+let host: Awaited<ReturnType<typeof startHost>>
+let calls = 0, closed = false
+
+const runtime = (directory: string) => runtimes.created.find(r => r.options.location.directory === directory) as FakeRuntime
+async function boot(directory: string, agent = "build") {
+  const session = await host.sdk.session.create({ agent, location: { directory } })
+  // Plugins set up on the location's first listing, which fails while they are still activating.
+  await waitFor(() => host.sdk.agent.list({ location: { directory } }).then(() => contexts.has(directory), () => false), 30_000)
+  return session.id
+}
+async function tools(directory: string) {
+  return (await contexts.get(directory)!.tool.list()).filter(t => t.id.startsWith("utilities_"))
+}
+/** Runs a registered executor with a real session, answering each permission request in turn. */
+async function call(directory: string, sessionID: string, tool: ToolName, replies: ("once" | "always" | "reject")[] = [], agent = "build", input: object = INPUTS[tool]) {
+  const definition = (await tools(directory)).find(t => t.id === `utilities_${tool}`)
+  if (!definition) throw new Error(`utilities_${tool} is not registered`)
+  const id = ++calls
+  let settled: { result?: { output?: unknown; content?: unknown }; error?: any } | undefined
+  const run = definition.execute(input, { sessionID, agent, messageID: `msg_test${id}`, id: `call_test${id}`, signal: new AbortController().signal, progress: async () => {} } as never)
+    .then(result => (settled = { result }), error => (settled = { error }))
+  const requests: { action: string; resources: readonly string[]; save?: readonly string[]; source?: unknown }[] = []
+  const deadline = Date.now() + 10_000
+  while (!settled && Date.now() < deadline) {
+    const [request] = await host.sdk.permission.list({ sessionID })
+    if (!request) { await Bun.sleep(25); continue }
+    requests.push(request)
+    await host.sdk.permission.reply({ sessionID, requestID: request.id, decision: replies.shift() ?? "reject" })
+  }
+  await run
+  return { ...settled!, requests }
+}
+/** Runs a Code Mode program through the host's own tool path, unattended, as a schedule condition does. */
+async function codemode(sessionID: string, body: string) {
+  const code = `const seen = {}\n${body}\nthrow new Error("SEEN " + JSON.stringify(seen))`
+  const message = await host.sdk.experimental.schedule.create({ sessionID, name: "utilities-check", when: { in: "6 hours" }, if: { code }, prompt: "never wakes" } as never)
+    .then(() => "created", (error: Error) => error.message)
+  const seen = /SEEN (\{.*\})/s.exec(message)
+  if (!seen) throw new Error(`the program did not finish: ${message}`)
+  return JSON.parse(seen[1]!) as Record<string, unknown>
+}
+/** Calls each tool once; `seen[name]` is the output's key count, or the error the program caught. */
+const program = (names: readonly ToolName[]) => names.map(name => `try { seen[${JSON.stringify(name)}] = Object.keys(await tools.utilities.${name}(${JSON.stringify(INPUTS[name])})).length } catch (error) { seen[${JSON.stringify(name)}] = String(error.message) }`).join("\n")
+const succeeded = (seen: Record<string, unknown>) => Object.fromEntries(Object.entries(seen).map(([name, value]) => [name, typeof value === "number" && value > 0 ? "ok" : value]))
+
+beforeAll(async () => {
+  host = await startHost([createPlugin({ createRuntime: runtimes.create, packageRoot }), observer])
+})
+afterAll(async () => {
+  if (!closed) await host?.sdk.close()
+  removeRoot()
+})
+
+describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
+  test("registers every available tool with its description, field descriptions, pins and permission name", async () => {
+    await boot(dirs.main)
+    const registered = await tools(dirs.main)
+    expect(registered.map(t => t.id).sort()).toEqual(NAMES.map(n => `utilities_${n}`).sort())
+    expect(registered.filter(t => t.id.startsWith("utilities_timer_")).map(t => t.id).sort()).toEqual(["utilities_timer_check", "utilities_timer_delete", "utilities_timer_get", "utilities_timer_list", "utilities_timer_set"])
+    for (const tool of registered) {
+      expect(tool.description.length).toBeGreaterThan(60)
+      expect(tool.options).toMatchObject({ namespace: "utilities", permission: tool.id })
+      expect(tool.options?.codemode).not.toBe(false)
+      const schema = z.toJSONSchema(tool.input as z.ZodType, { io: "input" }) as { properties?: Record<string, { description?: string }>; oneOf?: { properties: Record<string, { description?: string }> }[]; anyOf?: { properties: Record<string, { description?: string }> }[] }
+      for (const shape of [schema, ...(schema.oneOf ?? schema.anyOf ?? [])]) for (const [field, property] of Object.entries(shape.properties ?? {})) expect(`${tool.id}.${field}: ${property.description ?? ""}`).toMatch(/: \S/)
+    }
+    expect(registered.filter(t => t.options?.pinned).map(t => t.id).sort()).toEqual(["utilities_time_convert", "utilities_time_now", "utilities_weather_current"])
+    const skills = await host.sdk.skill.list({ location: { directory: dirs.main } })
+    expect(skills.data.map((s: { id: string }) => s.id).filter((id: string) => id.startsWith("utilities")).sort()).toEqual(["utilities-speech", "utilities-time", "utilities-weather"])
+    const commands = await host.sdk.command.list({ location: { directory: dirs.main } })
+    expect(commands.data.map((c: { name: string }) => c.name).filter((n: string) => n.startsWith("utilities")).sort()).toEqual(["utilities-speech-install", "utilities-status"])
+  })
+
+  test("inserts the ask rules right after each agent's base allow; config-only agents are named with the fix", async () => {
+    const { data: agents } = await host.sdk.agent.list({ location: { directory: dirs.main } })
+    const rules = (id: string) => (agents as { id: string; permissions: Rule[] }[]).find(a => a.id === id)!.permissions.map(r => `${r.effect} ${r.action} ${r.resource}`)
+    const block = DEFAULT_RULES.map(r => `${r.effect} ${r.action} ${r.resource}`)
+    for (const id of ["build", "plan", "general", "explore"]) expect(rules(id).slice(0, 6)).toEqual(["allow * *", ...block])
+    expect(rules("plan").filter(r => r.startsWith("deny")).length).toBeGreaterThan(0)
+    expect(rules("plan").findIndex(r => r.startsWith("deny"))).toBeGreaterThan(5) // Plan's own denies still come later and win
+    expect(rules("explore").at(-1)?.startsWith("deny") || rules("explore").includes("deny * *")).toBe(true)
+    expect(rules("reviewer").some(r => r.includes("utilities_"))).toBe(false)
+    const status = await host.sdk.rpc(Utilities).status({}, { location: { directory: dirs.main } })
+    expect(status.permissions.askByDefault).toEqual([...DEFAULT_ASK])
+    expect(status.permissions.unguardedAgents).toContain("reviewer")
+    expect(status.permissions.unguardedAgents).not.toContain("build")
+    expect(status.permissions.next).toContain("agents.<name>.permissions")
+    expect(formatStatus(status)).toContain(DEFAULT_RULES.map(rule => JSON.stringify(rule)).join(",\n  "))
+  })
+
+  test("computation, timer reads and status run unattended through the host's tool path", async () => {
+    const sessionID = await boot(dirs.main)
+    const reads = NAMES.filter(n => TOOLS[n].effect === "compute" || TOOLS[n].effect === "read-state")
+    expect(reads.length).toBe(15)
+    expect(succeeded(await codemode(sessionID, program(reads)))).toEqual(Object.fromEntries(reads.map(name => [name, "ok"])))
+  })
+
+  test("side effects ask under Build; a decline propagates as the host's own error", async () => {
+    const sessionID = await boot(dirs.main)
+    const declined = await call(dirs.main, sessionID, "weather_current", ["reject"])
+    expect(declined.requests.map(r => [r.action, r.resources])).toEqual([["utilities_weather_current", ["api.open-meteo.com"]]])
+    expect(declined.requests[0]!.source).toMatchObject({ type: "tool" })
+    expect(declined.error).toBeDefined()
+    expect(declined.error.metadata?.code).toBeUndefined()
+    const approved = await call(dirs.main, sessionID, "weather_current", ["once"])
+    expect(approved.requests).toHaveLength(1)
+    expect(approved.result?.output).toMatchObject({ attribution: "Weather data by Open-Meteo.com (CC BY 4.0)" })
+    for (const tool of ["timer_set", "timer_delete"] as const) {
+      const asked = await call(dirs.main, sessionID, tool, ["once"])
+      expect(asked.requests.map(r => [r.action, r.resources, r.save])).toEqual([[`utilities_${tool}`, ["timer:review"], ["timer:*"]]])
+    }
+  })
+
+  test("the speech download asks before its first use, then the tool list reloads", async () => {
+    const sessionID = await boot(dirs.main)
+    const speech = await call(dirs.main, sessionID, "speech_synthesize", ["once", "once"])
+    expect(speech.requests.map(r => r.action)).toEqual(["utilities_speech_download", "utilities_speech_synthesize"])
+    expect(speech.result?.output).toMatchObject({ path: expect.any(String), sha256: expect.any(String) })
+    const status = await host.sdk.rpc(Utilities).status({}, { location: { directory: dirs.main } })
+    expect(status.modules.speech.availability).toBe("AVAILABLE")
+    // A module that becomes unavailable disappears; it comes back when it recovers.
+    runtime(dirs.main).setAvailability("weather", "INTEGRITY_MISMATCH")
+    await waitFor(async () => !(await tools(dirs.main)).some(t => t.id === "utilities_weather_current"))
+    expect((await tools(dirs.main)).some(t => t.id === "utilities_time_now")).toBe(true)
+    runtime(dirs.main).setAvailability("weather", "AVAILABLE")
+    await waitFor(async () => (await tools(dirs.main)).some(t => t.id === "utilities_weather_current"))
+  })
+
+  test("a saved Always allow skips the next prompt (V3)", async () => {
+    const sessionID = await boot(dirs.main)
+    const first = await call(dirs.main, sessionID, "timer_set", ["always"], "build", { name: "first", deadline: "2026-11-02T09:00:00Z" })
+    expect(first.requests).toHaveLength(1)
+    const { projectID } = await host.sdk.session.get({ sessionID })
+    const saved = (await host.sdk.permission.saved.list({ projectID }) as { id: string; action: string; resource: string }[]).filter(s => s.action === "utilities_timer_set")
+    expect(saved.map(s => s.resource)).toEqual(["timer:*"])
+    const second = await call(dirs.main, sessionID, "timer_set", [], "build", { name: "second", deadline: "2026-11-02T09:00:00Z" })
+    expect(second.requests).toHaveLength(0)
+    expect(second.error).toBeUndefined()
+    for (const item of saved) await host.sdk.permission.saved.remove({ id: item.id })
+  })
+
+  test("config allow rules skip the prompts, and every tool executes through the host's tool path (V3)", async () => {
+    const sessionID = await boot(dirs.allowed)
+    for (const tool of ["weather_current", "timer_set", "speech_synthesize"] as const) {
+      const result = await call(dirs.allowed, sessionID, tool)
+      expect([tool, result.requests.length, result.error]).toEqual([tool, 0, undefined])
+    }
+    const half = Math.ceil(NAMES.length / 2)
+    const seen = { ...await codemode(sessionID, program(NAMES.slice(0, half))), ...await codemode(sessionID, program(NAMES.slice(half))) }
+    expect(succeeded(seen)).toEqual(Object.fromEntries(NAMES.map(name => [name, "ok"])))
+  })
+
+  test("a user deny hides and blocks the tools it names", async () => {
+    const sessionID = await boot(dirs.denied)
+    await expect(codemode(sessionID, program(["speech_cleanup"]))).rejects.toThrow("Permission denied: utilities_speech_cleanup")
+    expect(succeeded(await codemode(sessionID, program(["time_now"])))).toEqual({ time_now: "ok" })
+  })
+
+  test("Utilities failures reach the caller as Tool.Error with code and next step", async () => {
+    const sessionID = await boot(dirs.main)
+    runtime(dirs.main).failures.set("time_calendar", failure("TIMER_EXISTS", "A timer named 'review' already exists.", "Call utilities_timer_set with replace: true to overwrite it."))
+    const failed = await call(dirs.main, sessionID, "time_calendar")
+    runtime(dirs.main).failures.clear()
+    expect(failed.error?._tag).toBe("Tool.Error")
+    expect(failed.error?.message).toBe("TIMER_EXISTS: A timer named 'review' already exists. Next step: Call utilities_timer_set with replace: true to overwrite it.")
+    expect(failed.error?.metadata).toEqual({ code: "TIMER_EXISTS", hint: "Call utilities_timer_set with replace: true to overwrite it." })
+  })
+
+  test("commands: status posts to the session; the speech install asks as the session's agent first", async () => {
+    const sessionID = await boot(dirs.install)
+    await host.sdk.session.command({ sessionID, name: "utilities-status", text: "" })
+    const install = host.sdk.session.command({ sessionID, name: "utilities-speech-install", text: "" })
+    let request: Awaited<ReturnType<typeof host.sdk.permission.list>>[number] | undefined
+    await waitFor(async () => (request = (await host.sdk.permission.list({ sessionID }))[0]) !== undefined)
+    expect(request).toMatchObject({ action: "utilities_speech_download", resources: ["github.com"] })
+    expect(request!.source).toBeUndefined()
+    await host.sdk.permission.reply({ sessionID, requestID: request!.id, decision: "once" })
+    await install
+    const inbox = (await host.sdk.session.inbox.list({ sessionID })) as unknown as { payload?: { text?: string } }[]
+    const texts = inbox.map(item => item.payload?.text ?? "")
+    expect(texts[0]).toStartWith("Utilities status\nConnection: ")
+    expect(texts[0]).toContain(`Utilities ${version}`)
+    expect(texts[0]).toContain(`\nOpenCode: ${HOST_VERSION} (tested). `)
+    expect(texts[1]).toStartWith("Downloaded 1 speech file")
+    expect(runtime(dirs.install).modules.speech).toBe("AVAILABLE")
+  })
+})
+
+describe("host compatibility and unload", () => {
+  test("an untested host is refused, and allowUntestedHost runs it with a warning in the status", async () => {
+    const refused = fakeRuntimes(), allowed = fakeRuntimes()
+    const untested = await startHost([
+      createPlugin({ createRuntime: refused.create, packageRoot }),
+      { id: "test.allowed", setup: (ctx: Plugin.Context) => createPlugin({ createRuntime: allowed.create, packageRoot }).setup({ ...ctx, options: { allowUntestedHost: true } }) },
+      observer,
+    ], "2.3.0")
+    try {
+      const location = { directory: project("untested", {}) }
+      await untested.sdk.agent.list({ location })
+      expect(untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities is tested on OpenCode >=2.2.3 <2.3.0, found 2.3.0. Next step: Use OpenCode 2.2.3 or a later 2.2.x release, or set the plugin option allowUntestedHost: true"))).toBe(true)
+      expect(refused.created).toHaveLength(0)
+      expect(allowed.created).toHaveLength(1)
+      const status = await untested.sdk.rpc(Utilities).status({}, { location })
+      expect(status.host).toMatchObject({ found: "2.3.0", availability: "HOST_UNTESTED", next: expect.stringContaining("untested") })
+    } finally { await untested.sdk.close() }
+  })
+
+  test("unloading closes every runtime and its availability subscription", async () => {
+    await host.sdk.close()
+    closed = true
+    expect(runtimes.created.length).toBeGreaterThan(0)
+    for (const created of runtimes.created) expect([created.closed, created.listenerCount()]).toEqual([true, 0])
+  })
+})
+
+async function waitFor(check: () => Promise<boolean>, timeout = 10_000) {
+  const deadline = Date.now() + timeout
+  while (!(await check())) {
+    if (Date.now() > deadline) throw new Error("timed out waiting for the host")
+    await Bun.sleep(50)
+  }
+}
