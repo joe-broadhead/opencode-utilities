@@ -4,6 +4,8 @@
 package's `package.json` as JSON, without loading the plugin, when a person reviews the exact
 version, and uses it as follows.
 
+Jelly names the plugin **Utilities** (`jelly.title`), with the package name and version beneath.
+
 ## Tools and permissions
 
 26 tools are declared (22 read-only). Jelly's agents have no base "allow everything"
@@ -33,14 +35,9 @@ None yet.
 
 ## Signing in
 
-No sign-in is needed. The optional Open-Meteo commercial key is OpenCode's key integration `open-meteo`; Jelly shows it as a sign-in card.
+Nothing is required. `jelly.signIns` declares one optional sign-in, `open-meteo`: OpenCode's key integration for Open-Meteo's commercial key (`required: false`). The free tier works without it, so the card stays Connected and the row reads Optional, with a link to Open-Meteo's pricing. A key that Open-Meteo turns down shows this plugin's `needs_auth` message on the row, with Replace the key.
 
-<!-- AUTH-PLACEHOLDER (Jelly rd152): settings and secrets for signing in from Jelly are being
-designed by Jelly's auth lane. Until that lands this package declares no `contributes.settings`;
-add the auth declarations here and in package.json when that design is agreed. -->
-**Not yet declared for Jelly.** How this plugin's sign-in appears in Jelly (desktop and web,
-expiry, reconnect and sign-out) is still being designed; this section and
-`jelly.contributes.settings` will say it once it is.
+Jelly folds the declared sign-ins into this plugin's one card, which shows each as Connected, Not signed in or Sign in again (expired or revoked), and starts, renews and signs out of each. An agent's `jelly_connection_request`, or a tool result that names this plugin's "Run /connect and choose …" next step, opens the same card. The plugin still signs in through OpenCode, as it does without Jelly; the declaration only tells Jelly which of the engine's integrations and servers are this plugin's.
 
 ## Versions
 

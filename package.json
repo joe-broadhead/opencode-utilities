@@ -50,6 +50,7 @@
     "zod": "4.6.7"
   },
   "jelly": {
+    "title": "Utilities",
     "tools": [
       {
         "name": "utilities.status",
@@ -215,6 +216,18 @@
     ],
     "rpc": [],
     "views": [],
+    "signIns": [
+      {
+        "id": "open-meteo",
+        "label": "Open-Meteo",
+        "integration": "open-meteo",
+        "required": false,
+        "help": {
+          "url": "https://open-meteo.com/en/pricing",
+          "label": "Commercial use needs a key from Open-Meteo"
+        }
+      }
+    ],
     "contributes": {
       "homeFeeds": [],
       "homeWidgets": [],
