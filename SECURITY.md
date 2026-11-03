@@ -38,4 +38,16 @@ Weather locations, timer text, speech text and audio, and file paths are private
 - **Deny is final.** A configured `deny` rule wins over every `ask`, `allow` and saved approval. Use `deny` for anything that must never run, including in non-interactive runs, because `--auto` approves asks and still cannot pass a deny.
 - **A top-level allow applies to every agent.** OpenCode adds top-level rules after each agent's built-in rules, and the last matching rule wins. So it skips the prompt for Build, and it also allows that action for Plan and Explore. Put the allow on the agent that should have it when a stricter agent must stay strict.
 - **File rules follow the host.** Transcription and a chosen synthesis path use `read` or `edit`. A file inside the project does not ask `external_directory`. A file outside the project does. The transcription source must be a regular file, not a symbolic link.
+- **Scripts follow the same rules.** See [Scripts](#scripts).
 - **Approval is not a network guarantee.** Approving a weather call does not make Open-Meteo accept it. Approving a download does not make the release exist. A hash mismatch discards the file.
+
+## Scripts
+
+The tools RPC (`utilities.tools.tools`, see [docs/scripting.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md)) runs the tools that change nothing for a script, with no model. It adds no authority:
+
+- A script names a session that names an agent, and runs as them. A tool that the agent's or the session's rules hide from the model is refused. The tool then makes the same permission requests it makes for the model, checked against the agent's rules, the session's rules and saved approvals.
+- An ask on a script's call is denied, not prompted: no one is there to answer it. So weather and the speech download, which ask by default, need an allow rule. The plugin's permission hook changes only an ask on one of its own script calls in flight, only to a deny, and leaves every other call alone.
+- Timer writes, synthesis and any tool added later that writes are never methods, even with an allow rule.
+- The Open-Meteo key stays with the weather program; a script never receives it. Errors carry the same codes and messages as the tools, with no input values, keys or paths.
+- OpenCode's `execute.before` and `execute.after` tool hooks, from any plugin, do not run for a script's call, so another plugin's policy hook does not see it. A script's calls are not recorded in the session.
+- The RPC is reachable only by callers of the OpenCode server API, who already hold the server's full authority. The session is not a login: it scopes a script to what its agent may do.

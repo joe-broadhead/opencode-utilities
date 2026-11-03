@@ -214,7 +214,8 @@ Use the engine name for the platform you run on. A hash mismatch or a missing fi
 | `/utilities-status` | Posts the full status into the session: the rows Connection, Account, Access, the modules, Tools, Agents without default rules (names, then the block, one rule per line), OpenCode, and one Next step (`Nothing to do.` when nothing is needed). |
 | `/utilities-speech-install` | Asserts `utilities_speech_download`, then downloads missing files. |
 | `/utilities` | TUI dialog, palette "Utilities: Status". Reads the `status` RPC method only, when it opens, and on server, agent and Open-Meteo key events, which it hears only while open. Shows the same lines as `/utilities-status`. `r` refreshes, `Esc` closes. The key hint reads `r refresh · esc close`. |
-| RPC `status` | The only RPC method. Returns the same status object. The TUI imports its contract from its own bundle; the package does not export it. |
+| RPC `status` | The `utilities.tools` RPC's only method. Returns the same status object. The TUI imports its contract from its own bundle; the package does not export it. |
+| RPC `utilities.tools.tools` | The tools RPC for scripts: `describe`, plus one method per tool that changes nothing, run as a session and its agent. Asks are refused, not prompted. Timer writes and synthesis are not methods. See [scripting.md](scripting.md). |
 
 Status fields: host check (`required`, `found`, `availability`, optional `next`), platform package, per-module availability, weather tier and key, speech file states (`missing`, `cached` or `pre-seeded`), voices, cache directory, output directory, due timer count, ask-by-default actions, and agents that did not receive the ask rules.
 

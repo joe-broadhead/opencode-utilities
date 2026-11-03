@@ -13,7 +13,10 @@ User-facing options, permission rules and limits are in [configuration.md](confi
 - the `open-meteo` key integration;
 - `/utilities-status` and `/utilities-speech-install`;
 - one RPC method, `status`;
+- the tools RPC `utilities.tools.tools`, with one `evaluate` permission hook;
 - three skills.
+
+The tools RPC (`src/host/scripting.ts`, on the shared module `src/host/tools-rpc.ts`) gives scripts the tools that change nothing, with no model. Each method runs `runTool`, the same function the model's tool runs, after parsing the input with the tool's schema, because OpenCode does not check an RPC method's inner input. It refuses a tool the session's agent or session rules hide, as OpenCode hides it from the model; the tool's own asserts then carry the script call's source id, and the hook turns an ask on one of those ids into a deny, since no one can answer it. Methods are chosen by effect: `compute`, `read-state`, `network` and `read-file`, never `write-state` or `write-file`. `describe` reports a method unavailable with its module's code exactly when the model's tool is not registered. `src/host/tools-rpc.ts` is a copy of a module shared by several plugins; only its block between the `PLUGIN-SPECIFIC` markers is Utilities'.
 
 The TUI part `utilities.tools.tui` is compiled at build time to `dist/tui.js`. It reads only `status`. OpenCode supplies `@opencode/plugin`, OpenTUI and Solid. The package has no peer dependencies and no install scripts.
 

@@ -333,13 +333,14 @@ describe("weather key and status", () => {
 
 describe("setup", () => {
   const registration = { dispose: async () => {} }
+  const disposed: string[] = []
   const ctx = (fail: boolean) => ({
     options: {}, app: { version: "2.2.3" }, location: { directory: "/repo/app", project: { id: "p", directory: "/repo" } },
-    permission: { assert: async () => {} },
+    permission: { assert: async () => {}, hook: async () => ({ dispose: async () => void disposed.push("hook") }) },
     integration: { transform: async () => registration, connection: {} },
     agent: { transform: async () => registration, list: async () => ({ data: [] }) },
     tool: { transform: async () => { if (fail) throw new Error("registration failed"); return registration }, reload: async () => {} },
-    rpc: { register: async () => registration }, command: { transform: async () => registration },
+    rpc: { register: async (contract: { id: string }) => ({ dispose: async () => void disposed.push(contract.id) }) }, command: { transform: async () => registration },
     skill: { transform: async () => registration, reload: async () => {} }, session: { synthetic: async () => {} },
   }) as never
   test("the runtime's location carries the project ID, the location directory and the project directory", async () => {
@@ -356,7 +357,10 @@ describe("setup", () => {
     expect(runtimes.created[0]!.listenerCount()).toBe(0)
     const cleanup = await plugin.setup(ctx(false))
     expect(runtimes.created[1]!.listenerCount()).toBe(1)
+    disposed.length = 0
     await (cleanup as () => Promise<void>)()
+    // The tools RPC and its evaluate hook go with the plugin; the status RPC is the host's to dispose.
+    expect(disposed.sort()).toEqual(["hook", "utilities.tools.tools"])
     expect(runtimes.created[1]).toMatchObject({ closed: true })
     expect(runtimes.created[1]!.listenerCount()).toBe(0)
   })
