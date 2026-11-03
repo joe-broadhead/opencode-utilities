@@ -15,6 +15,8 @@ import { fileURLToPath } from "node:url"
 import { DEFAULT_ASK, MODULES, PLATFORMS, PLUGIN_ID } from "../../src/domain/contract.js"
 import { detectTarget, isPlatform } from "../../src/domain/backends.js"
 import { HOST_RANGE } from "../../src/host/compat.js"
+import { SCRIPT_TOOLS } from "../../src/host/scripting.js"
+import { TOOLS_RPC_ID } from "../../src/host/tools-rpc.js"
 
 setDefaultTimeout(300_000)
 const repo = fileURLToPath(new URL("../../", import.meta.url))
@@ -201,7 +203,80 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
     expect(base).toBeGreaterThanOrEqual(0)
     expect(build!.permissions.slice(base + 1, base + 1 + DEFAULT_ASK.length)).toEqual([...DEFAULT_ASK].map(action => ({ action, resource: "*", effect: "ask" })))
   })
+
+  // The tools RPC on the same server: a script calls the tools that change nothing, as a session and its agent.
+  describe(`the tools RPC ${TOOLS_RPC_ID}`, () => {
+    const sessions: Record<string, string> = {}
+    const call = (session: string, method: string, input: unknown) => script(host, method, { sessionID: sessions[session] ?? session, input })
+    beforeAll(async () => {
+      const create = async (body: object) => ((await host.api("POST", "/api/session", body)).data as { data: { id: string } }).data.id
+      sessions.build = await create({ agent: "build" })
+      sessions.locked = await create({ agent: "locked" })
+      sessions.agentless = await create({})
+      // Session rules come after the agent's: one narrows build, one reopens a tool for locked, one allows everything.
+      sessions.narrow = await create({ agent: "build", permissions: [rule("utilities_time_now", "deny")] })
+      sessions.reopen = await create({ agent: "locked", permissions: [rule("utilities_time_now", "allow")] })
+      sessions.allowed = await create({ agent: "build", permissions: [rule("utilities_*", "allow")] })
+    })
+
+    test("describes exactly the tools that change nothing; the writes and an unknown tool are no methods, even with an allow rule", async () => {
+      const { value } = await script(host, "describe", {})
+      expect(value.methods.map((method: { name: string }) => method.name)).toEqual([...SCRIPT_TOOLS])
+      for (const method of value.methods) expect(method).toMatchObject({ kind: "plugin", action: `utilities_${method.name}` })
+      if (platformDir) for (const method of value.methods.filter((m: { name: string }) => /^(?:time|timer|weather)_/.test(m.name))) expect(method).toMatchObject({ available: true })
+      for (const name of ["timer_set", "timer_delete", "speech_synthesize", "unknown_tool"])
+        expect(await call("allowed", name, { name: "review", deadline: "2026-11-02T09:00:00Z", text: "hello" })).toMatchObject({ type: "rpc.method_not_found" })
+    })
+
+    test("runs a read with the real time program as the session's agent, with no model turn", async () => {
+      const result = await call("build", "time_now", { timezones: ["UTC"] })
+      if (!platformDir) return void expect(result).toMatchObject({ type: "failed", code: "PLATFORM_PACKAGE_MISSING" })
+      expect(result.value).toMatchObject({ format: "rfc3339", times: [{ timezone: "UTC", utc_offset: "+00:00" }] })
+      expect((await call("build", "speech_cleanup", { text: "um so hello  world" })).value).toMatchObject({ text: expect.stringContaining("hello world"), provider: "rules" })
+      const session = (await host.api("GET", `/api/session/${sessions.build}`)).data as { data: { tokens: { input: number; output: number } } }
+      expect(session.data.tokens).toMatchObject({ input: 0, output: 0 })
+    })
+
+    test("refuses a tool the agent hides, and applies the session's rules after the agent's", async () => {
+      expect(await call("locked", "time_now", {})).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
+      expect(await call("narrow", "time_now", {})).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
+      expect(await call("narrow", "time_zones", { region: "Europe" })).not.toMatchObject({ code: "PERMISSION_DENIED" })
+      expect(await call("reopen", "time_now", {})).not.toMatchObject({ code: "PERMISSION_DENIED" })
+      expect(await call("reopen", "time_zones", {})).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
+    })
+
+    test("refuses the weather ask, and the speech download ask, at once with no approval prompt left waiting", async () => {
+      const asks = ["weather_current", ...speechEngine ? ["speech_transcribe"] : []]
+      for (const method of asks) {
+        const started = Date.now()
+        const result = await call("build", method, method === "weather_current" ? { location: "Amsterdam" } : { path: "clip.wav" })
+        expect(result).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
+        expect(result.message).toMatch(/cannot answer an approval prompt/)
+        expect(Date.now() - started).toBeLessThan(5000)
+      }
+      const pending = (await host.api("GET", "/api/permission/request")).data as { data: unknown[] }
+      expect(pending.data.filter(request => JSON.stringify(request).includes(sessions.build!))).toEqual([])
+    })
+
+    test("names an unknown session and a session without an agent, checks the input, and refuses a bad envelope", async () => {
+      expect(await call("ses_does_not_exist", "time_now", {})).toMatchObject({ type: "failed", code: "SESSION_UNKNOWN" })
+      expect(await call("agentless", "time_now", {})).toMatchObject({ type: "failed", code: "SESSION_AGENT_REQUIRED" })
+      expect(await call("build", "time_now", { timezones: "UTC", extra: 1 })).toMatchObject({ type: "failed", code: "INPUT_INVALID" })
+      for (const envelope of [{ sessionID: sessions.build, input: {}, extra: true }, { input: {} }, { sessionID: sessions.build }])
+        expect(await script(host, "time_now", envelope)).toMatchObject({ type: "rpc.invalid_input" })
+    })
+  })
 })
+
+const rule = (action: string, effect: "allow" | "deny" | "ask") => ({ action, resource: "*", effect })
+
+/** A tools RPC call's output as `{ value }`, or its error's `{ type, code, message }`. */
+async function script(host: { api: (method: string, path: string, body?: unknown) => Promise<{ status: number; data: unknown }> }, method: string, input: unknown): Promise<Record<string, any>> {
+  const { status, data } = await host.api("POST", `/api/rpc/${TOOLS_RPC_ID}/${method}`, { input })
+  const body = data as Record<string, any>
+  if (status === 200) return { value: body.output }
+  return { type: body.type ?? body._tag, code: body.data?.code, message: String(body.message ?? data) }
+}
 
 /** The stock CLI for `version`: the OPENCODE_BIN_* path when set, otherwise the npm release with scripts off. */
 function stockBinary(version: string) {
@@ -225,7 +300,8 @@ async function serve(version: string, binary: string) {
   const root = join(temp, `host-${version}`)
   const home = join(root, "home"), directory = join(root, "project"), tmp = join(root, "tmp")
   for (const dir of [join(home, ".config"), join(home, ".local/share"), join(home, ".cache"), join(home, ".local/state"), directory, tmp]) mkdirSync(dir, { recursive: true })
-  writeFileSync(join(directory, "opencode.json"), JSON.stringify({ plugins: [installed] }))
+  // `locked`, an agent defined only in config, hides the time tools: the tools RPC tests use it.
+  writeFileSync(join(directory, "opencode.json"), JSON.stringify({ plugins: [installed], agents: { locked: { mode: "primary", permissions: [rule("utilities_time_*", "deny")] } } }))
   const password = randomBytes(18).toString("base64url"), port = await freePort()
   const env = {
     HOME: home, OPENCODE_TEST_HOME: home, TMPDIR: tmp,

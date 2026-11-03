@@ -9,6 +9,7 @@ import { StatusSchema } from "./status-schema.js"
 import { commandTransform } from "./commands.js"
 import { checkHost } from "./compat.js"
 import { createAuthorize, insertDefaultRules } from "./permissions.js"
+import { registerScripting } from "./scripting.js"
 import { loadSkills, skillTransform } from "./skills.js"
 import { buildStatus } from "./status.js"
 import { toolTransform } from "./tools.js"
@@ -40,8 +41,8 @@ export function createPlugin({ createRuntime, packageRoot }: PluginSources): Plu
         packageRoot,
       })
       const shutdown = new AbortController()
-      let unsubscribe = () => {}
-      const close = async () => { shutdown.abort(); unsubscribe(); await runtime.close() }
+      let unsubscribe = () => {}, stopScripting = async () => {}
+      const close = async () => { shutdown.abort(); unsubscribe(); await stopScripting(); await runtime.close() }
       try {
         let modules = (await runtime.status()).modules
         const enabled = (module: Module) => registrable(module, modules[module].availability)
@@ -49,7 +50,8 @@ export function createPlugin({ createRuntime, packageRoot }: PluginSources): Plu
         const skills = await loadSkills(packageRoot)
         await registerWeatherIntegration(ctx.integration)
         await ctx.agent.transform(insertDefaultRules)
-        await ctx.tool.transform(toolTransform({ runtime, weather, status, modules: () => modules }))
+        const sources = { runtime, weather, status, modules: () => modules }
+        await ctx.tool.transform(toolTransform(sources))
         await ctx.rpc.register(Utilities, {
           status: async (_input, context) => {
             try { return StatusSchema.parse(await status()) }
@@ -59,6 +61,8 @@ export function createPlugin({ createRuntime, packageRoot }: PluginSources): Plu
             }
           },
         })
+        // Scripts call the tools that change nothing with no model, as a session and its agent (docs/scripting.md).
+        stopScripting = await registerScripting(ctx, sources)
         await ctx.command.transform(commandTransform({ assert: input => ctx.permission.assert(input), synthetic: input => ctx.session.synthetic(input), runtime, status, signal: shutdown.signal }))
         await ctx.skill.transform(skillTransform(skills, enabled))
         // Availability changes, such as a finished speech download, rebuild the tool and skill lists.

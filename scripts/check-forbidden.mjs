@@ -36,7 +36,7 @@ const RULES = [
   { pattern: /["'`]@opencode\/ai(?:\/[^"'`]*)?["'`]/, message: "@opencode/ai changes incompatibly between patches; do not import it" },
   { pattern: /\bpackages\/(?:ai|client|core|opencode|plugin|protocol|schema|sdk|server|util)\/src\b/, message: "private host source import" },
   { pattern: /opencode-(?:plugin-consumer|plugin-images|granola)-host/, message: "pinned host checkout reference" },
-  { pattern: /\bhook\(\s*["']evaluate["']/, message: "permission evaluate hook" },
+  { pattern: /\bhook\(\s*["']evaluate["']/, evaluate: true, message: "permission evaluate hook (only the tools RPC's own, in src/host/tools-rpc.ts)" },
   { pattern: /\bevent\.effect\s*=(?!=)/, message: "a hook that changes a permission effect" },
   { pattern: /\b(?:config|options)\.policy\b|(?:^|[\s{,])policy\s*\??\s*:/, scope: ["src/", "dist/"], message: "plugin permission policy option" },
   { pattern: /\bexperimental\.policies\b|\bresponsePolicy\b/, message: "fork-only policy API" },
@@ -44,18 +44,29 @@ const RULES = [
   { pattern: /\bexperimental\s*\??\.\s*artifact\b|\bexperimental\s*\??\.?\[\s*["'`]artifact["'`]\s*\]|\{[^}]*\bartifact\b[^}]*\}\s*=\s*[\w$.?]*\bexperimental\b/, message: "ctx.experimental.artifact is experimental (new in 2.2.4); do not use it" },
   { pattern: /^import\s+\{[^}]*\bz\b[^}]*\}\s+from\s+["']zod["']/, scope: ["src/"], message: "import zod as `import * as z from \"zod\"`; a named import bundles every locale" },
 ]
+// The one exception to the evaluate-hook rule: the tools RPC (src/host/tools-rpc.ts) turns an ask on its own script
+// calls in flight into a deny, because no one is there to answer a script's prompt. It only tightens, and matches only
+// its own live call ids. It is allowed exactly once, in that file and in that file's section of dist/index.js.
+const SCRIPT_HOOK = "src/host/tools-rpc.ts"
+const scriptHooks = new Map([[SCRIPT_HOOK, 0], ["dist/index.js", 0]])
 const vendored = file => file.startsWith("dist/")
 for (const file of [...source, ...built]) {
   const content = readFileSync(join(root, file), "utf8")
-  // In dist/, only first-party sections are checked; Bun marks each bundled module with a `// <path>` comment.
-  let firstParty = true
+  // In dist/, only first-party sections are checked; the bundler marks each bundled module with a `// <path>` comment.
+  let firstParty = true, section = file
   content.split("\n").forEach((line, index) => {
-    if (vendored(file) && /^\/\/ (?:src|node_modules)\//.test(line)) firstParty = line.startsWith("// src/")
+    if (vendored(file) && /^\/\/ (?:src|node_modules)\//.test(line)) { firstParty = line.startsWith("// src/"); section = line.slice(3) }
     if (!firstParty) return
-    for (const rule of RULES) if ((!rule.scope || rule.scope.some(prefix => file.startsWith(prefix))) && rule.pattern.test(line)) report(file, index + 1, rule.message)
+    for (const rule of RULES) {
+      if (rule.scope && !rule.scope.some(prefix => file.startsWith(prefix))) continue
+      if (!rule.pattern.test(line)) continue
+      if (rule.evaluate && section === SCRIPT_HOOK && scriptHooks.has(file)) { scriptHooks.set(file, scriptHooks.get(file) + 1); continue }
+      report(file, index + 1, rule.message)
+    }
   })
   for (const call of assertCalls(content)) if (call.args > 1) report(file, call.line, "permission.assert takes one argument; the signal option is fork-only")
 }
+for (const [file, count] of scriptHooks) if (count !== 1) report(file, 0, `the tools RPC's evaluate hook must appear exactly once here, found ${count}`)
 
 /** `.assert(` calls with their top-level argument count, skipping strings and comments. */
 function assertCalls(content) {
