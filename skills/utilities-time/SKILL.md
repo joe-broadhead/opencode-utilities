@@ -36,3 +36,7 @@ Timers belong to the current project and never alert on their own. To remind the
 If an error says the timer state is unknown, read the timer with `utilities_timer_get` before trying again.
 
 If the user needs an alert that fires by itself, explain that these timers are polled and suggest OpenCode's experimental schedules instead (the `schedule_*` tools, turned on with `experimental.schedules` in opencode.json).
+
+## Scripts
+
+When the user wants a job that runs without you, such as a cron job that checks due timers, it can call these tools through the OpenCode server with no model. The RPC `utilities.tools.tools` has one method per tool that changes nothing, named without the `utilities_` prefix (`time_now`, `timer_check`, and so on), and `describe`, which lists them with their schemas. Each call is `opencode api post /api/rpc/utilities.tools.tools/<method>` with the body `{"input":{"sessionID":"<session>","input":<the tool's input>}}`. The script runs as that session's agent, so have it create its session once with `opencode api post /api/session` and a body such as `{"title":"timer check","agent":"build"}`. A script cannot set or delete timers. The details are in the plugin's `docs/scripting.md`.

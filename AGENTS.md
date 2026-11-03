@@ -5,7 +5,8 @@ This repository builds `@joe-broadhead/opencode-utilities`, an unofficial OpenCo
 ## Design
 
 - **Host.** Public `@opencode/plugin` APIs only. The host range is exactly `>=2.2.3 <2.3.0`, in `package.json` `opencode.host` and in the startup check; never `^2.2.3`.
-- **Stable IDs.** Plugin `utilities.tools`, TUI `utilities.tools.tui`, namespace `utilities`.
+- **Stable IDs.** Plugin `utilities.tools`, TUI `utilities.tools.tui`, namespace `utilities`, the status RPC `utilities.tools` and the tools RPC `utilities.tools.tools`.
+- **Scripts.** The tools RPC (`src/host/scripting.ts`) makes a method only of a tool whose effect is `compute`, `read-state`, `network` or `read-file`; never a write, whatever the rules say. Each method runs the tool's own path (`runTool`) and checks its own input. `src/host/tools-rpc.ts` is a copy of a module shared by several plugins: change only its block between the `PLUGIN-SPECIFIC` markers here, and the rest in the shared copy first.
 - **Permissions.** Default ask rules go in through `ctx.agent.transform`, directly after each agent's base `* * allow`. Leave agents with no base allow alone, never change a deny, and add no policy layer or allow-list option. An agent is guarded when the whole block appears anywhere after its base allow, because other plugins insert at the same index. Agents without the block are named with the fix: the block **first** in that agent's own `permissions`, followed by the user's top-level `utilities_*` rules. Never recommend the block at the top level.
 - **Plain assert.** `ctx.permission.assert(input)` with one argument, raced locally against the tool signal and fenced after it settles. Host permission errors propagate unchanged.
 - **One status model.** `/utilities-status`, the RPC `status` method and the TUI dialog render the same view with the S9 rows (Connection, Account, Access, the modules, Tools, Agents without default rules, OpenCode) and exactly one `Next step` line, `Nothing to do.` when nothing is needed. Status text is plain text. The dialog subscribes to events only while open. `utilities_status` renders it compactly, with the unguarded agents as a count. No `ctx.ui.slot` calls: the TUI has one palette command, "Utilities: Status" (`/utilities`), and its dialog.
@@ -21,7 +22,7 @@ This repository builds `@joe-broadhead/opencode-utilities`, an unofficial OpenCo
 - a second argument, or a signal option, to `permission.assert`;
 - `ctx.experimental.artifact`;
 - imports of `@opencode/ai`, `@opencode-ai/*` or OpenCode host source;
-- a permission `evaluate` hook, a hook that changes a permission effect, or a `policy` option;
+- a permission `evaluate` hook, a hook that changes a permission effect, or a `policy` option. The one exception is the tools RPC's hook in `src/host/tools-rpc.ts`, allowed exactly once there and once in `dist/index.js`: it turns an `ask` on one of the RPC's own script calls in flight into a deny, because no one can answer it, and touches nothing else;
 - a named `import { z } from "zod"` in `src/` (use `import * as z from "zod"`);
 - install or pack scripts, and peer or bundled dependencies, in any `package.json`;
 - absolute local paths in any tracked file;

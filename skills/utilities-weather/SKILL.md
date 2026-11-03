@@ -27,3 +27,7 @@ Missing readings are `null`; say a value is unavailable rather than inventing on
 Every result includes `attribution`. When you show weather data, credit it: "Weather data by Open-Meteo.com (CC BY 4.0)".
 
 Without a key, the free tier is for non-commercial use only and is rate-limited. For commercial use, the user adds an Open-Meteo API key: run `/connect` and choose Open-Meteo. `utilities_status` shows which tier is in use and whether the key works.
+
+## Scripts
+
+A script can call the weather tools through the RPC `utilities.tools.tools` with no model (methods such as `weather_current`, body `{"input":{"sessionID":"<session>","input":<the tool's input>}}`). Weather asks by default and a script cannot answer a prompt, so the session's agent, or the session itself, needs an allow rule such as `{"action":"utilities_weather_current","resource":"*","effect":"allow"}`. The details are in the plugin's `docs/scripting.md`.
