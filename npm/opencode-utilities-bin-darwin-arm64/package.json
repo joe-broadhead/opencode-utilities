@@ -1,6 +1,6 @@
 {
   "name": "@joe-broadhead/opencode-utilities-bin-darwin-arm64",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "macOS arm64 time-keep and weather-signal binaries for @joe-broadhead/opencode-utilities, an unofficial OpenCode plugin. Installed with it as an optional dependency.",
   "license": "MIT",
   "repository": {
