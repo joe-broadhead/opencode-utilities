@@ -10,9 +10,12 @@ import { DEFAULT_ASK, TOOLS, type ToolName } from "../../src/domain/contract.js"
 import type { Plugin } from "@opencode/plugin"
 import { createPlugin } from "../../src/host/plugin.js"
 import { DEFAULT_RULES } from "../../src/host/permissions.js"
+import { SCRIPT_TOOLS } from "../../src/host/scripting.js"
+import { TOOLS_RPC_ID } from "../../src/host/tools-rpc.js"
 import { formatStatus, Utilities } from "../../src/rpc.js"
+import { Rpc } from "@opencode/plugin/rpc"
 import { fakeRuntimes, failure, type FakeRuntime } from "./runtime.js"
-import { INPUTS } from "./samples.js"
+import { INPUTS, SAMPLES } from "./samples.js"
 
 setDefaultTimeout(60_000)
 const packageRoot = fileURLToPath(new URL("../../", import.meta.url))
@@ -215,6 +218,122 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     expect(texts[0]).toContain(`\nOpenCode: ${HOST_VERSION} (tested). `)
     expect(texts[1]).toStartWith("Downloaded 1 speech file")
     expect(runtime(dirs.install).modules.speech).toBe("AVAILABLE")
+  })
+})
+
+describe(`the tools RPC ${TOOLS_RPC_ID} on @opencode/sdk, host version ${HOST_VERSION}`, () => {
+  // Every name a script might try: the methods, the excluded tools and one that does not exist.
+  const NAMED = [...NAMES, "unknown_tool"]
+  const any = { type: "object" } as const
+  const client = () => host.sdk.rpc(Rpc.define({ id: TOOLS_RPC_ID, methods: Object.fromEntries(["describe", ...NAMED].map(name => [name, { input: any, output: any, errors: { failed: any } }])), events: {} } as never)) as unknown as Record<string, (input: unknown, options: object) => Promise<any>>
+  /** A method's output, or its error's `{ type, code, message }`. */
+  async function script(directory: string, method: string, input: unknown): Promise<Record<string, any>> {
+    try { return { value: await client()[method]!(input, { location: { directory } }) } }
+    catch (error) { const e = error as Record<string, any>; return { type: e.type ?? e._tag, code: e.data?.code, message: String(e.message ?? e) } }
+  }
+  const rule = (action: string, effect: string, resource = "*") => ({ action, resource, effect })
+  const sessions: Record<string, string> = {}
+  let directory: string
+  const call = (session: string, method: string, input: object = INPUTS[method as ToolName]) => script(directory, method, { sessionID: sessions[session] ?? session, input })
+
+  beforeAll(async () => {
+    directory = project("scripts", { agents: { locked: { mode: "primary", permissions: [rule("utilities_time_*", "deny")] } } })
+    sessions.build = await boot(directory)
+    const create = async (input: object) => (await host.sdk.session.create({ location: { directory }, ...input } as never)).id
+    sessions.locked = await create({ agent: "locked" })
+    sessions.agentless = await create({})
+    // Session rules come after the agent's: one narrows build, one reopens a tool for locked, one allows the asks.
+    sessions.narrow = await create({ agent: "build", permissions: [rule("utilities_time_now", "deny")] })
+    sessions.reopen = await create({ agent: "locked", permissions: [rule("utilities_time_now", "allow")] })
+    sessions.allowed = await create({ agent: "build", permissions: [rule("utilities_*", "allow")] })
+    sessions.resource = await create({ agent: "build", permissions: [rule("utilities_weather_*", "allow"), rule("utilities_weather_daily", "deny", "api.open-meteo.com")] })
+  })
+
+  test("describes exactly the tools that change nothing; the writes and unknown tools are no methods, even with an allow rule", async () => {
+    const { value } = await script(directory, "describe", {})
+    expect(value.id).toBe(TOOLS_RPC_ID)
+    expect(value.methods.map((method: { name: string }) => method.name)).toEqual([...SCRIPT_TOOLS])
+    expect(SCRIPT_TOOLS).toHaveLength(22)
+    for (const method of value.methods) expect(method).toMatchObject({ kind: "plugin", action: `utilities_${method.name}`, available: true, input: expect.any(Object), output: expect.any(Object) })
+    for (const name of ["timer_set", "timer_delete", "speech_synthesize", "unknown_tool"]) {
+      expect(SCRIPT_TOOLS).not.toContain(name as ToolName)
+      expect(await call("allowed", name, INPUTS[name as ToolName] ?? {})).toMatchObject({ type: "rpc.method_not_found" })
+    }
+    expect(runtime(directory).calls.filter(c => !SCRIPT_TOOLS.includes(c.tool))).toEqual([])
+  })
+
+  test("describe follows module availability: a method is available exactly when the model's tool is registered", async () => {
+    runtime(directory).setAvailability("weather", "INTEGRITY_MISMATCH")
+    try {
+      await waitFor(async () => !(await tools(directory)).some(t => t.id === "utilities_weather_current"))
+      const { value } = await script(directory, "describe", {})
+      const byName = Object.fromEntries(value.methods.map((method: { name: string }) => [method.name, method]))
+      for (const name of SCRIPT_TOOLS.filter(n => n.startsWith("weather_"))) expect(byName[name]).toMatchObject({ available: false, reason: "INTEGRITY_MISMATCH" })
+      expect(byName.time_now).toMatchObject({ available: true })
+      expect(byName.time_now.reason).toBeUndefined()
+      // Speech stays available while only its files are missing: the first call asks to download them.
+      expect(byName.speech_transcribe).toMatchObject({ available: true })
+    } finally {
+      runtime(directory).setAvailability("weather", "AVAILABLE")
+    }
+  })
+
+  test("runs a read as the session and its agent with no model turn, and returns the tool's output", async () => {
+    const before = runtime(directory).calls.length
+    expect(await call("build", "time_now")).toEqual({ value: SAMPLES.time_now.output })
+    // Parsed with the tool's own schema, defaults included, as the host parses the model's call.
+    expect(runtime(directory).calls.slice(before)).toEqual([{ tool: "time_now", input: { ...INPUTS.time_now, format: "rfc3339" } }])
+    expect((await call("build", "status", {})).value).toMatchObject({ version, permissions: { askByDefault: [...DEFAULT_ASK] } })
+    const session = await host.sdk.session.get({ sessionID: sessions.build! })
+    expect(session.tokens).toMatchObject({ input: 0, output: 0 })
+  })
+
+  test("checks the tool's input itself, before the runtime runs", async () => {
+    const before = runtime(directory).calls.length
+    expect(await call("build", "time_now", { timezones: "UTC", extra: 1 })).toMatchObject({ type: "failed", code: "INPUT_INVALID" })
+    expect(await call("build", "status", { extra: 1 })).toMatchObject({ type: "failed", code: "INPUT_INVALID" })
+    expect(runtime(directory).calls.length).toBe(before)
+  })
+
+  test("refuses a tool the agent's rules hide, and applies the session's rules after the agent's", async () => {
+    const before = runtime(directory).calls.length
+    expect(await call("locked", "time_now")).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
+    expect(await call("narrow", "time_now")).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
+    expect(runtime(directory).calls.length).toBe(before)
+    expect(await call("narrow", "time_zones")).toEqual({ value: SAMPLES.time_zones.output })
+    expect(await call("reopen", "time_now")).toEqual({ value: SAMPLES.time_now.output })
+    expect(await call("reopen", "time_zones")).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
+  })
+
+  test("refuses the weather ask and the speech download ask at once, with no prompt left waiting; an allow rule lets them run", async () => {
+    for (const method of ["weather_current", "speech_transcribe"]) {
+      const started = Date.now()
+      const refused = await call("build", method)
+      expect(refused).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
+      expect(refused.message).toMatch(/cannot answer an approval prompt/)
+      expect(Date.now() - started).toBeLessThan(5000)
+    }
+    expect(await host.sdk.permission.list({ sessionID: sessions.build! })).toEqual([])
+    expect(runtime(directory).modules.speech).toBe("SPEECH_ASSETS_MISSING")
+    expect(await call("allowed", "weather_current")).toEqual({ value: SAMPLES.weather_current.output })
+    expect(await call("allowed", "speech_transcribe")).toEqual({ value: SAMPLES.speech_transcribe.output })
+  })
+
+  test("a host deny on the call's resource is PERMISSION_DENIED; a Utilities failure keeps its code and next step", async () => {
+    expect(await call("resource", "weather_daily")).toMatchObject({ type: "failed", code: "PERMISSION_DENIED", message: expect.stringContaining("utilities_weather_daily") })
+    expect(await call("resource", "weather_summary")).toEqual({ value: SAMPLES.weather_summary.output })
+    runtime(directory).failures.set("time_calendar", failure("TIMER_EXISTS", "A timer named 'review' already exists.", "Call utilities_timer_set with replace: true to overwrite it."))
+    try {
+      const failed = await call("build", "time_calendar")
+      expect(failed).toEqual({ type: "failed", code: "TIMER_EXISTS", message: "TIMER_EXISTS: A timer named 'review' already exists. Next step: Call utilities_timer_set with replace: true to overwrite it." })
+    } finally { runtime(directory).failures.clear() }
+  })
+
+  test("names an unknown session and a session without an agent, and refuses a bad envelope", async () => {
+    expect(await call("ses_does_not_exist", "time_now")).toMatchObject({ type: "failed", code: "SESSION_UNKNOWN" })
+    expect(await call("agentless", "time_now")).toMatchObject({ type: "failed", code: "SESSION_AGENT_REQUIRED" })
+    for (const envelope of [{ sessionID: sessions.build, input: {}, extra: true }, { input: {} }, { sessionID: sessions.build }])
+      expect(await script(directory, "time_now", envelope)).toMatchObject({ type: "rpc.invalid_input" })
   })
 })
 
