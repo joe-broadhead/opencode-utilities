@@ -1,6 +1,6 @@
 # The one local check on public GitHub-hosted runners: a native build for the runner's platform, then
 # `npm ci --ignore-scripts` and `npm run check`.
-# The pack test loads the packed plugin on stock OpenCode 2.2.3 and 2.2.4.
+# The pack test loads the packed plugin on each tested stock OpenCode release, the list in src/host/versions.ts.
 name: CI
 on:
   pull_request:
@@ -38,7 +38,7 @@ jobs:
         env:
           NATIVE_BUILD_ROOT: ${{ runner.temp }}/native-build
       - run: npm ci --ignore-scripts
-      - name: Stock OpenCode 2.2.3 and 2.2.4
+      - name: Stock OpenCode (the tested releases)
         run: |
           case "$RUNNER_OS-$RUNNER_ARCH" in
             Linux-X64) platform=linux-x64 ;;
@@ -47,7 +47,9 @@ jobs:
             macOS-ARM64) platform=darwin-arm64 ;;
             *) echo "No stock OpenCode build for $RUNNER_OS-$RUNNER_ARCH" >&2; exit 1 ;;
           esac
-          for version in 2.2.3 2.2.4; do
+          versions=$(node --input-type=module -e "import('./src/host/versions.ts').then(m => console.log(m.TESTED_HOSTS.join(' ')))")
+          test -n "$versions"
+          for version in $versions; do
             prefix="$RUNNER_TEMP/opencode-$version"
             npm install --prefix "$prefix" --ignore-scripts --no-save --no-audit --no-fund "@opencode/cli-$platform@$version"
             echo "OPENCODE_BIN_${version//./_}=$prefix/node_modules/@opencode/cli-$platform/bin/opencode" >> "$GITHUB_ENV"
