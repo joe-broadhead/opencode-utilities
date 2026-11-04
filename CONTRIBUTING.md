@@ -2,7 +2,7 @@
 
 ## Setup
 
-You need Node.js 24 or later, npm, [Bun](https://bun.sh) 1.4.4 (the Bun inside stock OpenCode 2.2.3 and 2.2.4) and [Rust](https://rustup.rs) 1.96.0 (`rustup toolchain install 1.96.0`).
+You need Node.js 24 or later, npm, [Bun](https://bun.sh) 1.4.4 (the Bun inside stock OpenCode 2.2.3, 2.2.4 and 2.2.5) and [Rust](https://rustup.rs) 1.96.0 (`rustup toolchain install 1.96.0`).
 
 ```sh
 git clone https://github.com/joe-broadhead/opencode-utilities.git
@@ -23,9 +23,11 @@ To try a checkout in OpenCode, point a `plugins` entry's `package` at the reposi
 
 ## Checks
 
-`npm run check` runs, in order: the native ensure step, the typecheck of `src` and `test`, the unit tests, the JS build, the host tests on embedded OpenCode 2.2.3 and 2.2.4, the TUI test, the forbidden-API scan (`npm run lint`) and the pack test. The pack test packs the plugin and this platform's package, installs them into an empty project with scripts off, and loads them in stock OpenCode 2.2.3 and 2.2.4.
+`npm run check` runs, in order: the native ensure step, the typecheck of `src` and `test`, the unit tests, the JS build, the host tests on embedded OpenCode once per tested release, the TUI test, the forbidden-API scan (`npm run lint`) and the pack test. The pack test packs the plugin and this platform's package, installs them into an empty project with scripts off, and loads them in each tested stock OpenCode release. The tested releases are one list, `TESTED_HOSTS` in `src/host/versions.ts` (2.2.3, 2.2.4 and 2.2.5); the status, the tests and CI all read it.
 
-- Set `OPENCODE_BIN_2_2_3` and `OPENCODE_BIN_2_2_4` to stock `opencode` binaries to skip installing them.
+- Set `OPENCODE_BIN_2_2_3`, `OPENCODE_BIN_2_2_4` and `OPENCODE_BIN_2_2_5` to stock `opencode` binaries to skip installing them. Unset, the pack test installs each release into its own temp folder, as CI and the release do.
+- Host and pack tests put their temp roots under `/private/tmp` on macOS (the system temp folder elsewhere), never under your home, because OpenCode searches upward for `.opencode/` folders. Each stock server gets its own free port.
+- The unit tests in `test/unit/time-keep.test.ts` run this platform's real `time-keep`, which `npm run check` builds first.
 - The default checks make no network calls to Open-Meteo or GitHub. Live weather runs only with `UTILITIES_LIVE_WEATHER=1`.
 
 Commit messages use `type(scope): summary`. Keep the README, `docs/configuration.md`, `SECURITY.md` and this file in step with the code. See [AGENTS.md](AGENTS.md) for the design rules.

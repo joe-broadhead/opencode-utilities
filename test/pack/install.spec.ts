@@ -10,7 +10,7 @@ import { execFileSync, spawn, type ChildProcess } from "node:child_process"
 import { createHash, randomBytes } from "node:crypto"
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { createServer } from "node:net"
-import { arch, platform, tmpdir } from "node:os"
+import { arch, homedir, platform, tmpdir } from "node:os"
 import { join, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { DEFAULT_ASK, MODULES, PLATFORMS, PLUGIN_ID } from "../../src/domain/contract.js"
@@ -35,7 +35,10 @@ const TRIPLES = { "darwin-arm64": "aarch64-apple-darwin", "darwin-x64": "x86_64-
 const onnx = JSON.parse(readFileSync(join(repo, "native/onnx-provenance.json"), "utf8")) as { distributions: Record<string, unknown> }
 const speechEngine = isPlatform(target) && Boolean(onnx.distributions[TRIPLES[target]])
 
-const temp = realpathSync(mkdtempSync(join(tmpdir(), "utilities-pack-")))
+// Never under the real home: OpenCode searches upward for .opencode/ folders. Every server also gets its own port.
+const realHome = realpathSync(homedir())
+const temp = realpathSync(mkdtempSync(join(existsSync("/private/tmp") ? "/private/tmp" : tmpdir(), "utilities-pack-")))
+if (temp === realHome || temp.startsWith(realHome + sep)) throw new Error(`refusing to run: the test root ${temp} is inside the home directory`)
 const project = join(temp, "project"), installed = join(project, "node_modules", NAME)
 interface Packed { filename: string; size: number; files: { path: string }[] }
 const PACKED_DIR = process.env.PACKED_DIR

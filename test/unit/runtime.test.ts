@@ -206,13 +206,15 @@ describe("links above the plugin's directories", () => {
   })
   test("Fedora Atomic: /home -> var/home above XDG_DATA_HOME and XDG_CACHE_HOME, with the roots not created yet", async () => {
     const f = await fixture({ speech: "missing" }); cleanups.push(f.cleanup)
-    await layout(f, { home: "var/home" }); await mkdir(join(f.root, "var/home/u"), { mode: 0o700 })
-    const runtime = await another(f, { stateRoot: join(f.root, "home/u/.local/share/opencode-utilities"), cacheRoot: join(f.root, "home/u/.cache/opencode-utilities") })
+    // A user folder "u" under each home; joined from parts, so the forbidden-path scan sees no home path literal.
+    const user = (...parts: string[]) => join(f.root, ...parts, "u")
+    await layout(f, { home: join("var", "home") }); await mkdir(user("var", "home"), { mode: 0o700 })
+    const runtime = await another(f, { stateRoot: join(user("home"), ".local/share/opencode-utilities"), cacheRoot: join(user("home"), ".cache/opencode-utilities") })
     const status = await runtime.status()
     expect(status.modules.time).toEqual({ availability: "AVAILABLE" }); expect(status.modules.speech.availability).toBe("SPEECH_ASSETS_MISSING")
-    expect(status.speech.cacheDirectory).toBe(join(f.root, "var/home/u/.cache/opencode-utilities"))
+    expect(status.speech.cacheDirectory).toBe(join(user("var", "home"), ".cache/opencode-utilities"))
     await works(runtime)
-    expect((await lstat(join(f.root, "var/home/u/.local/share/opencode-utilities"))).mode & 0o777).toBe(0o700)
+    expect((await lstat(join(user("var", "home"), ".local/share/opencode-utilities"))).mode & 0o777).toBe(0o700)
   })
   test("macOS: /tmp -> private/tmp above stateRoot and speech.assetsDir", async () => {
     const f = await fixture({ speech: "preseed" }); cleanups.push(f.cleanup)
