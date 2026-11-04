@@ -26,7 +26,8 @@ Use these tools instead of mental arithmetic whenever a date or time matters.
 ## Holidays and business days
 
 - `utilities_time_holidays` checks a date or lists a year for a country code such as `GB`. The offline calendar covers 2000 to 2030 only. Outside that range a call fails with `INPUT_INVALID` or `HOLIDAY_COVERAGE`; say so rather than guess.
-- `utilities_time_business_days` counts working days between two dates (both included), or finds the next or previous working day. Pass `country` to skip that country's holidays.
+- `utilities_time_business_days` counts working days between two dates (both included), or finds the next or previous working day. Weekends are Saturday and Sunday. Pass `country` to skip that country's nationwide holidays too.
+- Regional holidays: the UK data (`GB`) includes holidays of only England, Wales, Scotland or Northern Ireland, such as Scotland's Summer Bank Holiday. Each holiday has `nationwide` and `regions`. Lists and checks show them all. Business days skip only the nationwide ones, unless you pass `region` (for example `"Scotland"`) with `country: "GB"`; then that nation's holidays count too. Ask which nation the user means when it matters.
 
 ## Timers
 

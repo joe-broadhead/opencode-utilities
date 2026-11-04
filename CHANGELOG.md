@@ -11,6 +11,11 @@ All notable changes to this project are documented here. The format follows [Kee
 - Date-times without seconds, such as `2026-03-29T02:30`, work. The tools accepted them, but the time program rejected them with `BACKEND_FAILED`.
 - An out-of-range date says which range applies, for example `date: must be from 2000 to 2030, the years the offline holiday data covers`, instead of `date: Invalid input`. Time zone, date and date-time errors name their rule too.
 
+### Changed
+
+- Business days skip only the holidays a whole country observes. Before, `utilities_time_business_days` with `country: "GB"` also skipped holidays of only one nation, such as Scotland's Summer Bank Holiday, for all of the UK. A new optional `region` parameter (England, Wales, Scotland or Northern Ireland, with `country: "GB"`) counts that nation's holidays too. A count lists the regional holidays it did not skip in `regional_holidays_not_skipped`.
+- Holiday lists and checks still show regional holidays, now with `nationwide` and `regions` fields on every holiday, not only the bracket in the name. `utilities_time_holidays` takes `region` too.
+
 ## [0.0.1] - 2026-11-03
 
 ### Added
