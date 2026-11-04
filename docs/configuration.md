@@ -260,6 +260,13 @@ A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next 
 | `BINARY_MISSING`, `INTEGRITY_MISMATCH` | Reinstall. For speech, delete the cache and run `/utilities-speech-install`. |
 | `SPEECH_ASSETS_MISSING` | Approve the download, run `/utilities-speech-install`, or pre-seed. |
 | `DOWNLOAD_FAILED` | Check the network and retry, or pre-seed. |
+| `INPUT_INVALID` | Correct the named field. The message names the rule, such as the 2000–2030 holiday range, never the value. |
+| `TIME_NONEXISTENT` | The local time is skipped by a daylight-saving change in `from_timezone`. Use a time outside the change, or add the UTC offset the user means. |
+| `TIME_AMBIGUOUS` | The local time happens twice at a daylight-saving change. The message gives both UTC offsets and instants. Add the offset the user means, or ask which one. |
+| `TIME_OFFSET_MISMATCH` | The `datetime` has an offset that `from_timezone` does not use at that moment. Remove it, or use the zone's own. |
+| `HOLIDAY_COVERAGE` | The call needs holiday data outside 2000–2030, for example the next business day after 2030-12-31. Use dates in range, or leave out `country` to count weekends only. |
+| `TIME_OUT_OF_RANGE` | The result is outside what the time engine supports. Use a smaller amount or a nearer date. |
+| `BACKEND_FAILED` | A program reported another error. For weather the message says which: no such place, the rate limit, or a failed request. |
 | `TIMER_EXISTS` | `utilities_timer_set` with `replace: true`. |
 | `TIMER_NOT_FOUND` | `utilities_timer_list`. |
 | `TIMER_STATE_UNKNOWN` | Read the timer before retrying. The change may or may not have been saved. |

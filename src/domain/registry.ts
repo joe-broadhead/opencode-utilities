@@ -14,7 +14,7 @@ const DESCRIPTIONS: { readonly [K in ToolName]: string } = {
   time_now: "Current date and time in one or more IANA time zones, with UTC offset, daylight-saving flag, weekday and ISO week. Use it for questions like \"what time is it in Tokyo?\".",
   time_zones: "List IANA time zone names, optionally only one region such as Europe. Use it to find the exact zone name before converting.",
   time_zone_info: "Details of one time zone: current offset and abbreviation, whether daylight saving is in effect, and the next offset change.",
-  time_convert: "Convert a local date and time from one time zone to another, handling daylight saving. A local time that does not exist or is ambiguous fails rather than guessing.",
+  time_convert: "Convert a local date and time from one time zone to another, handling daylight saving. It never guesses: a local time skipped by a daylight-saving change fails with TIME_NONEXISTENT, and one that happens twice fails with TIME_AMBIGUOUS, which gives both UTC offsets. Add the offset the user means to the datetime to choose one.",
   time_calendar: "Calendar facts for a date: weekday, ISO week and year, day of year, quarter, days in the month and leap year.",
   time_add: "Add or subtract seconds, minutes, hours, days, weeks, months or years to a date or date-time. Month and year steps clamp to the month's last day.",
   time_between: "Signed difference between two dates or date-times in seconds, minutes, hours, days and weeks.",

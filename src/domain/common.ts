@@ -12,15 +12,18 @@ export const text = (max = 256) => z.string().max(max).refine(s => !s.includes("
 export const byteText = (max: number) => text(max).refine(s => new TextEncoder().encode(s).length <= max)
 export const integer = z.number().int().safe()
 export const finite = z.number().finite()
-export const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s => {
+// The messages name the rule, never the value, and reach the model through INPUT_INVALID.
+export const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be a date as YYYY-MM-DD").refine(s => {
   const d = new Date(`${s}T00:00:00Z`); return Number.isFinite(+d) && d.toISOString().slice(0, 10) === s && s >= "1900-01-01" && s <= "2100-12-31"
-})
-export const datetime = z.string().max(80).regex(/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})?$/).refine(s => date.safeParse(s.slice(0, 10)).success && Number(s.slice(11, 13)) < 24 && Number(s.slice(14, 16)) < 60)
-export const instant = datetime.refine(s => /(?:Z|[+-]\d{2}:\d{2})$/.test(s) && Number.isFinite(Date.parse(s)))
-export const dateOrTime = z.union([date, datetime])
-export const zone = z.string().max(80).regex(/^(?:UTC|[A-Za-z_+-]+(?:\/[A-Za-z0-9_+-]+)+)$/).refine(s => {
+}, "must be a real date from 1900-01-01 to 2100-12-31")
+export const datetime = z.string().max(80).regex(/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})?$/, "must be a date-time such as 2026-10-29T15:30:00, optionally ending in Z or an offset such as +01:00")
+  .refine(s => date.safeParse(s.slice(0, 10)).success && Number(s.slice(11, 13)) < 24 && Number(s.slice(14, 16)) < 60 && (s.length < 19 || Number(s.slice(17, 19)) < 60), "must be a real date-time from 1900 to 2100")
+export const instant = datetime.refine(s => /(?:Z|[+-]\d{2}:\d{2})$/.test(s) && Number.isFinite(Date.parse(s)), "must end in Z or a UTC offset such as +01:00")
+export const dateOrTime = z.union([date, datetime], { error: "must be a date as YYYY-MM-DD or a date-time such as 2026-10-29T15:30:00, from 1900 to 2100" })
+const ZONE = "must be an IANA time zone name, such as Europe/London; call utilities_time_zones to find one"
+export const zone = z.string().max(80).regex(/^(?:UTC|[A-Za-z_+-]+(?:\/[A-Za-z0-9_+-]+)+)$/, ZONE).refine(s => {
   try { new Intl.DateTimeFormat("en", { timeZone: s }); return true } catch { return false }
-})
+}, ZONE)
 export const empty = z.strictObject({})
 
 /** What happened and the user's next step, per code. Messages never contain private input values. */
@@ -48,6 +51,11 @@ export const FAILURES: { readonly [C in FailureCode]: readonly [message: string,
   BACKEND_JSON_INVALID: ["The program behind this tool returned unreadable output.", "Retry. If it persists, reinstall the plugin."],
   STDOUT_LIMIT: ["The program behind this tool returned more output than the plugin accepts.", "Narrow the request."],
   STDERR_LIMIT: ["The program behind this tool wrote too much diagnostic output.", "Retry. If it persists, reinstall the plugin."],
+  TIME_NONEXISTENT: ["That local time is skipped by a daylight-saving change, so it does not exist in that zone.", "Use a time outside the change, or add the UTC offset the user means to the datetime."],
+  TIME_AMBIGUOUS: ["That local time happens twice, at a daylight-saving change.", "Add the UTC offset the user means to the datetime, or ask the user which one they mean."],
+  TIME_OFFSET_MISMATCH: ["The datetime's UTC offset is not the one from_timezone uses at that moment.", "Remove the offset to read the datetime as local time in from_timezone, or use from_timezone's own offset."],
+  TIME_OUT_OF_RANGE: ["The result is outside the range the time engine supports.", "Use a smaller amount or a nearer date."],
+  HOLIDAY_COVERAGE: ["Holiday data covers 2000–2030, and this call needs a year outside it.", "Use dates from 2000 to 2030, or leave out country to count weekends only."],
   TIMER_EXISTS: ["A timer with that name already exists.", "Call utilities_timer_set with replace: true to overwrite it."],
   TIMER_NOT_FOUND: ["No timer with that name exists in this project.", "Call utilities_timer_list to see this project's timers."],
   TIMER_QUOTA: ["This project already has 1000 timers.", "Delete timers with utilities_timer_delete first."],

@@ -176,6 +176,8 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 | `WEATHER_KEY_REJECTED` | Run `/connect` and choose Open-Meteo, then enter a valid key, or run `opencode auth logout open-meteo` for the free tier. |
 | Weather `429` | The free-tier rate limit was reached. Wait, or add a commercial key. |
 | `UNSAFE_PATH` | A file or folder inside the plugin's state, cache or install directory is a symbolic link. Replace it with the real file or folder. Links above those directories, such as macOS `/tmp` or Fedora Atomic `/home`, are fine. |
+| `TIME_NONEXISTENT`, `TIME_AMBIGUOUS` | The local time falls in a daylight-saving change. `TIME_AMBIGUOUS` gives both UTC offsets: add the one you mean to the `datetime`. |
+| `HOLIDAY_COVERAGE` | Holiday data covers 2000–2030. Use dates in that range, or leave out `country`. |
 | `TIMER_EXISTS` | Call `utilities_timer_set` with `replace: true`, or pick another name. |
 | `TIMER_NOT_FOUND` | Call `utilities_timer_list`. Timers are per project. |
 | `TIMER_STATE_UNKNOWN` | Read the timer with `utilities_timer_get` before trying again. |

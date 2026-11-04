@@ -10,7 +10,10 @@ Use these tools instead of mental arithmetic whenever a date or time matters.
 ## Times and time zones
 
 - "What time is it in Tokyo?": `utilities_time_now` with `timezones: ["Asia/Tokyo"]`. It defaults to UTC, so always pass the zones the user means.
-- Converting a meeting time: `utilities_time_convert` with the local `datetime` and both zones. A local time that does not exist or is ambiguous at a daylight-saving change fails; ask the user which time they mean.
+- Converting a meeting time: `utilities_time_convert` with the local `datetime` and both zones. Seconds are optional. At a daylight-saving change it does not guess:
+  - `TIME_NONEXISTENT`: the clocks skip that local time. Tell the user, and suggest a time outside the change.
+  - `TIME_AMBIGUOUS`: that local time happens twice. The error gives both UTC offsets. Ask the user which one they mean, then call again with that offset on the `datetime`, for example `2026-10-25T02:30:00+01:00`.
+  - `TIME_OFFSET_MISMATCH`: the `datetime` has an offset the zone does not use then. Remove it, or use the zone's own.
 - Unsure of a zone name: `utilities_time_zones` with a `region` such as `Europe`, then `utilities_time_zone_info` for offsets and the next change.
 
 ## Dates
@@ -22,7 +25,7 @@ Use these tools instead of mental arithmetic whenever a date or time matters.
 
 ## Holidays and business days
 
-- `utilities_time_holidays` checks a date or lists a year for a country code such as `GB`. The offline calendar covers 2000 to 2030 only; outside that range, say so rather than guess.
+- `utilities_time_holidays` checks a date or lists a year for a country code such as `GB`. The offline calendar covers 2000 to 2030 only. Outside that range a call fails with `INPUT_INVALID` or `HOLIDAY_COVERAGE`; say so rather than guess.
 - `utilities_time_business_days` counts working days between two dates (both included), or finds the next or previous working day. Pass `country` to skip that country's holidays.
 
 ## Timers
