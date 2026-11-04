@@ -7,7 +7,7 @@ import { realpath } from "node:fs/promises"
 import { run, BackendFailure } from "../../src/process/run.js"
 import { withLock } from "../../src/process/lock.js"
 import { Queue } from "../../src/process/queue.js"
-import { noSymlinks, privateDirectory, sweep } from "../../src/process/files.js"
+import { noSymlinks, privateDirectory, resolveRoot, sweep } from "../../src/process/files.js"
 import { LIMITS, deadline } from "../../src/domain/common.js"
 
 const cleanups: Array<() => Promise<unknown>> = []
@@ -122,6 +122,18 @@ test("one walker checks components: links are rejected, missing components are a
   expect(await readdir(target)).toEqual([])
   const state = await privateDirectory(join(root, "a", "b"))
   await chmod(state, 0o755); await expect(privateDirectory(state)).rejects.toMatchObject({ code: "STATE_NOT_PRIVATE" })
+})
+test("a root resolves its existing part through links once, keeps the missing rest, and later walks pass", async () => {
+  const root = await scratch("utilities-root-"), target = join(root, "var", "home"), link = join(root, "home")
+  await mkdir(target, { recursive: true }); await symlink(join("var", "home"), link)
+  const resolved = await resolveRoot(join(link, "u", ".local", "share", "opencode-utilities"))
+  expect(resolved).toBe(join(target, "u", ".local", "share", "opencode-utilities"))
+  await expect(privateDirectory(join(resolved, "projects"))).resolves.toBe(join(resolved, "projects"))
+  await expect(resolveRoot(join(link, ".."))).resolves.toBe(root)
+  await symlink(join(root, "absent"), join(target, "dangling"))
+  // A dangling link is kept as a name, so the later walk still refuses it.
+  const dangling = await resolveRoot(join(target, "dangling", "state"))
+  expect(dangling).toBe(join(target, "dangling", "state")); await expect(privateDirectory(dangling)).rejects.toMatchObject({ code: "UNSAFE_PATH" })
 })
 test("the sweep removes only old matching entries it owns, and never follows links", async () => {
   const root = await scratch("utilities-sweep-"), jobs = join(root, "jobs"), old = new Date(Date.now() - 3600000), outside = join(root, "outside")

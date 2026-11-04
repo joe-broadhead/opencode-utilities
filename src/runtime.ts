@@ -16,7 +16,7 @@ import { invoke as invokeSpeech, type EngineOperation, type SpeechJob } from "./
 import { invoke as invokeTime } from "./modules/time/adapter.js"
 import { invoke as invokeWeather } from "./modules/weather/adapter.js"
 import { cleanup } from "./modules/speech/cleanup.js"
-import { privateDirectory, removeOwned, stage, sweep } from "./process/files.js"
+import { privateDirectory, removeOwned, resolveRoot, stage, sweep } from "./process/files.js"
 import { Queue } from "./process/queue.js"
 import { run } from "./process/run.js"
 import { fileAccess, readRequests, synthesisRequests, timerRequest, weatherRequest, type WeatherAction } from "./runtime/permissions.js"
@@ -40,8 +40,13 @@ interface Plan {
   readonly speech?: { readonly roles: readonly SpeechAssetRole[]; readonly source?: SpeechJob["source"]; readonly output?: OutputTarget }
 }
 
-export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
-  const packageRoot = options.packageRoot ?? fileURLToPath(new URL("../", import.meta.url))
+export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
+  // Every root is resolved once. Links above them are the user's setup; links inside them are refused (UNSAFE_PATH).
+  const [packageRoot, stateRoot, cacheRoot, speechAssetsDir] = await Promise.all([
+    resolveRoot(given.packageRoot ?? fileURLToPath(new URL("../", import.meta.url))), resolveRoot(given.stateRoot), resolveRoot(given.cacheRoot),
+    given.speechAssetsDir === undefined ? undefined : resolveRoot(given.speechAssetsDir),
+  ])
+  const options: RuntimeOptions = { ...given, packageRoot, stateRoot, cacheRoot, ...speechAssetsDir === undefined ? {} : { speechAssetsDir } }
   const target = options.target ?? detectTarget(), directory = resolve(options.location.directory)
   const location = { directory, projectDirectory: options.location.projectDirectory }
   const scope = createHash("sha256").update(JSON.stringify([options.location.project, directory])).digest("hex")
@@ -115,7 +120,9 @@ export async function createRuntime(options: RuntimeOptions): Promise<Runtime> {
           stage: job, store: paths.store, signal: work,
           async run(args, runOptions = {}) {
             // The program is verified again right before each spawn; unchanged files are not re-hashed.
-            if (await verifier.check(program.path, program.sha256, true) !== "verified") fail("INTEGRITY_MISMATCH")
+            const checked = await verifier.check(program.path, program.sha256, true)
+            if (checked === "unsafe") fail("UNSAFE_PATH")
+            if (checked !== "verified") fail("INTEGRITY_MISMATCH")
             fence(work)
             return run({ executable: program.path, args, cwd: job!, signal: work, ...runOptions.stdin === undefined ? {} : { stdin: runOptions.stdin }, ...step.env ? { env: step.env } : {},
               beforeSpawn: () => fence(work), onSpawn: () => { if (runOptions.mutation) mutationStarted = true } })

@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { chmod, link, lstat, mkdir, readFile, readdir, rm, symlink, utimes, writeFile } from "node:fs/promises"
+import { chmod, link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, utimes, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { createRuntime } from "../../src/runtime.js"
 import { verifier } from "../../src/domain/backends.js"
 import { LIMITS } from "../../src/domain/common.js"
 import { WEATHER_ATTRIBUTION, type Authorize, type Runtime, type RuntimeOptions } from "../../src/domain/contract.js"
 import { invoke as timeInvoke } from "../../src/modules/time/adapter.js"
-import { calendar, fixture, invocation, place, PACKAGE, VERSION, type Fixture, type FixtureOptions } from "../fixtures.js"
+import { calendar, fixture, invocation, MODELS, place, PACKAGE, VERSION, type Fixture, type FixtureOptions } from "../fixtures.js"
 
 const cleanups: Array<() => Promise<unknown>> = []
 afterEach(async () => {
@@ -117,7 +117,7 @@ describe("platform package and integrity", () => {
     await writeFile(bin, original + "\n// tampered", { mode: 0o755 })
     await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toMatchObject({ code: "INTEGRITY_MISMATCH" })
     await rm(bin); await writeFile(join(f.root, "real"), original, { mode: 0o755 }); await symlink(join(f.root, "real"), bin)
-    await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toMatchObject({ code: "INTEGRITY_MISMATCH" })
+    await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toMatchObject({ code: "UNSAFE_PATH" })
     await rm(bin); await writeFile(bin, original, { mode: 0o644 })
     await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toMatchObject({ code: "INTEGRITY_MISMATCH" })
     expect(await f.recorded()).toEqual([])
@@ -180,6 +180,64 @@ describe("state root", () => {
     await another(f)
     expect(await readdir(jobs)).toEqual(["job-active"])
     expect((await readdir(scope)).sort()).toEqual(["00000000-0000-4000-8000-000000000001.wav", "keep.wav"])
+  })
+})
+
+describe("links above the plugin's directories", () => {
+  // A link above a root is the user's setup, not the plugin's: macOS /tmp -> private/tmp, Fedora Atomic
+  // /home -> var/home, or a dotfile link to ~/.local or ~/.cache. Links inside the plugin's folders stay refused.
+  async function layout(f: Fixture, links: Record<string, string>) {
+    for (const [link, target] of Object.entries(links)) { await mkdir(join(f.root, target), { recursive: true }); await symlink(target, join(f.root, link)) }
+  }
+  const works = async (runtime: Runtime) => {
+    await expect(runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).resolves.toMatchObject({ output: calendar })
+    await expect(runtime.invoke("timer_set", { name: "linked", deadline: "2027-01-01T00:00:00Z" }, invocation())).resolves.toMatchObject({ output: { name: "linked" } })
+    await expect(runtime.invoke("timer_get", { name: "linked" }, invocation())).resolves.toMatchObject({ output: { name: "linked" } })
+  }
+  test("a linked install, state and cache path work, and status shows the resolved paths", async () => {
+    const f = await fixture(); cleanups.push(f.cleanup)
+    await symlink(".", join(f.root, "link"))
+    const linked = join(f.root, "link"), runtime = await another(f, { packageRoot: linked, stateRoot: join(linked, "state"), cacheRoot: join(linked, "cache") })
+    const status = await runtime.status()
+    expect(status.modules).toEqual({ time: { availability: "AVAILABLE" }, weather: { availability: "AVAILABLE" }, speech: { availability: "AVAILABLE" } })
+    expect(status.speech.assets.every(a => a.state === "cached")).toBe(true)
+    expect(status.speech.cacheDirectory).toBe(f.cache); expect(status.timers.directory.startsWith(join(f.state, "projects"))).toBe(true)
+    await works(runtime)
+  })
+  test("Fedora Atomic: /home -> var/home above XDG_DATA_HOME and XDG_CACHE_HOME, with the roots not created yet", async () => {
+    const f = await fixture({ speech: "missing" }); cleanups.push(f.cleanup)
+    await layout(f, { home: "var/home" }); await mkdir(join(f.root, "var/home/u"), { mode: 0o700 })
+    const runtime = await another(f, { stateRoot: join(f.root, "home/u/.local/share/opencode-utilities"), cacheRoot: join(f.root, "home/u/.cache/opencode-utilities") })
+    const status = await runtime.status()
+    expect(status.modules.time).toEqual({ availability: "AVAILABLE" }); expect(status.modules.speech.availability).toBe("SPEECH_ASSETS_MISSING")
+    expect(status.speech.cacheDirectory).toBe(join(f.root, "var/home/u/.cache/opencode-utilities"))
+    await works(runtime)
+    expect((await lstat(join(f.root, "var/home/u/.local/share/opencode-utilities"))).mode & 0o777).toBe(0o700)
+  })
+  test("macOS: /tmp -> private/tmp above stateRoot and speech.assetsDir", async () => {
+    const f = await fixture({ speech: "preseed" }); cleanups.push(f.cleanup)
+    await layout(f, { tmp: "private/tmp" }); await rename(f.seed, join(f.root, "private/tmp/seed"))
+    const runtime = await another(f, { stateRoot: join(f.root, "tmp/utilities-state"), speechAssetsDir: join(f.root, "tmp/seed") })
+    const status = await runtime.status()
+    expect(status.modules.speech).toEqual({ availability: "AVAILABLE" }); expect(status.speech.assets.every(a => a.state === "pre-seeded")).toBe(true)
+    await works(runtime)
+  })
+  test.skipIf(process.platform !== "darwin")("macOS: the real /tmp, which is a link to /private/tmp", async () => {
+    const f = await fixture(), state = await mkdtemp("/tmp/utilities-linked-"); cleanups.push(f.cleanup, () => rm(state, { recursive: true, force: true }))
+    expect(await realpath(state)).toBe(join("/private", state))
+    const runtime = await another(f, { stateRoot: join(state, "state") })
+    await works(runtime)
+    expect((await runtime.status()).timers.directory.startsWith(join("/private", state, "state", "projects"))).toBe(true)
+  })
+  test("a link inside the plugin's folders is UNSAFE_PATH, never an integrity failure", async () => {
+    const f = await setup(), engine = f.cached("engine")
+    await rename(engine, join(f.root, "engine")); await symlink(join(f.root, "engine"), engine)
+    const status = await f.runtime.status()
+    expect(status.modules.speech).toMatchObject({ availability: "UNSAFE_PATH" }); expect(status.modules.time).toEqual({ availability: "AVAILABLE" })
+    await expect(f.runtime.invoke("speech_transcribe", { path: "clip.wav" }, invocation())).rejects.toMatchObject({ code: "UNSAFE_PATH" })
+    const seed = await fixture({ speech: "preseed" }); cleanups.push(seed.cleanup)
+    await rename(join(seed.seed, MODELS["tiny-q5_1"]), join(seed.root, "model")); await symlink(join(seed.root, "model"), join(seed.seed, MODELS["tiny-q5_1"]))
+    expect((await (await another(seed)).status()).modules.speech).toMatchObject({ availability: "UNSAFE_PATH" })
   })
 })
 

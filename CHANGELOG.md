@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A symbolic link above the plugin's state, cache or install folder no longer breaks it. On Fedora Atomic and Silverblue (`/home` is a link to `/var/home`), with `stateRoot` or `speech.assetsDir` under macOS `/tmp`, or with a dotfile link to `~/.local` or `~/.cache`, every module failed, and time and weather wrongly reported `INTEGRITY_MISMATCH`. The plugin now resolves its roots once at startup and refuses links only inside its own folders. Such a link is now `UNSAFE_PATH`, never an integrity failure, and status reports it per module.
+
 ## [0.0.1] - 2026-11-03
 
 ### Added

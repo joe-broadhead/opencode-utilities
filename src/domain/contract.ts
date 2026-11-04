@@ -69,7 +69,7 @@ export type Authorize = (requests: readonly PermissionRequest[], invocation: Inv
 
 export const AVAILABILITY = [
   "AVAILABLE", "DISABLED", "CLOSED", "HOST_UNTESTED", "UNSUPPORTED_PLATFORM", "PLATFORM_PACKAGE_MISSING",
-  "BINARY_MISSING", "INTEGRITY_MISMATCH", "CONTRACT_MISMATCH", "SPEECH_ASSETS_MISSING",
+  "BINARY_MISSING", "INTEGRITY_MISMATCH", "CONTRACT_MISMATCH", "SPEECH_ASSETS_MISSING", "UNSAFE_PATH",
 ] as const
 export type Availability = typeof AVAILABILITY[number]
 export type FailureCode = Exclude<Availability, "AVAILABLE">
@@ -79,7 +79,7 @@ export type FailureCode = Exclude<Availability, "AVAILABLE">
   | "WEATHER_KEY_REJECTED"
   | "SOURCE_REJECTED" | "SOURCE_CHANGED" | "WAV_INVALID" | "WAV_UNSUPPORTED" | "AUDIO_DURATION_LIMIT"
   | "SPEECH_FAILED" | "BRIDGE_CORRELATION" | "OUTPUT_EXISTS" | "OUTPUT_PATH_MISMATCH" | "DOWNLOAD_FAILED"
-  | "UNSAFE_PATH" | "STATE_NOT_PRIVATE" | "STATE_FILE_UNSAFE" | "FILE_REJECTED" | "FILE_CHANGED" | "UNSAFE_CLEANUP" | "CLEANUP_FAILED"
+  | "STATE_NOT_PRIVATE" | "STATE_FILE_UNSAFE" | "FILE_REJECTED" | "FILE_CHANGED" | "UNSAFE_CLEANUP" | "CLEANUP_FAILED"
   | "OPERATION_FAILED"
 /** What happened (message) and the next step (hint). Messages name zod paths and config keys, never input values. */
 export interface UtilitiesFailure { readonly code: FailureCode; readonly message: string; readonly hint?: string }

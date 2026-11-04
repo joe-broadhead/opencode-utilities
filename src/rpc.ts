@@ -57,6 +57,7 @@ const AVAILABILITY_TEXT: { readonly [A in Availability]: string } = {
   INTEGRITY_MISMATCH: "failed: integrity check",
   CONTRACT_MISMATCH: "failed: unexpected program version",
   SPEECH_ASSETS_MISSING: "speech files not downloaded yet",
+  UNSAFE_PATH: "failed: a symbolic link inside the plugin's folders",
 }
 const MODULE_TEXT: { readonly [M in Module]: string } = { time: "Time and timers", weather: "Weather", speech: "Speech" }
 const megabytes = (bytes: number) => `${Math.round(bytes / 1e6)} MB`

@@ -26,7 +26,7 @@ The runtime plans a call, asks for permission, then starts the module deadline. 
 
 Each module has its own queue. A child is a fixed argument array, `shell: false`, with a scrubbed environment rooted in a private job directory: empty `PATH`, fixed locale, no host credentials. The Open-Meteo key, when connected, is the only extra variable, `OPEN_METEO_API_KEY`. Stdout is capped at 1 MiB and stderr at 64 KiB. Stderr never reaches the model. Cancellation sends `SIGTERM`, then `SIGKILL` after 100 ms, and reaps the process group. Windows is not supported.
 
-Integrity of a program or model file is checked once per process and cached by file identity (`dev`, `ino`, `size`, `mtimeMs`, `ctimeMs`). A symbolic link never passes. The state directory must be mode `0700` and owned by the user.
+Integrity of a program or model file is checked once per process and cached by file identity (`dev`, `ino`, `size`, `mtimeMs`, `ctimeMs`). A symbolic link never passes. The roots (state, cache, `speech.assetsDir`, the installed and platform packages) are resolved once with `realpath` at startup, so links above them are allowed and links inside them are `UNSAFE_PATH`. The state directory must be mode `0700` and owned by the user.
 
 The plugin does not log tool input, paths, transcripts, timer text or child stderr.
 
