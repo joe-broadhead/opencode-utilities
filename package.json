@@ -48,5 +48,191 @@
     "typescript": "5.9.3",
     "vitest": "5.0.5",
     "zod": "4.6.7"
+  },
+  "jelly": {
+    "title": "Utilities",
+    "tools": [
+      {
+        "name": "utilities.status",
+        "permission": "utilities_status",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.time_now",
+        "permission": "utilities_time_now",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.time_zones",
+        "permission": "utilities_time_zones",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.time_zone_info",
+        "permission": "utilities_time_zone_info",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.time_convert",
+        "permission": "utilities_time_convert",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.time_calendar",
+        "permission": "utilities_time_calendar",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.time_add",
+        "permission": "utilities_time_add",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.time_between",
+        "permission": "utilities_time_between",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.time_format",
+        "permission": "utilities_time_format",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.time_holidays",
+        "permission": "utilities_time_holidays",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.time_business_days",
+        "permission": "utilities_time_business_days",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.timer_set",
+        "permission": "utilities_timer_set",
+        "effect": "ask",
+        "readOnly": false
+      },
+      {
+        "name": "utilities.timer_get",
+        "permission": "utilities_timer_get",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.timer_list",
+        "permission": "utilities_timer_list",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.timer_check",
+        "permission": "utilities_timer_check",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.timer_delete",
+        "permission": "utilities_timer_delete",
+        "effect": "ask",
+        "readOnly": false
+      },
+      {
+        "name": "utilities.weather_geocode",
+        "permission": "utilities_weather_geocode",
+        "effect": "ask",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.weather_current",
+        "permission": "utilities_weather_current",
+        "effect": "ask",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.weather_daily",
+        "permission": "utilities_weather_daily",
+        "effect": "ask",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.weather_hourly",
+        "permission": "utilities_weather_hourly",
+        "effect": "ask",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.weather_demand_signal",
+        "permission": "utilities_weather_demand_signal",
+        "effect": "ask",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.weather_summary",
+        "permission": "utilities_weather_summary",
+        "effect": "ask",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.speech_cleanup",
+        "permission": "utilities_speech_cleanup",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.speech_transcribe",
+        "permission": "utilities_speech_transcribe",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.speech_synthesize",
+        "permission": "utilities_speech_synthesize",
+        "effect": "ask",
+        "readOnly": false
+      },
+      {
+        "name": "utilities.speech_download",
+        "permission": "utilities_speech_download",
+        "effect": "ask",
+        "readOnly": false
+      }
+    ],
+    "skills": [
+      "utilities-time",
+      "utilities-weather",
+      "utilities-speech"
+    ],
+    "rpc": [],
+    "views": [],
+    "signIns": [
+      {
+        "id": "open-meteo",
+        "label": "Open-Meteo",
+        "integration": "open-meteo",
+        "required": false,
+        "help": {
+          "url": "https://open-meteo.com/en/pricing",
+          "label": "Commercial use needs a key from Open-Meteo"
+        }
+      }
+    ],
+    "contributes": {
+      "homeFeeds": [],
+      "homeWidgets": [],
+      "workKinds": [],
+      "settings": []
+    }
   }
 }
