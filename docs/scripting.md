@@ -75,7 +75,9 @@ A refusal or failure is the RPC error `failed`, with a message `CODE: what happe
 | `CANCELLED` | The request was cancelled. |
 | Utilities' own codes | The tool failed as it would for the model, with the same code and next step: `INPUT_INVALID`, `TIMER_NOT_FOUND`, `WEATHER_KEY_REJECTED`, `SPEECH_ASSETS_MISSING`, a module's availability code, and the rest of the table in [configuration.md](configuration.md#errors). |
 
-OpenCode itself answers `rpc.invalid_input` for a body that is not the envelope above, and `rpc.method_not_found` for a method that does not exist, such as `timer_set`.
+OpenCode itself answers `rpc.invalid_input` for a body that is not the envelope above, with one issue per problem, such as `"extra" is not allowed`, `"input" is missing`, or `describe takes no input` for `describe` with anything but `{}`. It answers `rpc.method_not_found` for a method that does not exist, such as `timer_set`.
+
+A `PERMISSION_DENIED` refusal names the action that was refused. When that is not the method's own, the message says so, as in `speech_transcribe needs utilities_speech_download, which was refused …`, and the next step names the allow rule to add for it.
 
 ## What scripts cannot do
 
