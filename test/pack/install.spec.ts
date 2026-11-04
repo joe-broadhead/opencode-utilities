@@ -1,7 +1,8 @@
 // Packs the package as npm would publish it, installs the tarball into an empty project with scripts disabled,
-// imports its entries, and loads it on stock OpenCode 2.2.3 and 2.2.4. Run `npm run build` first.
-// OPENCODE_BIN_2_2_3 and OPENCODE_BIN_2_2_4 name the stock `opencode` binaries when set. When unset, each
-// release is installed into this test's temp project with --ignore-scripts. That is the CI path.
+// imports its entries, and loads it on each tested stock OpenCode release (TESTED_HOSTS: 2.2.3, 2.2.4 and 2.2.5).
+// Run `npm run build` first. OPENCODE_BIN_2_2_3, OPENCODE_BIN_2_2_4 and OPENCODE_BIN_2_2_5 name the stock
+// `opencode` binaries when set. When unset, each release is installed into this test's temp project with
+// --ignore-scripts, once per version.
 // PACKED_DIR names a folder of tarballs that are already packed, as release.yml does: the test then checks the
 // main tarball and this platform's tarball from there, the exact files that will be published.
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
@@ -9,19 +10,19 @@ import { execFileSync, spawn, type ChildProcess } from "node:child_process"
 import { createHash, randomBytes } from "node:crypto"
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { createServer } from "node:net"
-import { arch, platform, tmpdir } from "node:os"
+import { arch, homedir, platform, tmpdir } from "node:os"
 import { join, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { DEFAULT_ASK, MODULES, PLATFORMS, PLUGIN_ID } from "../../src/domain/contract.js"
 import { detectTarget, isPlatform } from "../../src/domain/backends.js"
-import { HOST_RANGE } from "../../src/host/compat.js"
+import { HOST_RANGE, TESTED_HOSTS } from "../../src/host/versions.js"
 import { SCRIPT_TOOLS } from "../../src/host/scripting.js"
 import { TOOLS_RPC_ID } from "../../src/host/tools-rpc.js"
 
 setDefaultTimeout(300_000)
 const repo = fileURLToPath(new URL("../../", import.meta.url))
 const NAME = "@joe-broadhead/opencode-utilities"
-const VERSIONS = ["2.2.3", "2.2.4"] as const
+const VERSIONS = TESTED_HOSTS
 const source = JSON.parse(readFileSync(join(repo, "package.json"), "utf8")) as { version: string }
 const target = detectTarget()
 const platformPackage = isPlatform(target) ? PLATFORMS[target].package : undefined
@@ -34,7 +35,10 @@ const TRIPLES = { "darwin-arm64": "aarch64-apple-darwin", "darwin-x64": "x86_64-
 const onnx = JSON.parse(readFileSync(join(repo, "native/onnx-provenance.json"), "utf8")) as { distributions: Record<string, unknown> }
 const speechEngine = isPlatform(target) && Boolean(onnx.distributions[TRIPLES[target]])
 
-const temp = realpathSync(mkdtempSync(join(tmpdir(), "utilities-pack-")))
+// Never under the real home: OpenCode searches upward for .opencode/ folders. Every server also gets its own port.
+const realHome = realpathSync(homedir())
+const temp = realpathSync(mkdtempSync(join(existsSync("/private/tmp") ? "/private/tmp" : tmpdir(), "utilities-pack-")))
+if (temp === realHome || temp.startsWith(realHome + sep)) throw new Error(`refusing to run: the test root ${temp} is inside the home directory`)
 const project = join(temp, "project"), installed = join(project, "node_modules", NAME)
 interface Packed { filename: string; size: number; files: { path: string }[] }
 const PACKED_DIR = process.env.PACKED_DIR
@@ -162,7 +166,10 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
     expect(response.status).toBe(200)
     const view = (response.data as { output: Record<string, any> }).output
     expect(view.version).toBe(source.version)
-    expect(view.host).toEqual({ required: HOST_RANGE, found: version, availability: "AVAILABLE" })
+    expect(view.host).toEqual({ version, range: HOST_RANGE, tested: true })
+    // `locked`, defined only in config, missed the block and denies only the time tools, so weather would run there unasked.
+    expect(view).toMatchObject({ state: "ready", unguardedAgents: ["locked"] })
+    expect(view.nextStep).toStartWith("Put the block shown under Agents without default rules first in the own permissions of locked ")
     expect(view.platform).toMatchObject({ target, ...platformPackage ? { package: platformPackage } : {} })
     expect(Object.keys(view.modules).sort()).toEqual([...MODULES].sort())
     expect(view.permissions.askByDefault).toEqual([...DEFAULT_ASK])
@@ -253,6 +260,11 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
         expect(result).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
         expect(result.message).toMatch(/cannot answer an approval prompt/)
         expect(Date.now() - started).toBeLessThan(5000)
+        // UTIL-6: the refusal names the ask that was refused, the download, not the transcription itself.
+        if (method === "speech_transcribe") {
+          expect(result.message).toContain("needs utilities_speech_download, which was refused")
+          expect(result.next).toStartWith("Add an allow rule for utilities_speech_download")
+        }
       }
       const pending = (await host.api("GET", "/api/permission/request")).data as { data: unknown[] }
       expect(pending.data.filter(request => JSON.stringify(request).includes(sessions.build!))).toEqual([])
@@ -275,11 +287,17 @@ async function script(host: { api: (method: string, path: string, body?: unknown
   const { status, data } = await host.api("POST", `/api/rpc/${TOOLS_RPC_ID}/${method}`, { input })
   const body = data as Record<string, any>
   if (status === 200) return { value: body.output }
-  return { type: body.type ?? body._tag, code: body.data?.code, message: String(body.message ?? data) }
+  return { type: body.type ?? body._tag, code: body.data?.code, next: body.data?.next, message: String(body.message ?? data) }
 }
 
-/** The stock CLI for `version`: the OPENCODE_BIN_* path when set, otherwise the npm release with scripts off. */
+/** The stock CLI for `version`: the OPENCODE_BIN_* path when set, otherwise the npm release with scripts off. Memoised: a second install would fail on its folder (EEXIST). */
+const binaries = new Map<string, string>()
 function stockBinary(version: string) {
+  let binary = binaries.get(version)
+  if (!binary) { binary = installStock(version); binaries.set(version, binary) }
+  return binary
+}
+function installStock(version: string) {
   const given = process.env[`OPENCODE_BIN_${version.replaceAll(".", "_")}`]
   if (given) {
     if (!existsSync(given)) throw new Error(`OPENCODE_BIN_${version.replaceAll(".", "_")} does not exist: ${given}`)

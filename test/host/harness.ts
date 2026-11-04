@@ -2,15 +2,19 @@
 // @opencode/*: it points HOME, OPENCODE_TEST_HOME, the XDG variables and TMPDIR at a temporary root, and
 // changes into that root, so the host never reads or writes the user's real OpenCode state. Under Bun,
 // os.homedir() ignores a HOME changed after startup, which is why OPENCODE_TEST_HOME is set too.
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { homedir, tmpdir } from "node:os"
 import { join, sep } from "node:path"
 import type { Plugin } from "@opencode/plugin"
 import type { OpenCode } from "@opencode/sdk"
 
 /** The host version reported to plugins. Read before the environment is replaced. */
 export const HOST_VERSION = process.env.OPENCODE_HOST_VERSION ?? "2.2.3"
-export const root = realpathSync(mkdtempSync(join(tmpdir(), "utilities-host-")))
+// Never under the real home: OpenCode searches upward for .opencode/ folders, which would bring in the user's own
+// agents and skills. /private/tmp on macOS; the system temp folder elsewhere.
+const realHome = realpathSync(homedir())
+export const root = realpathSync(mkdtempSync(join(existsSync("/private/tmp") ? "/private/tmp" : tmpdir(), "utilities-host-")))
+if (root === realHome || root.startsWith(realHome + sep)) throw new Error(`refusing to start: the test root ${root} is inside the home directory`)
 const home = join(root, "home")
 const previousDir = process.cwd()
 for (const dir of [home, join(home, ".config"), join(home, ".local/share"), join(home, ".cache"), join(home, ".local/state"), join(root, "tmp")]) mkdirSync(dir, { recursive: true })

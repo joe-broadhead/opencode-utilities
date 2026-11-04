@@ -2,21 +2,24 @@ import { describe, expect, test } from "vitest"
 import { homedir } from "node:os"
 import { join } from "node:path"
 import { loadConfig } from "../../src/domain/config.js"
-import { checkHost, HOST_RANGE, tested } from "../../src/host/compat.js"
+import { checkHost, HOST_RANGE, inRange, TESTED_HOSTS, tested } from "../../src/host/compat.js"
 
 describe("host check", () => {
-  test("the tested line is 2.2.3 up to, not including, 2.3.0", () => {
+  test("the supported line is 2.2.3 up to, not including, 2.3.0; the tested releases are 2.2.3, 2.2.4 and 2.2.5", () => {
     expect(HOST_RANGE).toBe(">=2.2.3 <2.3.0")
-    for (const version of ["2.2.3", "2.2.4", "2.2.10"]) expect(tested(version), version).toBe(true)
-    for (const version of ["2.2.2", "2.3.0", "3.0.0", "2.2.4-beta.1", "0.0.0-dev-377", "unknown", "", "v2.2.3"]) expect(tested(version), version).toBe(false)
+    for (const version of ["2.2.3", "2.2.4", "2.2.5", "2.2.10"]) expect(inRange(version), version).toBe(true)
+    for (const version of ["2.2.2", "2.3.0", "3.0.0", "2.2.4-beta.1", "0.0.0-dev-377", "unknown", "", "v2.2.3"]) expect(inRange(version), version).toBe(false)
+    expect(TESTED_HOSTS).toEqual(["2.2.3", "2.2.4", "2.2.5"])
+    expect(["2.2.3", "2.2.4", "2.2.5", "2.2.6"].map(tested)).toEqual([true, true, true, false])
   })
-  test("an untested host is refused with the next step", () => {
-    expect(() => checkHost("2.3.0", false)).toThrow("HOST_UNTESTED: Utilities is tested on OpenCode >=2.2.3 <2.3.0, found 2.3.0. Next step: Use OpenCode 2.2.3 or a later 2.2.x release, or set the plugin option allowUntestedHost: true to run anyway.")
+  test("a host outside the range is refused with the next step", () => {
+    expect(() => checkHost("2.3.0", false)).toThrow("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0, found 2.3.0. Next step: Use OpenCode 2.2.3, 2.2.4 or 2.2.5, or set the plugin option allowUntestedHost: true to run anyway.")
     expect(() => checkHost("unknown", false)).toThrow("found unknown")
   })
-  test("allowUntestedHost runs an untested host and keeps a warning for the status", () => {
-    expect(checkHost("2.3.0", true)).toEqual({ required: HOST_RANGE, found: "2.3.0", availability: "HOST_UNTESTED", next: expect.stringContaining("untested") })
-    expect(checkHost("2.2.4", false)).toEqual({ required: HOST_RANGE, found: "2.2.4", availability: "AVAILABLE" })
+  test("a tested release runs; another release in the range runs untested; allowUntestedHost runs one outside it, with a warning", () => {
+    expect(checkHost("2.2.5", false)).toEqual({ version: "2.2.5", range: HOST_RANGE, tested: true })
+    expect(checkHost("2.2.6", false)).toEqual({ version: "2.2.6", range: HOST_RANGE, tested: false })
+    expect(checkHost("2.3.0", true)).toEqual({ version: "2.3.0", range: HOST_RANGE, tested: false, next: expect.stringContaining("allowUntestedHost is set") })
   })
 })
 

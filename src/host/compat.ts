@@ -1,29 +1,16 @@
 import { formatFailure } from "../domain/common.js"
+import { HOST_RANGE, inRange, TESTED_TEXT, tested, type HostCheck } from "./versions.js"
 
-/** The tested OpenCode line. package.json `opencode.host` states the same range. */
-export const HOST_RANGE = ">=2.2.3 <2.3.0"
+export { HOST_RANGE, TESTED_HOSTS, inRange, tested, type HostCheck } from "./versions.js"
 
-type Version = readonly [number, number, number]
-const parse = (value: string): Version | undefined => {
-  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(value)
-  return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : undefined
-}
-const compare = (a: Version, b: Version) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]
-
-/** Whether `version` is a release inside `>=low <high`. Prereleases, dev builds and "unknown" are untested. */
-export function tested(version: string, range = HOST_RANGE) {
-  const [, low, high] = /^>=(\S+) <(\S+)$/.exec(range) ?? []
-  const found = parse(version), min = low && parse(low), max = high && parse(high)
-  if (!found || !min || !max) return false
-  return compare(found, min) >= 0 && compare(found, max) < 0
-}
-
-export interface HostCheck { readonly required: string; readonly found: string; readonly availability: "AVAILABLE" | "HOST_UNTESTED"; readonly next?: string }
-
-/** Refuses an untested host unless `allowUntestedHost` is set; then the status keeps a warning and the next step. */
+/**
+ * A tested release runs. Another release inside the range runs too, untested: the OpenCode row says so, and the next
+ * step is unchanged (S13). Outside the range setup refuses, unless `allowUntestedHost` is set; then the plugin runs
+ * with a warning as its next step. Utilities has no status-only mode, so its state is never `host_untested`.
+ */
 export function checkHost(found: string, allowUntestedHost: boolean): HostCheck {
-  if (tested(found)) return { required: HOST_RANGE, found, availability: "AVAILABLE" }
-  const next = "Use OpenCode 2.2.3 or a later 2.2.x release, or set the plugin option allowUntestedHost: true to run anyway."
-  if (!allowUntestedHost) throw new Error(formatFailure({ code: "HOST_UNTESTED", message: `Utilities is tested on OpenCode ${HOST_RANGE}, found ${found}.`, hint: next }))
-  return { required: HOST_RANGE, found, availability: "HOST_UNTESTED", next: "This OpenCode version is untested and allowUntestedHost is set. If something fails, use OpenCode 2.2.3 or a later 2.2.x release." }
+  if (tested(found)) return { version: found, range: HOST_RANGE, tested: true }
+  if (inRange(found)) return { version: found, range: HOST_RANGE, tested: false }
+  if (!allowUntestedHost) throw new Error(formatFailure({ code: "HOST_UNTESTED", message: `Utilities supports OpenCode ${HOST_RANGE}, found ${found}.`, hint: `Use ${TESTED_TEXT}, or set the plugin option allowUntestedHost: true to run anyway.` }))
+  return { version: found, range: HOST_RANGE, tested: false, next: `This OpenCode version is outside ${HOST_RANGE} and runs only because allowUntestedHost is set. If something fails, use ${TESTED_TEXT}.` }
 }

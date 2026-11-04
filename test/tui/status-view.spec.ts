@@ -19,13 +19,16 @@ interface Deferred { resolve(view: StatusView): void; reject(error: Error): void
 
 const view = (version: string, overrides: Partial<StatusView> = {}): StatusView => ({
   version,
-  host: { required: ">=2.2.3 <2.3.0", found: "2.2.3", availability: "AVAILABLE" },
+  host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true },
+  state: "ready",
+  unguardedAgents: ["reviewer"],
+  nextStep: "Add the rules to reviewer's own permissions.",
   platform: { target: "darwin-arm64", package: "@joe-broadhead/opencode-utilities-bin-darwin-arm64", availability: "AVAILABLE" },
   modules: { weather: { availability: "AVAILABLE" }, time: { availability: "AVAILABLE" }, speech: { availability: "SPEECH_ASSETS_MISSING", next: "Run /utilities-speech-install, or set the speech.assetsDir option." } },
   weather: { tier: "free", key: "none", attribution: "Weather data by Open-Meteo.com (CC BY 4.0)", next: "For commercial use, add an API key: Run /connect and choose Open-Meteo." },
-  speech: { assets: [{ role: "engine", name: "utilities-speech", bytes: 46_000_000, state: "missing" }], voices: [], cacheDirectory: "/cache", outputDirectory: "/out", next: "Run /utilities-speech-install, or set the speech.assetsDir option." },
+  speech: { assets: [{ role: "engine", name: "utilities-speech", bytes: 46_000_000, state: "missing" }], voices: [], preseeded: false, cacheDirectory: "/cache", outputDirectory: "/out", next: "Run /utilities-speech-install, or set the speech.assetsDir option." },
   timers: { due: 2, directory: "/state/timers" },
-  permissions: { askByDefault: ["utilities_weather_*", "utilities_timer_set", "utilities_timer_delete", "utilities_speech_synthesize", "utilities_speech_download"], unguardedAgents: ["reviewer"], next: "Add the rules to reviewer's own permissions." },
+  permissions: { askByDefault: ["utilities_weather_*", "utilities_timer_set", "utilities_timer_delete", "utilities_speech_synthesize", "utilities_speech_download"] },
   ...overrides,
 })
 
