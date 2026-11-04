@@ -12,7 +12,7 @@
     ".": "./dist/index.js",
     "./tui": "./dist/tui.js"
   },
-  "files": ["dist", "skills", "manifest", "README.md", "LICENSE", "NOTICE", "CHANGELOG.md"],
+  "files": ["dist", "assets", "skills", "manifest", "README.md", "LICENSE", "NOTICE", "CHANGELOG.md"],
   "opencode": { "host": ">=2.2.3 <2.3.0" },
   "workspaces": ["npm/*"],
   "scripts": {
@@ -51,6 +51,8 @@
   },
   "jelly": {
     "title": "Utilities",
+    "summary": "Time zones, holidays, timers, weather and on-device speech.",
+    "icon": "assets/icon.svg",
     "tools": [
       {
         "name": "utilities.status",
