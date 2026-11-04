@@ -26,7 +26,7 @@ There is no `policy` option and no `allowActions` option. Permissions are OpenCo
 | `modules.weather` | boolean | `true` | When `false`, weather tools are not registered. |
 | `modules.time` | boolean | `true` | When `false`, time and timer tools are not registered. |
 | `modules.speech` | boolean | `true` | When `false`, speech tools are not registered and `/utilities-speech-install` refuses. |
-| `stateRoot` | absolute path | `$XDG_DATA_HOME/opencode-utilities`, or `~/.local/share/opencode-utilities` | Timer stores and the default speech output directory. Must be mode `0700`, owned by the user, and not a symbolic link. |
+| `stateRoot` | absolute path | `$XDG_DATA_HOME/opencode-utilities`, or `~/.local/share/opencode-utilities` | Timer stores and the default speech output directory. Must be mode `0700` and owned by the user. See [Symbolic links](#symbolic-links). |
 | `speech.assetsDir` | absolute path | unset | Flat pre-seed directory. See [Speech files](#speech-files). |
 | `allowUntestedHost` | boolean | `false` | When `true`, an untested OpenCode version loads and status shows `HOST_UNTESTED` with a warning. When `false` or omitted, setup throws. |
 
@@ -41,6 +41,12 @@ Unknown keys are rejected. A relative path is rejected.
 | `jobs/job-*` | Per-call scratch. Removed at startup when older than 10 minutes. |
 
 The speech cache is not under `stateRoot`. It is `$XDG_CACHE_HOME/opencode-utilities` (`~/.cache/opencode-utilities` when unset).
+
+### Symbolic links
+
+At startup the plugin resolves each of its roots once with `realpath`: `stateRoot`, the speech cache, `speech.assetsDir`, the installed package and its platform package. A link above a root, or the root itself, is fine. Examples are macOS `/tmp` (a link to `/private/tmp`), Fedora Atomic and Silverblue `/home` (a link to `/var/home`), and a dotfile setup that links `~/.local` or `~/.cache`. Status shows the resolved paths.
+
+Inside those roots, the plugin refuses every symbolic link: a timer store, a job folder, a cached or pre-seeded speech file, a program. The error is `UNSAFE_PATH`, never `INTEGRITY_MISMATCH`.
 
 ## Host check
 
@@ -262,3 +268,5 @@ A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next 
 | `WAV_INVALID`, `WAV_UNSUPPORTED` | Convert to 16-bit PCM WAV. The hint includes an `ffmpeg` example. |
 | `OUTPUT_EXISTS` | Choose another path, or delete the file. The output is created exclusively. |
 | `QUEUE_FULL` | Wait, then retry. Each module has its own queue. |
+| `UNSAFE_PATH` | A file or folder inside the plugin's own directories is a symbolic link, or not the expected type. Replace the link with the real file or folder, or reinstall. Links above those directories are fine. See [Symbolic links](#symbolic-links). |
+| `STATE_NOT_PRIVATE` | Run `chmod 700` on the `stateRoot` directory. |

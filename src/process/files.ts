@@ -1,6 +1,6 @@
 import { constants, type Stats } from "node:fs"
 import { open, lstat, mkdir, mkdtemp, readdir, realpath, rm } from "node:fs/promises"
-import { resolve, parse as pathParse, join } from "node:path"
+import { basename, dirname, resolve, parse as pathParse, join } from "node:path"
 import { createHash } from "node:crypto"
 import { fail, fence } from "../domain/common.js"
 
@@ -21,7 +21,24 @@ async function walk(path: string, visit: (component: string, info: Stats | undef
   }
   return absolute
 }
-/** Rejects a symbolic link in any existing component. Missing components are allowed. */
+/**
+ * Resolves a configured root once: the longest existing prefix goes through `realpath`, and the missing rest is
+ * appended as given. A link above or at a root is the user's own setup (macOS `/tmp`, Fedora Atomic `/home`, dotfile
+ * links), not the plugin's, so every later walk starts from the resolved path and refuses links only inside it.
+ */
+export async function resolveRoot(path: string): Promise<string> {
+  const rest: string[] = []
+  let head = resolve(path)
+  for (;;) {
+    try { return join(await realpath(head), ...rest) }
+    catch (error) {
+      const code = (error as NodeJS.ErrnoException).code, parent = dirname(head)
+      if (code !== "ENOENT" && code !== "ENOTDIR" || parent === head) throw error
+      rest.unshift(basename(head)); head = parent
+    }
+  }
+}
+/** Rejects a symbolic link in any existing component. Missing components are allowed. Pass resolved roots. */
 export const noSymlinks = (path: string) => walk(path, (_, info) => { if (info?.isSymbolicLink()) fail("UNSAFE_PATH") })
 /** Creates missing components 0700, rejects links, and requires the final directory to be private to this user. */
 export async function privateDirectory(path: string) {
