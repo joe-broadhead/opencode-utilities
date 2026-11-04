@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto"
 import { lstat, readdir, writeFile } from "node:fs/promises"
-import { extname, join, resolve } from "node:path"
+import { dirname, extname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type * as z from "zod"
 import { identifySource, type OutputTarget } from "./artifacts/audio.js"
@@ -49,8 +49,14 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
   const options: RuntimeOptions = { ...given, packageRoot, stateRoot, cacheRoot, ...speechAssetsDir === undefined ? {} : { speechAssetsDir } }
   const target = options.target ?? detectTarget(), directory = resolve(options.location.directory)
   const location = { directory, projectDirectory: options.location.projectDirectory }
-  const scope = createHash("sha256").update(JSON.stringify([options.location.project, directory])).digest("hex")
-  const paths = { store: join(options.stateRoot, "projects", scope, "timers"), jobs: join(options.stateRoot, "jobs"), speech: join(options.stateRoot, "speech"), output: join(options.stateRoot, "speech", scope) }
+  // Timers and default speech files belong to the project, wherever in it OpenCode runs.
+  const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
+  const scope = hash([options.location.project]), store = (key: string) => join(options.stateRoot, "projects", key, "timers")
+  const paths = { store: store(scope), jobs: join(options.stateRoot, "jobs"), speech: join(options.stateRoot, "speech"), output: join(options.stateRoot, "speech", scope) }
+  // 0.0.1 kept a store per location directory, keyed by [project, directory]. Those of this directory and its parents
+  // are moved into the project store on first use; another folder's moves when OpenCode runs there.
+  const legacy: string[] = []
+  for (let dir = directory; ; dir = dirname(dir)) { legacy.push(store(hash([options.location.project, dir]))); if (dirname(dir) === dir) break }
   const backends = new Backends(packageRoot, target)
   const assets = new SpeechAssets({ packageRoot, cacheRoot: options.cacheRoot, target, ...options.speechAssetsDir === undefined ? {} : { assetsDir: options.speechAssetsDir } })
   const shutdown = new AbortController(), queue = new Queue(), pending = new Set<Promise<unknown>>(), listeners = new Set<() => void>()
@@ -117,7 +123,7 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
         job = await stage(paths.jobs, work); fence(work)
         if (module !== "speech") { await writeFile(join(job, "empty.toml"), "", { flag: "wx", mode: 0o600 }); fence(work) }
         const ctx: ModuleContext = {
-          stage: job, store: paths.store, signal: work,
+          stage: job, store: paths.store, legacyStores: legacy, signal: work,
           async run(args, runOptions = {}) {
             // The program is verified again right before each spawn; unchanged files are not re-hashed.
             const checked = await verifier.check(program.path, program.sha256, true)
@@ -185,7 +191,8 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
   async function dueTimers(signal: AbortSignal): Promise<number | undefined> {
     if (!options.modules.time || closed) return undefined
     try {
-      if (!await lstat(paths.store).then(() => true, () => false)) return 0
+      const exists = (path: string) => lstat(path).then(() => true, () => false)
+      if (!(await Promise.all([paths.store, ...legacy].map(exists))).includes(true)) return 0
       const step = await plan("timer_check", { offset: 0, limit: 1 })
       const { output } = await perform("timer_check", parse(timeInputs.timer_check, { offset: 0, limit: 1 }), step, signal)
       return (output as { total: number }).total

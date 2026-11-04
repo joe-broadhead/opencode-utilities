@@ -1,7 +1,8 @@
-import { join } from "node:path"
+import { lstat, rename, rm, rmdir } from "node:fs/promises"
+import { dirname, join } from "node:path"
 import { timeArgv } from "./argv.js"
 import type * as z from "zod"
-import { timeNative, timeOutputs, timerList, timerCheck, type TimeInput, type TimeOperation } from "./contracts.js"
+import { timeNative, timeOutputs, timerList, timerCheck, type TimeInput, type TimeOperation, type TimerRecord } from "./contracts.js"
 import { applies, mark, tagged } from "./regions.js"
 import { privateDirectory, sqliteFiles } from "../../process/files.js"
 import { withLock } from "../../process/lock.js"
@@ -88,6 +89,7 @@ async function timers<K extends TimeOperation>(op: K, input: TimeInput[K], ctx: 
   const run = async (args: string[], mutation = false) => { await sqliteFiles(ctx.store); fence(ctx.signal); return ctx.run(args, { mutation }) }
   await privateDirectory(ctx.store); fence(ctx.signal)
   return withLock(join(ctx.store, ".utilities-lock"), ctx.signal, async () => {
+    await migrate(ctx, run); fence(ctx.signal)
     if (op === "timer_set") {
       const i = input as TimeInput["timer_set"]
       const existing = parse(timerList, await run(timeArgv("timer_list", { offset: 0, limit: 20 }, paths(ctx))))
@@ -117,4 +119,48 @@ async function timers<K extends TimeOperation>(op: K, input: TimeInput[K], ctx: 
     const end = page.offset + timers.length
     return { ...value, total: value.count, count: timers.length, timers, nextOffset: end < value.count ? end : null }
   })
+}
+
+const SQLITE = ["timers.db", "timers.db-wal", "timers.db-shm", "timers.db-journal"] as const
+const present = async (store: string) => (await Promise.all(SQLITE.map(file => lstat(join(store, file)).then(() => file, () => undefined)))).filter(file => file !== undefined)
+const sameTimer = (a: TimerRecord, b: TimerRecord) => a.deadline_utc === b.deadline_utc && a.description === b.description && JSON.stringify([...a.tags].sort()) === JSON.stringify([...b.tags].sort())
+/** `name (2)`, `name (3)` …: the first name the project store does not use, within the 128-character limit. */
+function freeName(name: string, taken: ReadonlySet<string>) {
+  for (let n = 2; ; n++) { const suffix = ` (${n})`, candidate = `${name.slice(0, 128 - suffix.length).trimEnd()}${suffix}`; if (!taken.has(candidate)) return candidate }
+}
+
+/**
+ * Moves 0.0.1's per-directory stores of this project into the project store. Runs under the project store's lock,
+ * and takes each old store's lock too, since a 0.0.1 process may still use it. An old store moves whole (its one
+ * SQLite file renamed, every field kept) while the project store is empty; otherwise each timer is copied with
+ * time-keep, an identical one is skipped, and a different one with a taken name gets `name (2)`. Copies are
+ * idempotent, so a move cut short repeats safely; the old files go only after every timer is in.
+ */
+async function migrate(ctx: ModuleContext, run: (args: string[], mutation?: boolean) => Promise<unknown>) {
+  const at = (store: string) => ({ config: join(ctx.stage, "empty.toml"), store })
+  for (const legacy of ctx.legacyStores) {
+    if (!await lstat(legacy).then(info => info.isDirectory(), () => false)) continue
+    await withLock(join(legacy, ".utilities-lock"), ctx.signal, async () => {
+      await sqliteFiles(legacy)
+      const files = await present(legacy)
+      if (!files.includes("timers.db")) return
+      if (files.length === 1 && (await present(ctx.store)).length === 0) { await rename(join(legacy, "timers.db"), join(ctx.store, "timers.db")); return }
+      const old = parse(timerList, await run(timeArgv("timer_list", { offset: 0, limit: 20 }, at(legacy))))
+      const current = parse(timerList, await run(timeArgv("timer_list", { offset: 0, limit: 20 }, at(ctx.store))))
+      const taken = new Set(current.timers.map(t => t.name))
+      for (const timer of old.timers) {
+        fence(ctx.signal)
+        const existing = current.timers.find(t => t.name === timer.name)
+        if (existing && sameTimer(existing, timer)) continue
+        // A full project store keeps the rest in the old store, still on disk; the next call tries again.
+        if (taken.size >= LIMITS.timers) return
+        const name = existing ? freeName(timer.name, taken) : timer.name
+        await run(timeArgv("timer_set", { name, deadline: timer.original_deadline, ...timer.description === undefined ? {} : { description: timer.description }, tags: timer.tags, replace: false }, at(ctx.store)))
+        taken.add(name)
+      }
+      for (const file of files) await rm(join(legacy, file), { force: true })
+    })
+    // Only empty folders go; anything else in them stays.
+    await rmdir(legacy).then(() => rmdir(dirname(legacy))).catch(() => undefined)
+  }
 }

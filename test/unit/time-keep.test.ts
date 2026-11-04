@@ -1,12 +1,16 @@
 // The real time-keep program from this machine's platform package, which `npm run check` builds first
 // (native:ensure). These tests pin what the synthetic fixture cannot: time-keep's own parsing and error messages.
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
-import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises"
+import { execFileSync } from "node:child_process"
+import { createHash } from "node:crypto"
+import { lstat, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises"
+import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { createRuntime } from "../../src/runtime.js"
-import type { Runtime } from "../../src/domain/contract.js"
+import { PLATFORMS, type Runtime } from "../../src/domain/contract.js"
+import { detectTarget } from "../../src/domain/backends.js"
 import { timeFailure } from "../../src/modules/time/failures.js"
 import { invocation } from "../fixtures.js"
 
@@ -136,3 +140,71 @@ describe("regional holidays (UTIL-4)", () => {
     await expect(call("time_business_days", { mode: "next", date: "2026-08-02", region: "Scotland" })).rejects.toMatchObject({ code: "INPUT_INVALID" })
   })
 })
+
+describe("timers belong to the project, and 0.0.1's per-directory stores move into it (UTIL-5)", () => {
+  const timeKeep = join(dirname(createRequire(join(repo, "package.json")).resolve(`${PLATFORMS[detectTarget() as keyof typeof PLATFORMS].package}/package.json`)), "bin/time-keep")
+  const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
+  /** A store exactly where 0.0.1 kept it: projects/sha256([project, directory])/timers. */
+  async function legacy(state: string, project: string, directory: string, timers: { name: string; deadline: string; description?: string; tags?: string[] }[]) {
+    const store = join(state, "projects", hash([project, directory]), "timers")
+    await mkdir(store, { recursive: true, mode: 0o700 }); await writeFile(join(state, "empty.toml"), "")
+    for (const t of timers) execFileSync(timeKeep, ["--output=json", `--config=${join(state, "empty.toml")}`, `--data-dir=${store}`, "timer", "set", ...t.description ? [`--description=${t.description}`] : [], ...(t.tags ?? []).map(tag => `--tag=${tag}`), "--", t.name, t.deadline])
+    return store
+  }
+  async function project(name: string, directory: string) {
+    const base = await mkdtemp(join(await realpath(tmpdir()), "utilities-move-")), state = join(base, "state"), dir = join(base, directory)
+    await mkdir(state, { mode: 0o700 }); await mkdir(dir, { recursive: true }); cleanups.push(() => rm(base, { recursive: true, force: true }))
+    const open = async (location: string) => {
+      const r = await createRuntime({ location: { project: name, directory: join(base, location), projectDirectory: join(base, "repo") }, authorize: async () => {}, modules: { time: true, weather: false, speech: false }, stateRoot: state, cacheRoot: join(base, "cache"), packageRoot: repo })
+      cleanups.push(() => r.close()); return r
+    }
+    return { base, state, open }
+  }
+  const cleanups: (() => Promise<unknown>)[] = []
+  afterAll(async () => { for (const c of cleanups.reverse()) await c() })
+  const list = async (r: Runtime) => ((await r.invoke("timer_list", { limit: 100 }, invocation())).output as { timers: { name: string; description?: string; tags: string[]; created_at_utc: string; deadline_utc: string }[] }).timers
+
+  test("a timer set at the project root is seen from a subfolder, and the reverse", async () => {
+    const p = await project("p-sub", "repo/sub"), root = await p.open("repo"), sub = await p.open("repo/sub")
+    await root.invoke("timer_set", { name: "from-root", deadline: "2027-01-01T00:00:00Z" }, invocation())
+    await sub.invoke("timer_set", { name: "from-sub", deadline: "2027-01-01T00:00:00Z" }, invocation())
+    expect((await list(sub)).map(t => t.name).sort()).toEqual(["from-root", "from-sub"])
+    expect((await list(root)).map(t => t.name).sort()).toEqual(["from-root", "from-sub"])
+    expect((await root.status()).timers.directory).toBe((await sub.status()).timers.directory)
+  })
+  test("one old store moves whole into an empty project store, every field kept, and its folder goes", async () => {
+    const p = await project("p-whole", "repo"), dir = join(p.base, "repo")
+    const store = await legacy(p.state, "p-whole", dir, [{ name: "review", deadline: "2027-01-01T09:00:00+01:00", description: "Quarterly review", tags: ["work", "q1"] }, { name: "due", deadline: "2020-01-01T00:00:00Z" }])
+    const before = JSON.parse(execFileSync(timeKeep, ["--output=json", `--config=${join(p.state, "empty.toml")}`, `--data-dir=${store}`, "timer", "list"], { encoding: "utf8" })).timers
+    const runtime = await p.open("repo")
+    // Status already counts the old store's due timer, which moves on that first use.
+    expect((await runtime.status()).timers).toMatchObject({ due: 1 })
+    const after = await list(runtime)
+    expect(after.map(({ remaining, remaining_seconds, status, overdue, ...t }: Record<string, unknown>) => t)).toEqual(before.map(({ remaining, remaining_seconds, status, overdue, ...t }: Record<string, unknown>) => t))
+    await expect(lstat(join(store, ".."))).rejects.toMatchObject({ code: "ENOENT" })
+  })
+  test("stores of this folder and its parents merge: identical timers once, a clashing name kept as name (2)", async () => {
+    const p = await project("p-merge", "repo/sub/deep"), repoDir = join(p.base, "repo"), subDir = join(repoDir, "sub")
+    const rootStore = await legacy(p.state, "p-merge", repoDir, [{ name: "shared", deadline: "2027-01-01T00:00:00Z", tags: ["a"] }, { name: "clash", deadline: "2027-02-01T00:00:00Z" }, { name: "root-only", deadline: "2027-03-01T00:00:00Z" }])
+    const subStore = await legacy(p.state, "p-merge", subDir, [{ name: "shared", deadline: "2027-01-01T00:00:00Z", tags: ["a"] }, { name: "clash", deadline: "2027-02-02T00:00:00Z", description: "the other one" }])
+    const other = await legacy(p.state, "p-other", repoDir, [{ name: "not-mine", deadline: "2027-01-01T00:00:00Z" }])
+    const deep = await p.open("repo/sub/deep")
+    const timers = await list(deep)
+    expect(timers.map(t => t.name).sort()).toEqual(["clash", "clash (2)", "root-only", "shared"])
+    // The nearest folder's store moves first, so the parent's different timer is the one renamed.
+    expect(timers.find(t => t.name === "clash")).toMatchObject({ deadline_utc: "2027-02-02T00:00:00Z", description: "the other one" })
+    expect(timers.find(t => t.name === "clash (2)")).toMatchObject({ deadline_utc: "2027-02-01T00:00:00Z" })
+    expect(timers.find(t => t.name === "shared")).toMatchObject({ tags: ["a"] })
+    for (const store of [rootStore, subStore]) await expect(lstat(store)).rejects.toMatchObject({ code: "ENOENT" })
+    // Another project's store is never touched, and the move does not repeat.
+    expect(await present(other)).toEqual(["timers.db"])
+    expect((await list(await p.open("repo"))).map(t => t.name).sort()).toEqual(["clash", "clash (2)", "root-only", "shared"])
+  })
+  test("a store a 0.0.1 process writes again after the move is merged on the next call; a repeated copy adds nothing", async () => {
+    const p = await project("p-again", "repo"), dir = join(p.base, "repo"), runtime = await p.open("repo")
+    await runtime.invoke("timer_set", { name: "kept", deadline: "2027-01-01T00:00:00Z" }, invocation())
+    await legacy(p.state, "p-again", dir, [{ name: "kept", deadline: "2027-01-01T00:00:00Z" }, { name: "late", deadline: "2027-05-01T00:00:00Z" }])
+    expect((await list(runtime)).map(t => t.name).sort()).toEqual(["kept", "late"])
+  })
+})
+const present = (store: string) => readdir(store).then(names => names.filter(name => name.startsWith("timers.db")))
