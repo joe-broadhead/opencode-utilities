@@ -18,7 +18,7 @@ describe("host check", () => {
   })
   test("a tested release runs; another release in the range runs untested; allowUntestedHost runs one outside it, with a warning", () => {
     expect(checkHost("2.2.5", false)).toEqual({ version: "2.2.5", range: HOST_RANGE, tested: true })
-    expect(checkHost("2.2.6", false)).toEqual({ version: "2.2.6", range: HOST_RANGE, tested: false, next: "If something fails, use OpenCode 2.2.3, 2.2.4 or 2.2.5, the tested releases." })
+    expect(checkHost("2.2.6", false)).toEqual({ version: "2.2.6", range: HOST_RANGE, tested: false })
     expect(checkHost("2.3.0", true)).toEqual({ version: "2.3.0", range: HOST_RANGE, tested: false, next: expect.stringContaining("allowUntestedHost is set") })
   })
 })

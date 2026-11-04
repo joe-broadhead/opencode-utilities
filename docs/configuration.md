@@ -62,8 +62,8 @@ Inside those roots, the plugin refuses every symbolic link: a timer store, a job
 | Version | Result |
 | --- | --- |
 | 2.2.3, 2.2.4, 2.2.5 | Load. These are the tested releases: status shows `tested`, and the status RPC `host.tested` is `true`. |
-| 2.2.6 or a later 2.2 release | Load, untested. Status shows `untested; supported range >=2.2.3 <2.3.0`, `state` is `host_untested`, and the next step names the tested releases. |
-| 2.2.2, 2.3.0, 3.0.0, a prerelease, a dev build, `unknown` | Refused, unless `allowUntestedHost` is `true`. With it, the plugin loads with a warning and `state` is `host_untested`. |
+| 2.2.6 or a later 2.2 release | Load normally, untested. The OpenCode row shows `untested; supported range >=2.2.3 <2.3.0` and `host.tested` is `false`; `state` and the next step are unchanged. |
+| 2.2.2, 2.3.0, 3.0.0, a prerelease, a dev build, `unknown` | Refused: setup fails, so there is no status. With `allowUntestedHost: true` the plugin loads, and the next step is a warning. |
 
 Do not write the range as `^2.2.3`. That would accept 2.3.
 
@@ -244,8 +244,8 @@ The status RPC starts with the fields every one of these plugins shares:
 | Field | Meaning |
 | --- | --- |
 | `version` | The plugin's version. |
-| `host` | `{ version, range, tested }`: OpenCode's version, the supported range `>=2.2.3 <2.3.0`, and whether the version is a tested release (2.2.3, 2.2.4, 2.2.5). `next` is added when it is not. |
-| `state` | `ready`; `host_untested` for an untested host; `failed` when every module that is on failed; `disabled` when every module is off. |
+| `host` | `{ version, range, tested }`: OpenCode's version, the supported range `>=2.2.3 <2.3.0`, and whether the version is a tested release (2.2.3, 2.2.4, 2.2.5). `next` is added only for a version outside the range that runs because of `allowUntestedHost`. |
+| `state` | `ready`; `failed` when every module that is on failed; `disabled` when every module is off. Utilities has no status-only mode, so the shared `host_untested` never occurs: an untested host shows only in `host.tested` and the OpenCode row. |
 | `unguardedAgents` | The agents without the default rules whose own rules would run a Utilities side effect without asking. Always present; `[]` when none. |
 | `nextStep` | Exactly the `Next step` row; `Nothing to do.` when nothing is needed. Missing speech files that download on first use, and the free weather tier, never set it. |
 

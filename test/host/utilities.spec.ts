@@ -353,7 +353,7 @@ describe("host compatibility and unload", () => {
       expect(allowed.created).toHaveLength(1)
       const status = await untested.sdk.rpc(Utilities).status({}, { location })
       expect(status.host).toMatchObject({ version: "2.3.0", range: ">=2.2.3 <2.3.0", tested: false, next: expect.stringContaining("allowUntestedHost is set") })
-      expect(status.state).toBe("host_untested")
+      expect(status.state).toBe("ready")
     } finally { await untested.sdk.close() }
   })
 
