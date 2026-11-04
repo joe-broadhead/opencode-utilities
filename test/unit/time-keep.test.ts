@@ -86,3 +86,53 @@ test("the other time-keep messages map by prefix, and unknown ones stay BACKEND_
   expect(timeFailure(report("something new"), "date_format", input as never)).toBeUndefined()
   expect(timeFailure({ error: { error_code: "INTERNAL", message: "holiday data supports years" } }, "holidays", input as never)).toBeUndefined()
 })
+
+describe("regional holidays (UTIL-4)", () => {
+  const days = (output: unknown) => (output as { holidays: { date: string; nationwide: boolean; regions: string[] }[] }).holidays
+  test("lists keep regional holidays, marked with a regions field; a region keeps only its own and the nationwide ones", async () => {
+    const all = days((await call("time_holidays", { mode: "list", year: 2026, country: "GB" })).output)
+    expect(all).toHaveLength(14)
+    expect(all.find(h => h.date === "2026-12-25")).toMatchObject({ name: "Christmas Day", nationwide: true, regions: [] })
+    expect(all.find(h => h.date === "2026-08-03")).toMatchObject({ name: "Summer Bank Holiday [Scotland]", nationwide: false, regions: ["Scotland"] })
+    expect(all.find(h => h.date === "2026-04-06")).toMatchObject({ nationwide: false, regions: ["England", "Wales", "Northern Ireland"] })
+    const scotland = await call("time_holidays", { mode: "list", year: 2026, country: "GB", region: "Scotland" })
+    expect(scotland.output).toMatchObject({ region: "Scotland", count: 10 })
+    expect(days(scotland.output).map(h => h.date)).not.toContain("2026-04-06")
+    // One row joins a regional and a nationwide holiday: the row is nationwide.
+    expect(days((await call("time_holidays", { mode: "list", year: 2023, country: "GB" })).output).find(h => h.date === "2023-01-02"))
+      .toMatchObject({ name: "New Year Holiday [Scotland], New Year's Day (Observed)", nationwide: true, regions: [] })
+    // A bracket elsewhere is an English name, not a region.
+    expect(days((await call("time_holidays", { mode: "list", year: 2026, country: "AR" })).output).every(h => h.nationwide && h.regions.length === 0)).toBe(true)
+    expect(days((await call("time_holidays", { mode: "list", year: 2026, country: "IM" })).output).find(h => h.date === "2026-11-30")).toMatchObject({ nationwide: false, regions: ["Scotland"] })
+  })
+  test("check marks the holiday; with a region, another region's holiday is not one", async () => {
+    await expect(call("time_holidays", { mode: "check", date: "2026-08-03", country: "GB" })).resolves.toMatchObject({ output: { is_holiday: true, region: null, holiday: { regions: ["Scotland"], nationwide: false } } })
+    const england = (await call("time_holidays", { mode: "check", date: "2026-08-03", country: "GB", region: "England" })).output
+    expect(england).toMatchObject({ is_holiday: false, region: "England" }); expect(england).not.toHaveProperty("holiday")
+    await expect(call("time_holidays", { mode: "check", date: "2026-08-03", country: "GB", region: "Scotland" })).resolves.toMatchObject({ output: { is_holiday: true } })
+  })
+  test("business days skip only nationwide holidays by default, and a region's own with region", async () => {
+    const one = await call("time_business_days", { mode: "between", from: "2026-08-03", to: "2026-08-03", country: "GB" })
+    expect(one.output).toMatchObject({ business_days: 1, holidays_skipped: [], regional_holidays_not_skipped: [{ date: "2026-08-03", regions: ["Scotland"] }] })
+    await expect(call("time_business_days", { mode: "between", from: "2026-08-03", to: "2026-08-03", country: "GB", region: "Scotland" })).resolves.toMatchObject({ output: { business_days: 0, region: "Scotland" } })
+    await expect(call("time_business_days", { mode: "between", from: "2026-08-01", to: "2026-08-31", country: "GB" })).resolves.toMatchObject({ output: { business_days: 21 } })
+    await expect(call("time_business_days", { mode: "between", from: "2026-08-31", to: "2026-08-01", country: "GB", region: "England" })).resolves.toMatchObject({ output: { business_days: -20, holidays_skipped: [{ date: "2026-08-31" }] } })
+    await expect(call("time_business_days", { mode: "between", from: "2026-12-21", to: "2026-12-31", country: "GB" })).resolves.toMatchObject({ output: { business_days: 7 } })
+    // A country without regional rows keeps time-keep's own count.
+    await expect(call("time_business_days", { mode: "between", from: "2026-12-21", to: "2026-12-31", country: "NL" })).resolves.toMatchObject({ output: { business_days: 8, regional_holidays_not_skipped: [] } })
+  })
+  test("next and previous step over nationwide holidays, and a region's own with region", async () => {
+    const next = (date: string, extra: object = {}) => call("time_business_days", { mode: "next", date, country: "GB", ...extra }).then(r => r.output)
+    await expect(next("2026-08-02")).resolves.toMatchObject({ business_date: "2026-08-03", days_moved: 1, mode: "country_holidays", country_code: "GB", region: null, coverage: { end_year: 2030 } })
+    await expect(next("2026-08-02", { region: "Scotland" })).resolves.toMatchObject({ business_date: "2026-08-04", days_moved: 2 })
+    await expect(next("2026-12-24")).resolves.toMatchObject({ business_date: "2026-12-29", days_moved: 5 })
+    await expect(next("2026-12-31")).resolves.toMatchObject({ business_date: "2027-01-04" })
+    await expect(next("2026-12-31", { region: "Scotland" })).resolves.toMatchObject({ business_date: "2027-01-05" })
+    await expect(call("time_business_days", { mode: "prev", date: "2026-12-29", country: "GB" })).resolves.toMatchObject({ output: { business_date: "2026-12-24", direction: "previous", days_moved: 5 } })
+    await expect(call("time_business_days", { mode: "prev", date: "2000-01-03", country: "GB" })).rejects.toMatchObject({ code: "HOLIDAY_COVERAGE" })
+  })
+  test("region is only for GB", async () => {
+    await expect(call("time_holidays", { mode: "list", year: 2026, country: "US", region: "England" })).rejects.toMatchObject({ code: "INPUT_INVALID", message: "The tool input is invalid. region: is only for country GB, the one country whose holiday data has regions." })
+    await expect(call("time_business_days", { mode: "next", date: "2026-08-02", region: "Scotland" })).rejects.toMatchObject({ code: "INPUT_INVALID" })
+  })
+})

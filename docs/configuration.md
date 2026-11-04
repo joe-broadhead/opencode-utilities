@@ -81,6 +81,15 @@ Only available modules are registered. Transcription and synthesis stay register
 
 `utilities_speech_download` is not a tool. It is the action asserted before a download, by the first transcription or synthesis call that needs files and by `/utilities-speech-install`. Resource and save are the release host (`github.com`). `metadata.bytes` is the total size. `metadata.files` lists the names.
 
+### Holidays and regions
+
+Holiday data is offline, from the `holidays` crate, and covers 2000–2030. Some rows are regional. In the UK (`GB`), a row may apply to only England, Wales, Scotland or Northern Ireland, which the data marks in the name, as in `Summer Bank Holiday [Scotland]`. The Isle of Man (`IM`) data repeats those UK rows. No other country in the data has regional rows; a bracket there holds an English name, as in `Año nuevo [New Year's Day]`.
+
+- Every holiday in a result has `nationwide` (boolean) and `regions` (the nations, empty when nationwide). A row that joins a regional and a nationwide holiday on one date is nationwide.
+- `utilities_time_holidays` lists and checks every holiday, regional ones included. With `region`, it keeps only that nation's holidays and the nationwide ones, and `check` answers `is_holiday: false` for another nation's holiday.
+- `utilities_time_business_days` skips weekends (Saturday and Sunday) and, with `country`, the nationwide holidays. With `region`, it also skips that nation's own. A count lists the regional weekday holidays it did not skip in `regional_holidays_not_skipped`.
+- `region` is only valid with `country: "GB"`. It takes `England`, `Wales`, `Scotland` or `Northern Ireland`.
+
 ### File resources
 
 A path is resolved against the location directory. `~` is expanded.
