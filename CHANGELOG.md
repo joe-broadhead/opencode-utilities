@@ -2,6 +2,19 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- A `jelly` section in `package.json`, which [Jelly](https://heyjelly.ai) reads without loading the plugin:
+  - all 25 tools and the speech download, each with its permission, the effect the plugin's default rules give it
+    and whether it only reads, so that Jelly's agents, which have no base allow rule for those rules to follow,
+    still ask before weather calls, timer changes, speech output and speech downloads;
+  - the skill ids, the name Jelly shows on the plugin's card, and the optional Open-Meteo key, with a link to
+    Open-Meteo's pricing.
+
+  [docs/jelly.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/jelly.md) explains each part.
+
 ## [0.0.2] - 2026-11-04
 
 ### Added
