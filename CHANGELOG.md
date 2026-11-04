@@ -7,6 +7,9 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Fixed
 
 - A symbolic link above the plugin's state, cache or install folder no longer breaks it. On Fedora Atomic and Silverblue (`/home` is a link to `/var/home`), with `stateRoot` or `speech.assetsDir` under macOS `/tmp`, or with a dotfile link to `~/.local` or `~/.cache`, every module failed, and time and weather wrongly reported `INTEGRITY_MISMATCH`. The plugin now resolves its roots once at startup and refuses links only inside its own folders. Such a link is now `UNSAFE_PATH`, never an integrity failure, and status reports it per module.
+- A daylight-saving gap or overlap, and a date outside the holiday data, no longer reach the model as a bare `BACKEND_FAILED: The program behind this tool reported an error.` They are now `TIME_NONEXISTENT`, `TIME_AMBIGUOUS` (with both UTC offsets, so the model can ask which one and retry with it), `TIME_OFFSET_MISMATCH`, `HOLIDAY_COVERAGE` and `TIME_OUT_OF_RANGE`, each with its own next step.
+- Date-times without seconds, such as `2026-03-29T02:30`, work. The tools accepted them, but the time program rejected them with `BACKEND_FAILED`.
+- An out-of-range date says which range applies, for example `date: must be from 2000 to 2030, the years the offline holiday data covers`, instead of `date: Invalid input`. Time zone, date and date-time errors name their rule too.
 
 ## [0.0.1] - 2026-11-03
 

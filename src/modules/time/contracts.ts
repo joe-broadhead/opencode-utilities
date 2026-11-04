@@ -3,7 +3,9 @@ import { date, dateOrTime, datetime, instant, zone, text, byteText, integer } fr
 
 const country = z.enum("AE AM AO AR AT AU AW AZ BA BD BE BG BI BO BR BW BY CA CH CL CN CO CU CW CY CZ DE DJ DK DO EE EG ES ET FI FR GB GE GR HK HN HR HU ID IE IL IM IN IS IT JM JP KE KR KZ LI LS LT LU LV MA MD MG MK MT MW MX MY MZ NA NG NI NL NO NZ PE PK PL PT PY RO RS RU SA SE SG SI SK SZ TN TR TW UA US UY UZ VE VN ZA ZM ZW".split(" "))
 const holidayCountry = country.describe("ISO 3166-1 alpha-2 country code, for example GB or US.")
-const holidayDate = date.refine(s => s >= "2000-01-01" && s <= "2030-12-31")
+const COVERAGE = "must be from 2000 to 2030, the years the offline holiday data covers"
+const covered = (s: string) => s >= "2000-01-01" && s <= "2030-12-31"
+const holidayDate = date.refine(covered, COVERAGE)
 // Match Rust str::trim, including NEL, without JS-only BOM trimming.
 export const timerName = text(128).min(1).refine(s => s === s.replace(/^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g, ""))
 const name = timerName.describe("Timer name, unique within this project. 1-128 characters, no leading or trailing spaces.")
@@ -23,7 +25,8 @@ export const timeInputs = {
   }),
   timezone_info: z.strictObject({ timezone: zone.describe("IANA time zone, for example America/New_York.") }),
   convert_timezone: z.strictObject({
-    datetime: datetime.describe("Local date and time in the source zone, for example 2026-10-29T15:30:00."),
+    datetime: datetime.refine(s => /(?:Z|[+-]\d{2}:\d{2})$/.test(s) || !s.includes("."), "may have fractional seconds only with an offset, such as 2026-10-29T15:30:00.5+01:00")
+      .describe("Local date and time in the source zone, for example 2026-10-29T15:30:00. Seconds are optional. An offset, such as +01:00, must be the zone's own and settles a time that a daylight-saving change makes ambiguous."),
     from_timezone: zone.describe("IANA zone the datetime is in."),
     to_timezone: zone.describe("IANA zone to convert to."),
   }),
@@ -50,7 +53,7 @@ export const timeInputs = {
     }),
     z.strictObject({
       mode: z.literal("list").describe("list: every public holiday in a year."),
-      year: integer.min(2000).max(2030).describe("Year to list, 2000-2030."),
+      year: integer.min(2000, COVERAGE).max(2030, COVERAGE).describe("Year to list, 2000-2030."),
       country: holidayCountry,
     }),
   ]),
@@ -66,7 +69,12 @@ export const timeInputs = {
       date: date.describe("Date as YYYY-MM-DD."),
       country: country.optional().describe("ISO country code whose public holidays to skip. The date must be within 2000-2030."),
     }),
-  ]).refine(v => v.mode === "between" ? Math.abs(Date.parse(v.to) - Date.parse(v.from)) <= 366 * 86400000 && (!v.country || holidayDate.safeParse(v.from).success && holidayDate.safeParse(v.to).success) : !v.country || holidayDate.safeParse(v.date).success),
+  ]).superRefine((v, ctx) => {
+    const coverage = (field: "from" | "to" | "date", value: string) => { if (v.country && !covered(value)) ctx.addIssue({ code: "custom", path: [field], message: `${COVERAGE} when country is given; leave out country to count weekends only` }) }
+    if (v.mode !== "between") return coverage("date", v.date)
+    if (Math.abs(Date.parse(v.to) - Date.parse(v.from)) > 366 * 86400000) ctx.addIssue({ code: "custom", path: ["to"], message: "must be at most 366 days from from" })
+    coverage("from", v.from); coverage("to", v.to)
+  }),
   timer_set: z.strictObject({
     name,
     deadline: instant.describe("When the timer is due, as a date-time with a zone offset, for example 2026-11-02T09:00:00Z."),

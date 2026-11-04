@@ -4,6 +4,7 @@ import { timeOutputs, timerList, timerCheck, type TimeInput, type TimeOperation 
 import { privateDirectory, sqliteFiles } from "../../process/files.js"
 import { withLock } from "../../process/lock.js"
 import { BackendFailure } from "../../process/run.js"
+import { timeFailure } from "./failures.js"
 import { LIMITS, parse, fail, fence } from "../../domain/common.js"
 import type { AdapterResult } from "../../domain/contract.js"
 import type { ModuleContext } from "../context.js"
@@ -15,8 +16,13 @@ const notFound = (report: unknown) => {
 }
 
 export async function invoke<K extends TimeOperation>(op: K, input: TimeInput[K], ctx: ModuleContext): Promise<AdapterResult> {
-  const output = op.startsWith("timer_") ? await timers(op, input, ctx) : parse(timeOutputs[op], await ctx.run(timeArgv(op, input, paths(ctx))))
-  return { output, text: JSON.stringify(output) }
+  try {
+    const output = op.startsWith("timer_") ? await timers(op, input, ctx) : parse(timeOutputs[op], await ctx.run(timeArgv(op, input, paths(ctx))))
+    return { output, text: JSON.stringify(output) }
+  } catch (error) {
+    // DST gaps and overlaps, coverage and range failures get their own codes; the rest stays BACKEND_FAILED.
+    throw error instanceof BackendFailure ? timeFailure(error.report, op, input) ?? error : error
+  }
 }
 const paths = (ctx: ModuleContext) => ({ config: join(ctx.stage, "empty.toml"), store: ctx.store })
 
