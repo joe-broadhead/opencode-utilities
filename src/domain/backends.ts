@@ -1,5 +1,5 @@
 import * as z from "zod"
-import { lstat } from "node:fs/promises"
+import { lstat, realpath } from "node:fs/promises"
 import { createRequire } from "node:module"
 import { dirname, join } from "node:path"
 import { hashRegular, identity, noSymlinks, readRegular, sameIdentity, type Identity } from "../process/files.js"
@@ -25,20 +25,23 @@ export async function packageJson(path: string, max = 65536): Promise<unknown> {
 
 /**
  * Verifies files against pinned SHA-256 hashes once per process. A result is cached by path and file identity
- * (dev, ino, size, mtimeMs, ctimeMs); any change to the file re-hashes it. Symbolic links are never accepted.
+ * (dev, ino, size, mtimeMs, ctimeMs); any change to the file re-hashes it. Symbolic links are never accepted: a link
+ * is `unsafe`, which callers report as UNSAFE_PATH, never as an integrity failure. Pass paths under resolved roots.
  */
 class Verifier {
   private verified = new Map<string, Identity & { sha256: string }>()
   private hashing = new Map<string, Promise<"verified" | "mismatch">>()
   digest(path: string) { return hashRegular(path) }
-  async check(path: string, expected: string, executable: boolean): Promise<"verified" | "missing" | "mismatch"> {
+  async check(path: string, expected: string, executable: boolean): Promise<"verified" | "missing" | "mismatch" | "unsafe"> {
     let info
     try { await noSymlinks(path); info = await lstat(path) }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code === "ENOENT") return "missing"
+      if (error instanceof UtilitiesError && error.code === "UNSAFE_PATH") return "unsafe"
       if (error instanceof UtilitiesError) return "mismatch"
       throw error
     }
+    if (info.isSymbolicLink()) return "unsafe"
     if (!info.isFile() || executable && !(info.mode & 0o111)) return "mismatch"
     const cached = this.verified.get(path)
     if (cached && cached.sha256 === expected && sameIdentity(cached, identity(info))) return "verified"
@@ -74,7 +77,8 @@ export class Backends {
     if (!binaries) fail("UNSUPPORTED_PLATFORM")
     const name = PLATFORMS[this.target].package
     let root: string
-    try { root = dirname(createRequire(join(this.packageRoot, "package.json")).resolve(`${name}/package.json`)) }
+    // Resolved once, like the other roots: npm and pnpm may reach the package through links above it.
+    try { root = await realpath(dirname(createRequire(join(this.packageRoot, "package.json")).resolve(`${name}/package.json`))) }
     catch { return fail("PLATFORM_PACKAGE_MISSING") }
     return { root, entry: binaries }
   }
@@ -83,6 +87,7 @@ export class Backends {
     const { root, entry } = await this.platform(), file = entry[module], path = join(root, file.path)
     const result = await verifier.check(path, file.sha256, true)
     if (result === "missing") fail("BINARY_MISSING")
+    if (result === "unsafe") fail("UNSAFE_PATH")
     if (result === "mismatch") fail("INTEGRITY_MISMATCH")
     return { path, sha256: file.sha256 }
   }

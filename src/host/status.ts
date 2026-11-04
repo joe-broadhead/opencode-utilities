@@ -1,6 +1,7 @@
 import { DEFAULT_ASK, type Runtime, type StatusView } from "../domain/contract.js"
+import { completeStatus } from "../rpc.js"
 import type { HostCheck } from "./compat.js"
-import { unguardedAgents, unguardedNext } from "./permissions.js"
+import { unguardedAgents } from "./permissions.js"
 import type { WeatherKey } from "./weather.js"
 
 export interface StatusSources {
@@ -15,16 +16,16 @@ export interface StatusSources {
 /** Joins the runtime's items with the host's. The result has no undefined fields, so it crosses RPC as JSON. */
 export async function buildStatus(sources: StatusSources): Promise<StatusView> {
   const [runtime, weather, agents] = await Promise.all([sources.runtime.status(), sources.weather.status(), sources.agents()])
-  const unguarded = unguardedAgents(agents)
-  const view: StatusView = {
+  const view = completeStatus({
     version: sources.version,
     host: sources.host,
+    unguardedAgents: unguardedAgents(agents),
     platform: runtime.platform,
     modules: runtime.modules,
     weather,
     speech: runtime.speech,
     timers: runtime.timers,
-    permissions: { askByDefault: [...DEFAULT_ASK], unguardedAgents: unguarded, next: unguardedNext(unguarded) },
-  }
+    permissions: { askByDefault: [...DEFAULT_ASK] },
+  })
   return JSON.parse(JSON.stringify(view)) as StatusView
 }

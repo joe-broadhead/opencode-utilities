@@ -62,12 +62,15 @@ export class SpeechAssets {
     const assets = await this.assets()
     return Promise.all(roles.map(async role => {
       const a = assets.get(role)!, executable = role === "engine"
+      // A link is refused as UNSAFE_PATH, never treated as a missing or altered file.
       if (this.options.assetsDir !== undefined) {
-        const path = join(this.options.assetsDir, a.name)
-        if (await verifier.check(path, a.sha256, executable) === "verified") return { role, asset: a, path, state: "pre-seeded" as const }
+        const path = join(this.options.assetsDir, a.name), result = await verifier.check(path, a.sha256, executable)
+        if (result === "unsafe") fail("UNSAFE_PATH")
+        if (result === "verified") return { role, asset: a, path, state: "pre-seeded" as const }
       }
-      const path = this.cached(a)
-      return { role, asset: a, path, state: await verifier.check(path, a.sha256, executable) === "verified" ? "cached" as const : "missing" as const }
+      const path = this.cached(a), result = await verifier.check(path, a.sha256, executable)
+      if (result === "unsafe") fail("UNSAFE_PATH")
+      return { role, asset: a, path, state: result === "verified" ? "cached" as const : "missing" as const }
     }))
   }
   /** The download request for `missing` files: resource and save are the release hosts; metadata carries the size. */

@@ -25,18 +25,18 @@ changes nothing in Jelly.
 
 Weather is read-only but asks, as the plugin's own rules do: it sends a place to Open-Meteo. `utilities_speech_download` is declared too: it is not a tool, but the speech tools assert it before a download.
 
-A tool the upstream server adds later is not declared, so in Jelly it is not asked about by
-default. Keep `jelly.tools` in step with the known-tool list; `test/**/jelly.test.ts` checks
-each declared effect against the plugin's own default rules.
+The declaration lists the tools of this version. Keep `jelly.tools` in step with the tool table in
+`src/domain/contract.ts`; `test/unit/jelly.test.ts` checks each declared effect against the plugin's own
+default rules, and the list and its `readOnly` marks against that table.
 
 ## Skills
 
 Declared: `utilities-time`, `utilities-weather`, `utilities-speech`. Jelly refuses an install whose
 skill ids collide with another plugin's or the agent's own.
 
-## Views
+## Views and scripts
 
-None yet.
+None: `jelly.views` and `jelly.rpc` are empty.
 
 ## Signing in
 
@@ -46,5 +46,5 @@ Jelly folds the declared sign-ins into this plugin's one card, which shows each 
 
 ## Versions
 
-Jelly's curated catalogue pins an exact version. `latest` is `0.0.0`; publish each release
-under a new version so a review in Jelly can tell the two apart.
+Jelly's curated catalogue pins an exact version. Each release is published under a new version, so a review in
+Jelly can tell the two apart.

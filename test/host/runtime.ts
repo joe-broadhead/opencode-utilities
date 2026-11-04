@@ -37,6 +37,7 @@ export function fakeRuntimes(initial: Partial<Record<Module, Availability>> = {}
       speech: {
         assets: [{ role: "engine", name: "utilities-speech", bytes: 46_000_000, state: modules.speech === "SPEECH_ASSETS_MISSING" ? "missing" : "cached" }],
         voices: ["Luna"],
+        preseeded: false,
         cacheDirectory: options.cacheRoot,
         outputDirectory: `${options.stateRoot}/speech`,
         ...(modules.speech === "SPEECH_ASSETS_MISSING" ? { next: "Run /utilities-speech-install, or set the speech.assetsDir option." } : {}),

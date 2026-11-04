@@ -10,7 +10,10 @@ Use these tools instead of mental arithmetic whenever a date or time matters.
 ## Times and time zones
 
 - "What time is it in Tokyo?": `utilities_time_now` with `timezones: ["Asia/Tokyo"]`. It defaults to UTC, so always pass the zones the user means.
-- Converting a meeting time: `utilities_time_convert` with the local `datetime` and both zones. A local time that does not exist or is ambiguous at a daylight-saving change fails; ask the user which time they mean.
+- Converting a meeting time: `utilities_time_convert` with the local `datetime` and both zones. Seconds are optional. At a daylight-saving change it does not guess:
+  - `TIME_NONEXISTENT`: the clocks skip that local time. Tell the user, and suggest a time outside the change.
+  - `TIME_AMBIGUOUS`: that local time happens twice. The error gives both UTC offsets. Ask the user which one they mean, then call again with that offset on the `datetime`, for example `2026-10-25T02:30:00+01:00`.
+  - `TIME_OFFSET_MISMATCH`: the `datetime` has an offset the zone does not use then. Remove it, or use the zone's own.
 - Unsure of a zone name: `utilities_time_zones` with a `region` such as `Europe`, then `utilities_time_zone_info` for offsets and the next change.
 
 ## Dates
@@ -22,8 +25,9 @@ Use these tools instead of mental arithmetic whenever a date or time matters.
 
 ## Holidays and business days
 
-- `utilities_time_holidays` checks a date or lists a year for a country code such as `GB`. The offline calendar covers 2000 to 2030 only; outside that range, say so rather than guess.
-- `utilities_time_business_days` counts working days between two dates (both included), or finds the next or previous working day. Pass `country` to skip that country's holidays.
+- `utilities_time_holidays` checks a date or lists a year for a country code such as `GB`. The offline calendar covers 2000 to 2030 only. Outside that range a call fails with `INPUT_INVALID` or `HOLIDAY_COVERAGE`; say so rather than guess.
+- `utilities_time_business_days` counts working days between two dates (both included), or finds the next or previous working day. Weekends are Saturday and Sunday. Pass `country` to skip that country's nationwide holidays too.
+- Regional holidays: the UK data (`GB`) includes holidays of only England, Wales, Scotland or Northern Ireland, such as Scotland's Summer Bank Holiday. Each holiday has `nationwide` and `regions`. Lists and checks show them all. Business days skip only the nationwide ones, unless you pass `region` (for example `"Scotland"`) with `country: "GB"`; then that nation's holidays count too. Ask which nation the user means when it matters.
 
 ## Timers
 
@@ -39,4 +43,4 @@ If the user needs an alert that fires by itself, explain that these timers are p
 
 ## Scripts
 
-When the user wants a job that runs without you, such as a cron job that checks due timers, it can call these tools through the OpenCode server with no model. The RPC `utilities.tools.tools` has one method per tool that changes nothing, named without the `utilities_` prefix (`time_now`, `timer_check`, and so on), and `describe`, which lists them with their schemas. Each call is `opencode api post /api/rpc/utilities.tools.tools/<method>` with the body `{"input":{"sessionID":"<session>","input":<the tool's input>}}`. The script runs as that session's agent, so have it create its session once with `opencode api post /api/session` and a body such as `{"title":"timer check","agent":"build"}`. A script cannot set or delete timers. The details are in the plugin's `docs/scripting.md`.
+When the user wants a job that runs without you, such as a cron job that checks due timers, it can call these tools through the OpenCode server with no model. The RPC `utilities.tools.tools` has one method per tool that changes nothing, named without the `utilities_` prefix (`time_now`, `timer_check`, and so on), and `describe`, which lists them with their schemas. Each call is `opencode api post /api/rpc/utilities.tools.tools/<method>` with the body `{"input":{"sessionID":"<session>","input":<the tool's input>}}`. The script runs as that session's agent, so have it create its session once with `opencode api post /api/session` and a body such as `{"title":"timer check","agent":"build"}`. `opencode api` runs in the user's home folder, so its timer reads see that folder's project; for a project's timers, the script calls the HTTP API with `?location[directory]=<project folder>`. A script cannot set or delete timers. The details are in the plugin's `docs/scripting.md`.

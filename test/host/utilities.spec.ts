@@ -117,9 +117,9 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     expect(rules("reviewer").some(r => r.includes("utilities_"))).toBe(false)
     const status = await host.sdk.rpc(Utilities).status({}, { location: { directory: dirs.main } })
     expect(status.permissions.askByDefault).toEqual([...DEFAULT_ASK])
-    expect(status.permissions.unguardedAgents).toContain("reviewer")
-    expect(status.permissions.unguardedAgents).not.toContain("build")
-    expect(status.permissions.next).toContain("agents.<name>.permissions")
+    expect(status.unguardedAgents).toContain("reviewer")
+    expect(status.unguardedAgents).not.toContain("build")
+    expect(status.nextStep).toContain("agents.<name>.permissions")
     expect(formatStatus(status)).toContain(DEFAULT_RULES.map(rule => JSON.stringify(rule)).join(",\n  "))
   })
 
@@ -348,11 +348,12 @@ describe("host compatibility and unload", () => {
     try {
       const location = { directory: project("untested", {}) }
       await untested.sdk.agent.list({ location })
-      expect(untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities is tested on OpenCode >=2.2.3 <2.3.0, found 2.3.0. Next step: Use OpenCode 2.2.3 or a later 2.2.x release, or set the plugin option allowUntestedHost: true"))).toBe(true)
+      expect(untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0, found 2.3.0. Next step: Use OpenCode 2.2.3, 2.2.4 or 2.2.5, or set the plugin option allowUntestedHost: true"))).toBe(true)
       expect(refused.created).toHaveLength(0)
       expect(allowed.created).toHaveLength(1)
       const status = await untested.sdk.rpc(Utilities).status({}, { location })
-      expect(status.host).toMatchObject({ found: "2.3.0", availability: "HOST_UNTESTED", next: expect.stringContaining("untested") })
+      expect(status.host).toMatchObject({ version: "2.3.0", range: ">=2.2.3 <2.3.0", tested: false, next: expect.stringContaining("allowUntestedHost is set") })
+      expect(status.state).toBe("ready")
     } finally { await untested.sdk.close() }
   })
 

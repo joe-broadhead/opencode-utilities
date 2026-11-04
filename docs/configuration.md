@@ -26,9 +26,9 @@ There is no `policy` option and no `allowActions` option. Permissions are OpenCo
 | `modules.weather` | boolean | `true` | When `false`, weather tools are not registered. |
 | `modules.time` | boolean | `true` | When `false`, time and timer tools are not registered. |
 | `modules.speech` | boolean | `true` | When `false`, speech tools are not registered and `/utilities-speech-install` refuses. |
-| `stateRoot` | absolute path | `$XDG_DATA_HOME/opencode-utilities`, or `~/.local/share/opencode-utilities` | Timer stores and the default speech output directory. Must be mode `0700`, owned by the user, and not a symbolic link. |
+| `stateRoot` | absolute path | `$XDG_DATA_HOME/opencode-utilities`, or `~/.local/share/opencode-utilities` | Timer stores and the default speech output directory. Must be mode `0700` and owned by the user. See [Symbolic links](#symbolic-links). |
 | `speech.assetsDir` | absolute path | unset | Flat pre-seed directory. See [Speech files](#speech-files). |
-| `allowUntestedHost` | boolean | `false` | When `true`, an untested OpenCode version loads and status shows `HOST_UNTESTED` with a warning. When `false` or omitted, setup throws. |
+| `allowUntestedHost` | boolean | `false` | When `true`, an OpenCode version outside `>=2.2.3 <2.3.0` loads, and status shows `host untested` with a warning. When `false` or omitted, setup throws for such a version. |
 
 Unknown keys are rejected. A relative path is rejected.
 
@@ -36,11 +36,24 @@ Unknown keys are rejected. A relative path is rejected.
 
 | Path under `stateRoot` | Contents |
 | --- | --- |
-| `projects/<scope>/timers` | This project's SQLite timer store. `<scope>` is a hash of the project ID and the location directory. |
-| `speech/<scope>/<id>.wav` | Default synthesis files. Removed at startup when older than 7 days. |
+| `projects/<scope>/timers` | This project's SQLite timer store. `<scope>` is a hash of OpenCode's project ID, so every folder of a project shares one store. |
+| `speech/<scope>/<id>.wav` | This project's default synthesis files. Removed at startup when older than 7 days. |
 | `jobs/job-*` | Per-call scratch. Removed at startup when older than 10 minutes. |
 
-The speech cache is not under `stateRoot`. It is `$XDG_CACHE_HOME/opencode-utilities` (`~/.cache/opencode-utilities` when unset).
+Timers are per project: a timer set at the project root is the same timer in every subfolder. OpenCode's project is the git repository; a folder outside any repository belongs to OpenCode's shared `global` project. Version 0.0.1 kept a store per folder instead, keyed by the project and the folder. The first timer call in a folder moves that folder's old stores, and its parents', into the project store, under both stores' locks. A store moves whole when the project has no timers yet; otherwise each timer is copied, an identical one is skipped, and a different timer with a name already taken is kept as `<name> (2)`, with its created time set to the move. An old store of a folder you never open again stays on disk until OpenCode runs there.
+
+The caches are not under `stateRoot`. They are under `$XDG_CACHE_HOME/opencode-utilities` (`~/.cache/opencode-utilities` when unset):
+
+| Path under the cache | Contents |
+| --- | --- |
+| `<sha256>/<name>` | Speech engine and model files. |
+| `weather/weather-signal/<hash>.json` | Open-Meteo responses, one file per request URL, mode `0600` in a `0700` folder. A forecast is reused for 30 minutes and a place search for 30 days, so repeated calls cost no extra requests. Files older than 31 days are removed at startup. |
+
+### Symbolic links
+
+At startup the plugin resolves each of its roots once with `realpath`: `stateRoot`, the speech cache, `speech.assetsDir`, the installed package and its platform package. A link above a root, or the root itself, is fine. Examples are macOS `/tmp` (a link to `/private/tmp`), Fedora Atomic and Silverblue `/home` (a link to `/var/home`), and a dotfile setup that links `~/.local` or `~/.cache`. Status shows the resolved paths.
+
+Inside those roots, the plugin refuses every symbolic link: a timer store, a job folder, a cached or pre-seeded speech file, a program. The error is `UNSAFE_PATH`, never `INTEGRITY_MISMATCH`.
 
 ## Host check
 
@@ -48,13 +61,13 @@ The speech cache is not under `stateRoot`. It is `$XDG_CACHE_HOME/opencode-utili
 
 | Version | Result |
 | --- | --- |
-| 2.2.3, 2.2.4, 2.2.10 | Load. Tested line. The plugin is tested on 2.2.3 and 2.2.4. |
-| 2.2.2, 2.3.0, 3.0.0 | Refused, unless `allowUntestedHost` is `true`. |
-| Prerelease, dev build, `unknown` | Untested. Refused, unless `allowUntestedHost` is `true`. |
+| 2.2.3, 2.2.4, 2.2.5 | Load. These are the tested releases: status shows `tested`, and the status RPC `host.tested` is `true`. |
+| 2.2.6 or a later 2.2 release | Load normally, untested. The OpenCode row shows `untested; supported range >=2.2.3 <2.3.0` and `host.tested` is `false`; `state` and the next step are unchanged. |
+| 2.2.2, 2.3.0, 3.0.0, a prerelease, a dev build, `unknown` | Refused: setup fails, so there is no status. With `allowUntestedHost: true` the plugin loads, and the next step is a warning. |
 
 Do not write the range as `^2.2.3`. That would accept 2.3.
 
-The refusal text is: `HOST_UNTESTED: Utilities is tested on OpenCode >=2.2.3 <2.3.0, found <version>. Next step: Use OpenCode 2.2.3 or a later 2.2.x release, or set the plugin option allowUntestedHost: true to run anyway.`
+The refusal text is: `HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0, found <version>. Next step: Use OpenCode 2.2.3, 2.2.4 or 2.2.5, or set the plugin option allowUntestedHost: true to run anyway.`
 
 ## Tools
 
@@ -74,6 +87,15 @@ Only available modules are registered. Transcription and synthesis stay register
 | `utilities_speech_synthesize` | write-file | ask `utilities_speech_synthesize`. Resource `kitten-nano-int8/<voice>`, save `*`. A given `path` also asserts `edit`, and `external_directory` outside the project. |
 
 `utilities_speech_download` is not a tool. It is the action asserted before a download, by the first transcription or synthesis call that needs files and by `/utilities-speech-install`. Resource and save are the release host (`github.com`). `metadata.bytes` is the total size. `metadata.files` lists the names.
+
+### Holidays and regions
+
+Holiday data is offline, from the `holidays` crate, and covers 2000–2030. Some rows are regional. In the UK (`GB`), a row may apply to only England, Wales, Scotland or Northern Ireland, which the data marks in the name, as in `Summer Bank Holiday [Scotland]`. The Isle of Man (`IM`) data repeats those UK rows. No other country in the data has regional rows; a bracket there holds an English name, as in `Año nuevo [New Year's Day]`.
+
+- Every holiday in a result has `nationwide` (boolean) and `regions` (the nations, empty when nationwide). A row that joins a regional and a nationwide holiday on one date is nationwide.
+- `utilities_time_holidays` lists and checks every holiday, regional ones included. With `region`, it keeps only that nation's holidays and the nationwide ones, and `check` answers `is_holiday: false` for another nation's holiday.
+- `utilities_time_business_days` skips weekends (Saturday and Sunday) and, with `country`, the nationwide holidays. With `region`, it also skips that nation's own. A count lists the regional weekday holidays it did not skip in `regional_holidays_not_skipped`.
+- `region` is only valid with `country: "GB"`. It takes `England`, `Wales`, `Scotland` or `Northern Ireland`.
 
 ### File resources
 
@@ -95,7 +117,7 @@ Integration ID `open-meteo`, method `key`, label "Open-Meteo commercial API key"
 
 There is no `env` method.
 
-Every weather output includes `attribution` with the value `Weather data by Open-Meteo.com (CC BY 4.0)`.
+Every weather output includes `attribution` with the value `Weather data by Open-Meteo.com (CC BY 4.0)`, and `cache`: `miss` for a fresh request, `hit` when the response came from the weather cache (see `stateRoot` layout above). The cache is shared by every project of this user. A connected key is never stored in it; requests with a key are cached apart from free-tier ones.
 
 ## Permissions
 
@@ -139,7 +161,7 @@ A saved "Always allow" is project-wide. It applies to every agent in that projec
 
 ### Agents without the inserted rules
 
-OpenCode creates agents that are defined only in user config, and agents added by later plugins, after this plugin's transform. They do not receive the ask rules. Status names them.
+OpenCode creates agents that are defined only in user config, and agents added by later plugins, after this plugin's transform. They do not receive the ask rules. Status names such an agent only when its own rules would run a Utilities side effect (weather, a timer change, synthesis or the download) without asking: the last rule that matches is an allow. An agent whose rules ask or deny for all of them, such as one ending in `{ "action": "*", "resource": "*", "effect": "ask" }`, needs no fix and is not listed.
 
 Fix: put the block above **first** in that agent's own `permissions`, followed by any `utilities_*` rules you already have in the top-level `permissions`.
 
@@ -217,7 +239,17 @@ Use the engine name for the platform you run on. A hash mismatch or a missing fi
 | RPC `status` | The `utilities.tools` RPC's only method. Returns the same status object. The TUI imports its contract from its own bundle; the package does not export it. |
 | RPC `utilities.tools.tools` | The tools RPC for scripts: `describe`, plus one method per tool that changes nothing, run as a session and its agent. Asks are refused, not prompted. Timer writes and synthesis are not methods. See [scripting.md](scripting.md). |
 
-Status fields: host check (`required`, `found`, `availability`, optional `next`), platform package, per-module availability, weather tier and key, speech file states (`missing`, `cached` or `pre-seeded`), voices, cache directory, output directory, due timer count, ask-by-default actions, and agents that did not receive the ask rules.
+The status RPC starts with the fields every one of these plugins shares:
+
+| Field | Meaning |
+| --- | --- |
+| `version` | The plugin's version. |
+| `host` | `{ version, range, tested }`: OpenCode's version, the supported range `>=2.2.3 <2.3.0`, and whether the version is a tested release (2.2.3, 2.2.4, 2.2.5). `next` is added only for a version outside the range that runs because of `allowUntestedHost`. |
+| `state` | `ready`; `failed` when every module that is on failed; `disabled` when every module is off. Utilities has no status-only mode, so the shared `host_untested` never occurs: an untested host shows only in `host.tested` and the OpenCode row. |
+| `unguardedAgents` | The agents without the default rules whose own rules would run a Utilities side effect without asking. Always present; `[]` when none. |
+| `nextStep` | Exactly the `Next step` row; `Nothing to do.` when nothing is needed. Missing speech files that download on first use, and the free weather tier, never set it. |
+
+Then Utilities' own: the platform package, per-module availability, the weather tier and key, speech file states (`missing`, `cached` or `pre-seeded`), voices, whether files are pre-seeded, the cache and output directories, the due timer count and the timer store, and the ask-by-default actions. An item's own `next` is its own next step. The `utilities_status` tool has the same fields, with `unguardedAgents` as a count, and a `nextStep` that points to `/utilities-status` for those agents.
 
 ## Bounds
 
@@ -247,13 +279,20 @@ A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next 
 | `OPTIONS_INVALID` | Fix the named option. |
 | `STATUS_UNAVAILABLE` | Run `/utilities-status` in a session to see the error, or check the OpenCode server log. |
 | `SKILLS_INVALID` | A skill file is missing or malformed; setup skips it with this warning. Reinstall the plugin. |
-| `HOST_UNTESTED` | Use a tested 2.2.x release, or set `allowUntestedHost`. |
+| `HOST_UNTESTED` | OpenCode is outside `>=2.2.3 <2.3.0`. Use 2.2.3, 2.2.4 or 2.2.5, or set `allowUntestedHost`. |
 | `DISABLED` | Set `modules.<name>` to `true`. |
 | `PLATFORM_PACKAGE_MISSING` | Reinstall so the platform package is present, or run `npm run native:build` in a checkout. |
 | `UNSUPPORTED_PLATFORM` | No build for this platform. Time and weather are unaffected when only speech lacks an engine. |
 | `BINARY_MISSING`, `INTEGRITY_MISMATCH` | Reinstall. For speech, delete the cache and run `/utilities-speech-install`. |
 | `SPEECH_ASSETS_MISSING` | Approve the download, run `/utilities-speech-install`, or pre-seed. |
 | `DOWNLOAD_FAILED` | Check the network and retry, or pre-seed. |
+| `INPUT_INVALID` | Correct the named field. The message names the rule, such as the 2000–2030 holiday range, never the value. |
+| `TIME_NONEXISTENT` | The local time is skipped by a daylight-saving change in `from_timezone`. Use a time outside the change, or add the UTC offset the user means. |
+| `TIME_AMBIGUOUS` | The local time happens twice at a daylight-saving change. The message gives both UTC offsets and instants. Add the offset the user means, or ask which one. |
+| `TIME_OFFSET_MISMATCH` | The `datetime` has an offset that `from_timezone` does not use at that moment. Remove it, or use the zone's own. |
+| `HOLIDAY_COVERAGE` | The call needs holiday data outside 2000–2030, for example the next business day after 2030-12-31. Use dates in range, or leave out `country` to count weekends only. |
+| `TIME_OUT_OF_RANGE` | The result is outside what the time engine supports. Use a smaller amount or a nearer date. |
+| `BACKEND_FAILED` | A program reported another error. For weather the message says which: no such place, the rate limit, or a failed request. |
 | `TIMER_EXISTS` | `utilities_timer_set` with `replace: true`. |
 | `TIMER_NOT_FOUND` | `utilities_timer_list`. |
 | `TIMER_STATE_UNKNOWN` | Read the timer before retrying. The change may or may not have been saved. |
@@ -262,3 +301,5 @@ A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next 
 | `WAV_INVALID`, `WAV_UNSUPPORTED` | Convert to 16-bit PCM WAV. The hint includes an `ffmpeg` example. |
 | `OUTPUT_EXISTS` | Choose another path, or delete the file. The output is created exclusively. |
 | `QUEUE_FULL` | Wait, then retry. Each module has its own queue. |
+| `UNSAFE_PATH` | A file or folder inside the plugin's own directories is a symbolic link, or not the expected type. Replace the link with the real file or folder, or reinstall. Links above those directories are fine. See [Symbolic links](#symbolic-links). |
+| `STATE_NOT_PRIVATE` | Run `chmod 700` on the `stateRoot` directory. |
