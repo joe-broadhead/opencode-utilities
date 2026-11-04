@@ -24,7 +24,7 @@ import { DEFAULT_VOICE, SPEECH_ROLES, SpeechAssets, VOICES, type Entry } from ".
 
 const INPUTS: { readonly [M in Module]: Readonly<Record<string, z.ZodType>> } = { time: timeInputs, weather: weatherInputs, speech: speechInputs }
 const ALL_ROLES: readonly SpeechAssetRole[] = ["engine", ...SPEECH_MODEL_ROLES]
-const JOB_AGE = 10 * 60_000, OUTPUT_AGE = 7 * 24 * 60 * 60_000
+const JOB_AGE = 10 * 60_000, OUTPUT_AGE = 7 * 24 * 60 * 60_000, WEATHER_CACHE_AGE = 31 * 24 * 60 * 60_000
 const availability = (error: unknown): Exclude<Availability, "AVAILABLE"> =>
   error instanceof UtilitiesError && (AVAILABILITY as readonly string[]).includes(error.code) ? error.code as Exclude<Availability, "AVAILABLE"> : "CONTRACT_MISMATCH"
 const megabytes = (bytes: number) => `${(bytes / 1_000_000).toFixed(1)} MB`
@@ -52,7 +52,7 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
   // Timers and default speech files belong to the project, wherever in it OpenCode runs.
   const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
   const scope = hash([options.location.project]), store = (key: string) => join(options.stateRoot, "projects", key, "timers")
-  const paths = { store: store(scope), jobs: join(options.stateRoot, "jobs"), speech: join(options.stateRoot, "speech"), output: join(options.stateRoot, "speech", scope) }
+  const paths = { store: store(scope), jobs: join(options.stateRoot, "jobs"), speech: join(options.stateRoot, "speech"), output: join(options.stateRoot, "speech", scope), weatherCache: join(options.cacheRoot, "weather") }
   // 0.0.1 kept a store per location directory, keyed by [project, directory]. Those of this directory and its parents
   // are moved into the project store on first use; another folder's moves when OpenCode runs there.
   const legacy: string[] = []
@@ -77,7 +77,8 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
       const executable = await backends.executable("weather"), key = await options.weatherKey?.(), commercial = key !== undefined
       const i = input as { location?: string; query?: string }
       const request = weatherRequest(`utilities_${tool}` as WeatherAction, weatherHosts(operation as WeatherOperation, commercial), i.location ?? i.query ?? "")
-      return { executable, commercial, ...key === undefined ? {} : { env: { OPEN_METEO_API_KEY: key } }, requests: [request] }
+      // XDG_CACHE_HOME outlives the job, so weather-signal's response cache (forecasts 30 minutes, places 30 days) works.
+      return { executable, commercial, env: { XDG_CACHE_HOME: paths.weatherCache, ...key === undefined ? {} : { OPEN_METEO_API_KEY: key } }, requests: [request] }
     }
     const op = operation as EngineOperation, roles = SPEECH_ROLES[op], entries = await assets.inspect(roles)
     const missing = entries.filter(e => e.state === "missing")
@@ -122,6 +123,8 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
         const program = executable!
         job = await stage(paths.jobs, work); fence(work)
         if (module !== "speech") { await writeFile(join(job, "empty.toml"), "", { flag: "wx", mode: 0o600 }); fence(work) }
+        // weather-signal keeps its cache in $XDG_CACHE_HOME/weather-signal; the plugin makes the folder private first.
+        if (module === "weather") { await privateDirectory(join(paths.weatherCache, "weather-signal")); fence(work) }
         const ctx: ModuleContext = {
           stage: job, store: paths.store, legacyStores: legacy, signal: work,
           async run(args, runOptions = {}) {
@@ -243,9 +246,13 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
     return { output, text: downloaded.length ? `Downloaded ${files(downloaded.length)} (${megabytes(bytes)}) into the speech cache. Speech tools are ready.` : "All speech files are already installed. Speech tools are ready." }
   }
 
-  /** Best effort: job directories left by a crash, and default synthesis files older than 7 days in any project. */
+  /**
+   * Best effort: job directories left by a crash, default synthesis files older than 7 days in any project, and
+   * weather cache entries past the longest TTL (30 days, for places), which weather-signal never removes itself.
+   */
   async function sweepState() {
     await sweep(paths.jobs, /^job-/, JOB_AGE, "directory").catch(() => undefined)
+    await sweep(join(paths.weatherCache, "weather-signal"), /^[a-f0-9]{64}\.json(?:\.tmp\.\d+\.\d+)?$/, WEATHER_CACHE_AGE, "file").catch(() => undefined)
     const scopes = await readdir(paths.speech).catch(() => [] as string[])
     for (const name of scopes.filter(name => /^[a-f0-9]{64}$/.test(name))) await sweep(join(paths.speech, name), /^[a-f0-9-]{36}\.wav$/, OUTPUT_AGE, "file").catch(() => undefined)
   }
