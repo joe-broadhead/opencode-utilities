@@ -6,7 +6,7 @@ Unofficial; not affiliated with Open-Meteo. Weather data is from Open-Meteo.com 
 
 ## Requirements
 
-- OpenCode `>=2.2.3 <2.3.0`, tested on 2.2.3 and 2.2.4.
+- OpenCode `>=2.2.3 <2.3.0`, tested on 2.2.3, 2.2.4 and 2.2.5. Another 2.2 release runs, and status calls it untested. Outside that range the plugin does not start, unless you set `allowUntestedHost`.
 - macOS 14 or later (arm64 or x64), or Linux (x64 or arm64) with glibc 2.39 or later, such as Ubuntu 24.04, Debian 13 or Fedora 40. macOS x64 has no speech engine, so it has text cleanup but not transcription or synthesis. Windows and musl are not supported.
 
 ## Install
@@ -120,7 +120,7 @@ What each call asserts:
 
 Every rule needs `"resource"`. OpenCode skips a rule without it.
 
-**Agents defined only in your config**, and agents added by plugins that load later, are created after this plugin inserts its rules, so side effects there do not ask. `/utilities` and `/utilities-status` name those agents. Put the block above, with `"effect": "ask"`, **first** in that agent's own `permissions` (`agents.<name>.permissions` in `opencode.json`, or `permissions` in the agent's front matter), followed by any top-level rules you have for `utilities_*` actions, so yours keep winning. Do not put the block in the top-level `permissions`: it would loosen Explore and any agent whose base is deny.
+**Agents defined only in your config**, and agents added by plugins that load later, are created after this plugin inserts its rules, so side effects there do not ask. `/utilities` and `/utilities-status` name those agents, unless their own rules already ask or deny for every Utilities side effect. Put the block above, with `"effect": "ask"`, **first** in that agent's own `permissions` (`agents.<name>.permissions` in `opencode.json`, or `permissions` in the agent's front matter), followed by any top-level rules you have for `utilities_*` actions, so yours keep winning. Do not put the block in the top-level `permissions`: it would loosen Explore and any agent whose base is deny.
 
 **Non-interactive runs.** In `opencode run`, a prompt is auto-rejected and the model is told to continue without the action. Pass `--auto`, or add allow rules. `--auto` approves asks but never passes a deny. For CI that uses speech, pre-seed `speech.assetsDir`.
 
@@ -140,7 +140,7 @@ Options go on the plugin entry in `opencode.json`:
 }
 ```
 
-`modules.<name>` turns a module off. `stateRoot` moves timer stores and default speech files. `speech.assetsDir` pre-seeds the speech files. `allowUntestedHost` loads on an untested OpenCode version, with a warning in status. An invalid option fails setup and names the key, never the value. The full reference, with every permission rule and error code, is [docs/configuration.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/configuration.md).
+`modules.<name>` turns a module off. `stateRoot` moves timer stores and default speech files. `speech.assetsDir` pre-seeds the speech files. `allowUntestedHost` loads on an OpenCode version outside the supported range, with a warning in status. An invalid option fails setup and names the key, never the value. The full reference, with every permission rule and error code, is [docs/configuration.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/configuration.md).
 
 ## Organisation rollout
 
@@ -165,7 +165,7 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 
 | State or code | What to do |
 | --- | --- |
-| `HOST_UNTESTED` | Use OpenCode 2.2.3 or a later 2.2.x, or set `allowUntestedHost: true` and accept the warning. |
+| `HOST_UNTESTED` | OpenCode is outside `>=2.2.3 <2.3.0`. Use 2.2.3, 2.2.4 or 2.2.5, or set `allowUntestedHost: true` and accept the warning. |
 | `OPTIONS_INVALID` | The message names the option. Fix it in the plugin entry and restart. |
 | `PLATFORM_PACKAGE_MISSING` | Reinstall the plugin so npm installs `@joe-broadhead/opencode-utilities-bin-<platform>` at the same version, then restart OpenCode. |
 | `UNSUPPORTED_PLATFORM` | There is no build for this OS or CPU. See [Requirements](#requirements). |

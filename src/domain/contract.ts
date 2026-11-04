@@ -108,11 +108,25 @@ export type GeocodeOutput<L> = WeatherOutput<{ readonly locations: readonly L[] 
 
 // Status: one view for the utilities_status tool, the utilities-status command, the RPC `status` method and the TUI.
 
-/** `next` is the user's next step, present only when the item needs action. */
+/**
+ * The plugin's state in the shared machine form (S13). Utilities has no service to connect to, so it is `ready`,
+ * unless the host is untested, every enabled module failed, or every module is off.
+ */
+export const STATES = ["ready", "host_untested", "failed", "disabled"] as const
+export type StatusState = typeof STATES[number]
+
+/**
+ * The shared status fields (S13) come first: `version`, `host`, `state`, `unguardedAgents` and `nextStep`, which is
+ * exactly the `Next step` row. Elsewhere, an item's `next` is its own next step, present only when it needs action.
+ */
 export interface StatusView {
   readonly version: string
-  /** `required` is package.json `opencode.host`; HOST_UNTESTED here means allowUntestedHost let an untested host run. */
-  readonly host: { readonly required: string; readonly found: string; readonly availability: Extract<Availability, "AVAILABLE" | "HOST_UNTESTED">; readonly next?: string }
+  /** `range` is package.json `opencode.host`; `tested` is true only for a release in the tested list. */
+  readonly host: { readonly version: string | null; readonly range: string; readonly tested: boolean; readonly next?: string }
+  readonly state: StatusState
+  /** Agents that did not get the default ask rules and whose own rules would run a Utilities side effect without asking. */
+  readonly unguardedAgents: readonly string[]
+  readonly nextStep: string
   readonly platform: { readonly target: string; readonly package?: PlatformPackage; readonly availability: Availability; readonly next?: string }
   readonly modules: { readonly [M in Module]: { readonly availability: Availability; readonly next?: string } }
   readonly weather: {
@@ -124,23 +138,19 @@ export interface StatusView {
   readonly speech: {
     readonly assets: readonly { readonly role: SpeechAssetRole; readonly name: string; readonly bytes: number; readonly state: "missing" | "cached" | "pre-seeded" }[]
     readonly voices: readonly string[]
+    /** speech.assetsDir is set: files are never downloaded. */
+    readonly preseeded: boolean
     readonly cacheDirectory: string
     readonly outputDirectory: string
     readonly next?: string
   }
   readonly timers: { readonly due?: number; readonly directory: string; readonly next?: string }
-  readonly permissions: {
-    readonly askByDefault: readonly DefaultAskAction[]
-    /** Agents that did not receive the default-ask rules, so side effects there follow the agent's own rules. */
-    readonly unguardedAgents: readonly string[]
-    readonly next?: string
-  }
+  readonly permissions: { readonly askByDefault: readonly DefaultAskAction[] }
 }
 
-/** The status tool's output: the view with the unguarded agents as a count, and the one next step. */
-export interface StatusSummary extends Omit<StatusView, "permissions"> {
-  readonly permissions: { readonly askByDefault: readonly DefaultAskAction[]; readonly unguardedAgents: number; readonly next?: string }
-  readonly next?: string
+/** The status tool's output: the view with the unguarded agents as a count, and a next step that points to /utilities-status for them. */
+export interface StatusSummary extends Omit<StatusView, "unguardedAgents"> {
+  readonly unguardedAgents: number
 }
 
 /** Whether a module's skill and engine tools are registered. Speech stays registered while only its files are missing: the first call asks to download them. */
@@ -189,6 +199,8 @@ export interface RuntimeOptions {
 export type ModuleTool = { [K in ToolName]: typeof TOOLS[K] extends { readonly module: Module } ? K : never }[ToolName]
 /** The StatusView items the runtime fills; the host fills version, host, weather and permissions. */
 export type RuntimeStatus = Pick<StatusView, "platform" | "modules" | "speech" | "timers">
+/** The view before its derived fields, `state` and `nextStep`, are filled in. */
+export type StatusFacts = Omit<StatusView, "state" | "nextStep">
 export interface SpeechInstallOutput { readonly downloaded: readonly { readonly name: string; readonly bytes: number }[]; readonly bytes: number; readonly cacheDirectory: string }
 export interface Runtime {
   /** Runs a module tool: parse, availability, permission, any speech download, queue, then the deadline-bound work. Every permission request goes through `RuntimeOptions.authorize` before any effect. */

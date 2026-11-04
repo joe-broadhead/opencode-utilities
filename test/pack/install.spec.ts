@@ -162,7 +162,9 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
     expect(response.status).toBe(200)
     const view = (response.data as { output: Record<string, any> }).output
     expect(view.version).toBe(source.version)
-    expect(view.host).toEqual({ required: HOST_RANGE, found: version, availability: "AVAILABLE" })
+    expect(view.host).toEqual({ version, range: HOST_RANGE, tested: true })
+    expect(view).toMatchObject({ state: "ready", unguardedAgents: [] })
+    expect(typeof view.nextStep).toBe("string")
     expect(view.platform).toMatchObject({ target, ...platformPackage ? { package: platformPackage } : {} })
     expect(Object.keys(view.modules).sort()).toEqual([...MODULES].sort())
     expect(view.permissions.askByDefault).toEqual([...DEFAULT_ASK])

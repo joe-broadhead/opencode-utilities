@@ -3,14 +3,15 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { DEFAULT_ASK, MODULES, TOOLS, WEATHER_ATTRIBUTION, registrable, toolRegistrable, type Availability, type Invocation, type StatusView, type ToolName } from "../../src/domain/contract.js"
+import { DEFAULT_ASK, MODULES, TOOLS, WEATHER_ATTRIBUTION, registrable, toolRegistrable, type Availability, type Invocation, type StatusFacts, type StatusView, type ToolName } from "../../src/domain/contract.js"
 import { commandTransform } from "../../src/host/commands.js"
 import { createPlugin } from "../../src/host/plugin.js"
-import { commandAuthorize, createAuthorize, DEFAULT_RULES, insertDefaultRules, unguardedAgents, unguardedNext } from "../../src/host/permissions.js"
+import { commandAuthorize, createAuthorize, DEFAULT_RULES, insertDefaultRules, unguardedAgents } from "../../src/host/permissions.js"
 import { loadSkills, skillTransform } from "../../src/host/skills.js"
 import { buildStatus } from "../../src/host/status.js"
 import { toolTransform } from "../../src/host/tools.js"
-import { compactStatus, formatStatus, formatSummary, nextStep, rulesToPaste } from "../../src/rpc.js"
+import { agentFix, compactStatus, completeStatus, formatStatus, formatSummary, nextStep, rulesToPaste, STATUS_JSON_SCHEMA } from "../../src/rpc.js"
+import { checkHost } from "../../src/host/compat.js"
 import { createWeatherKey } from "../../src/host/weather.js"
 import { VERSION } from "../fixtures.js"
 import { failure, fakeRuntimes } from "../host/runtime.js"
@@ -28,16 +29,19 @@ function toolEditor() {
 }
 const modulesWith = (availability: Partial<Record<(typeof MODULES)[number], Availability>>) =>
   Object.fromEntries(MODULES.map(m => [m, { availability: availability[m] ?? "AVAILABLE" }])) as StatusView["modules"]
-const VIEW: StatusView = {
+const FACTS: StatusFacts = {
   version: VERSION,
-  host: { required: ">=2.2.3 <2.3.0", found: "2.2.3", availability: "AVAILABLE" },
+  host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true },
+  unguardedAgents: [],
   platform: { target: "darwin-arm64", availability: "AVAILABLE" },
   modules: modulesWith({}),
   weather: { tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION },
-  speech: { assets: [], voices: [], cacheDirectory: "/cache", outputDirectory: "/out" },
+  speech: { assets: [], voices: [], preseeded: false, cacheDirectory: "/cache", outputDirectory: "/out" },
   timers: { directory: "/timers" },
-  permissions: { askByDefault: [...DEFAULT_ASK], unguardedAgents: [] },
+  permissions: { askByDefault: [...DEFAULT_ASK] },
 }
+const VIEW: StatusView = completeStatus(FACTS)
+const status = (facts: Partial<StatusFacts>) => completeStatus({ ...FACTS, ...facts })
 const context = (signal = new AbortController().signal) => ({ sessionID: "ses_1", agent: "build", messageID: "msg_1", id: "call_1", signal })
 
 describe("tools", () => {
@@ -132,7 +136,6 @@ describe("permissions", () => {
     transform(state)
     const listed = [...Object.entries(state).map(([id, permissions]) => ({ id, permissions })), { id: "reviewer", permissions: agents().build }]
     expect(unguardedAgents(listed)).toEqual(["reviewer"])
-    expect(unguardedNext([])).toBeUndefined()
   })
 
   test("an agent stays guarded when another plugin inserts its block at the same index later", () => {
@@ -149,10 +152,9 @@ describe("permissions", () => {
   })
 
   test("the per-agent fix names the agents and never the top-level permissions", () => {
-    const next = unguardedNext(["reviewer", "mdagent"])!
-    expect(next).toContain("reviewer, mdagent")
-    expect(next).toContain("Put the block shown with them first in each of those agents' own permissions (agents.<name>.permissions")
-    expect(next).toContain("followed by any rules you already have for utilities_* actions in the top-level permissions")
+    const next = agentFix(["reviewer", "mdagent"])
+    expect(next).toBe("Put the block shown under Agents without default rules first in the own permissions of reviewer, mdagent (agents.<name>.permissions in opencode.json, or the agent's front matter), followed by your top-level rules for utilities_* actions.")
+    expect(next).not.toContain("top-level permissions")
     expect(JSON.parse(rulesToPaste(VIEW))).toEqual(DEFAULT_RULES)
     expect(rulesToPaste(VIEW).split("\n")).toHaveLength(DEFAULT_RULES.length + 2) // one rule per line
     expect(next).not.toMatch(/top-level permissions block|add .* to the top-level/i)
@@ -251,7 +253,7 @@ describe("skills", () => {
 })
 
 describe("status rendering", () => {
-  const unguarded: StatusView = { ...VIEW, permissions: { askByDefault: [...DEFAULT_ASK], unguardedAgents: ["reviewer", "mdagent"], next: unguardedNext(["reviewer", "mdagent"])! } }
+  const unguarded = status({ unguardedAgents: ["reviewer", "mdagent"] })
   const labels = (text: string) => text.split("\n").slice(1).filter(l => /^[A-Z][\w ]*: /.test(l)).map(l => l.slice(0, l.indexOf(":")))
   const S9 = ["Connection", "Account", "Access", "Platform", "Weather", "Time and timers", "Speech", "Speech files", "Timers", "Asks first", "Tools", "Agents without default rules", "OpenCode", "Next step"]
 
@@ -264,35 +266,83 @@ describe("status rendering", () => {
     expect(text).toContain("Tools: 25 available, 0 unknown")
     expect(text).toContain(`OpenCode: 2.2.3 (tested). Utilities ${VERSION}`)
     expect(text.match(/^Next step: /gm)).toHaveLength(1)
-    expect(text.split("\n").at(-1)).toBe(`Next step: ${unguarded.permissions.next}`)
+    expect(text.split("\n").at(-1)).toBe(`Next step: ${unguarded.nextStep}`)
+    expect(unguarded.nextStep).toBe(agentFix(["reviewer", "mdagent"]))
     expect(formatStatus(VIEW).split("\n").at(-1)).toBe("Next step: Nothing to do.")
   })
 
+  test("the status RPC has the shared S13 fields first, with these names, and the JSON Schema requires them", () => {
+    expect(Object.keys(VIEW).slice(0, 5)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep"])
+    expect(VIEW).toMatchObject({ version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, state: "ready", unguardedAgents: [], nextStep: "Nothing to do." })
+    expect(STATUS_JSON_SCHEMA.required.slice(0, 5)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep"])
+    expect(VIEW.permissions).toEqual({ askByDefault: [...DEFAULT_ASK] })
+    expect(status({ modules: modulesWith({ weather: "DISABLED", time: "DISABLED", speech: "DISABLED" }) }).state).toBe("disabled")
+    expect(status({ modules: modulesWith({ weather: "PLATFORM_PACKAGE_MISSING", time: "PLATFORM_PACKAGE_MISSING", speech: "UNSUPPORTED_PLATFORM" }) }).state).toBe("failed")
+    expect(status({ modules: modulesWith({ speech: "SPEECH_ASSETS_MISSING" }) }).state).toBe("ready")
+  })
+
+  test("tested hosts are 2.2.3, 2.2.4 and 2.2.5; another 2.2 release runs untested; outside the range needs allowUntestedHost (X1, INSTALL-4)", () => {
+    for (const version of ["2.2.3", "2.2.4", "2.2.5"]) expect(checkHost(version, false)).toEqual({ version, range: ">=2.2.3 <2.3.0", tested: true })
+    const later = status({ host: checkHost("2.2.6", false) })
+    expect(later).toMatchObject({ state: "host_untested", host: { tested: false }, nextStep: "If something fails, use OpenCode 2.2.3, 2.2.4 or 2.2.5, the tested releases." })
+    expect(formatStatus(later)).toContain("OpenCode: 2.2.6 (untested; supported range >=2.2.3 <2.3.0)")
+    expect(() => checkHost("2.3.0", false)).toThrow("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0, found 2.3.0. Next step: Use OpenCode 2.2.3, 2.2.4 or 2.2.5, or set the plugin option allowUntestedHost: true to run anyway.")
+    expect(formatStatus(status({ host: checkHost("2.3.0", true) }))).toContain("OpenCode: 2.3.0 (host untested: outside >=2.2.3 <2.3.0; allowUntestedHost is set)")
+  })
+
+  test("a fresh install reads Nothing to do.: the speech download and the free weather tier stay in their rows (INSTALL-13)", () => {
+    const fresh = status({
+      modules: modulesWith({ speech: "SPEECH_ASSETS_MISSING" }),
+      weather: { tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION, next: "For commercial use, run /connect and choose Open-Meteo." },
+      speech: { ...FACTS.speech, assets: [{ role: "engine", name: "utilities-speech-darwin-arm64", bytes: 46_000_000, state: "missing" }], next: "Run /utilities-speech-install to download 1 file (46.0 MB), or pre-seed speech.assetsDir." },
+    })
+    expect(fresh.nextStep).toBe("Nothing to do.")
+    expect(formatStatus(fresh)).toContain("Speech files: 1 of 1 files missing (46 MB). They download after a prompt on the first transcription or synthesis, or run /utilities-speech-install")
+    // Missing pre-seeded files are a misconfiguration; macOS x64 has no engine, which needs nothing.
+    const seeded = status({ modules: { ...modulesWith({}), speech: { availability: "SPEECH_ASSETS_MISSING", next: "Copy the missing speech files into speech.assetsDir." } }, speech: { ...fresh.speech, preseeded: true } })
+    expect(seeded.nextStep).toBe("Copy the missing speech files into speech.assetsDir.")
+    expect(status({ modules: { ...modulesWith({}), speech: { availability: "UNSUPPORTED_PLATFORM", next: "Call utilities_status." } } }).nextStep).toBe("Nothing to do.")
+  })
+
   test("the connection and host rows use the shared state labels", () => {
-    expect(formatStatus({ ...VIEW, weather: { ...VIEW.weather, tier: "commercial", key: "connected" } })).toContain("Connection: connected (Open-Meteo key)")
-    expect(formatStatus({ ...VIEW, weather: { ...VIEW.weather, tier: "commercial", key: "rejected" } })).toContain("Connection: sign-in required")
-    expect(formatStatus({ ...VIEW, host: { ...VIEW.host, found: "2.3.0", availability: "HOST_UNTESTED" } })).toContain("OpenCode: 2.3.0 (host untested: tested on >=2.2.3 <2.3.0)")
-    expect(formatStatus({ ...VIEW, modules: modulesWith({ weather: "DISABLED" }) })).toContain("Weather: disabled")
+    expect(formatStatus(status({ weather: { ...VIEW.weather, tier: "commercial", key: "connected" } }))).toContain("Connection: connected (Open-Meteo key)")
+    expect(formatStatus(status({ weather: { ...VIEW.weather, tier: "commercial", key: "rejected" } }))).toContain("Connection: sign-in required")
+    expect(formatStatus(status({ modules: modulesWith({ weather: "DISABLED" }) }))).toContain("Weather: disabled")
   })
 
   test("the next step goes from blocking problems to optional ones", () => {
-    const host = { ...unguarded.host, availability: "HOST_UNTESTED" as const, next: "host" }
-    expect(nextStep({ ...unguarded, host })).toBe("host")
-    expect(nextStep({ ...unguarded, weather: { ...VIEW.weather, next: "free tier" } })).toBe(unguarded.permissions.next)
-    expect(nextStep({ ...VIEW, weather: { ...VIEW.weather, next: "free tier" } })).toBe("free tier")
-    expect(nextStep({ ...VIEW, weather: { ...VIEW.weather, key: "rejected", next: "rejected" }, timers: { directory: "/t", due: 1, next: "timers" } })).toBe("rejected")
+    const facts = { ...FACTS, unguardedAgents: ["reviewer"] }
+    expect(nextStep({ ...facts, host: { ...facts.host, tested: false, next: "host" } })).toBe("host")
+    expect(nextStep({ ...facts, weather: { ...VIEW.weather, next: "free tier" } })).toBe(agentFix(["reviewer"]))
+    expect(nextStep({ ...FACTS, weather: { ...VIEW.weather, next: "free tier" } })).toBe("Nothing to do.")
+    expect(nextStep({ ...facts, weather: { ...VIEW.weather, key: "rejected", next: "rejected" }, timers: { directory: "/t", due: 1, next: "timers" } })).toBe("rejected")
+    expect(nextStep({ ...FACTS, timers: { directory: "/t", due: 1, next: "timers" } })).toBe("timers")
   })
 
   test("the status tool counts the unguarded agents and points to /utilities-status instead of the rules", () => {
     const summary = compactStatus(unguarded), text = formatSummary(summary)
-    expect(summary.permissions).toEqual({ askByDefault: [...DEFAULT_ASK], unguardedAgents: 2, next: "2 agents lack the default ask rules. Run /utilities-status for the agents and the rules to paste." })
-    expect(summary.next).toBe(summary.permissions.next)
+    expect(summary).toMatchObject({ unguardedAgents: 2, nextStep: "2 agents lack the default ask rules. Run /utilities-status for the agents and the block to paste." })
     expect(labels(text)).toEqual(S9)
     expect(text).toContain("Agents without default rules: 2\n")
     expect(text).not.toContain("reviewer")
     expect(text).not.toContain('"effect":"ask"')
-    expect(text.split("\n").at(-1)).toBe(`Next step: ${summary.next}`)
-    expect(compactStatus(VIEW)).toEqual({ ...VIEW, permissions: { askByDefault: [...DEFAULT_ASK], unguardedAgents: 0 } })
+    expect(text.split("\n").at(-1)).toBe(`Next step: ${summary.nextStep}`)
+    expect(compactStatus(VIEW)).toEqual({ ...VIEW, unguardedAgents: 0 })
+  })
+
+  test("only agents whose own rules would run a side effect without asking are unguarded (LIVE-1)", () => {
+    const base = { action: "*", resource: "*", effect: "allow" } as const
+    const agents: { id: string; permissions: { action: string; resource: string; effect: "allow" | "ask" | "deny" }[] }[] = [
+      { id: "guarded", permissions: [base, ...DEFAULT_RULES] },
+      { id: "allow-all", permissions: [base] },
+      // The perf-probe agents end with *:*=ask, so every Utilities side effect already asks.
+      { id: "asks-all", permissions: [base, { action: "read", resource: "*", effect: "allow" }, { action: "*", resource: "*", effect: "ask" }] },
+      { id: "denies-utilities", permissions: [base, { action: "utilities_*", resource: "*", effect: "deny" }] },
+      { id: "asks-weather-only", permissions: [base, { action: "utilities_weather_*", resource: "*", effect: "ask" }] },
+      { id: "allows-later", permissions: [base, { action: "*", resource: "*", effect: "ask" }, { action: "utilities_timer_*", resource: "timer:*", effect: "allow" }] },
+      { id: "no-base", permissions: [{ action: "*", resource: "*", effect: "deny" }] },
+    ]
+    expect(unguardedAgents(agents)).toEqual(["allow-all", "asks-weather-only", "allows-later"])
   })
 })
 
@@ -321,11 +371,11 @@ describe("weather key and status", () => {
   test("the status joins runtime and host items and drops undefined fields", async () => {
     const runtime = await fakeRuntimes().create({ location: { project: "p", directory: "/d", projectDirectory: "/d" }, authorize: async () => {}, modules: { weather: true, time: true, speech: true }, stateRoot: "/state", cacheRoot: "/cache" })
     const view = await buildStatus({
-      version: VERSION, host: { required: ">=2.2.3 <2.3.0", found: "2.2.3", availability: "AVAILABLE" }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) },
+      version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) },
       agents: async () => [{ id: "build", permissions: [{ action: "*", resource: "*", effect: "allow" }, ...DEFAULT_RULES] }, { id: "reviewer", permissions: [{ action: "*", resource: "*", effect: "allow" }] }],
     })
-    expect(Object.keys(view)).toEqual(["version", "host", "platform", "modules", "weather", "speech", "timers", "permissions"])
-    expect(view.permissions).toMatchObject({ askByDefault: [...DEFAULT_ASK], unguardedAgents: ["reviewer"], next: expect.stringContaining("reviewer") })
+    expect(Object.keys(view)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "permissions"])
+    expect(view).toMatchObject({ state: "ready", unguardedAgents: ["reviewer"], nextStep: agentFix(["reviewer"]), permissions: { askByDefault: [...DEFAULT_ASK] } })
     expect(JSON.stringify(view)).toBe(JSON.stringify(JSON.parse(JSON.stringify(view))))
     expect("next" in view.host).toBe(false)
   })

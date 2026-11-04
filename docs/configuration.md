@@ -28,7 +28,7 @@ There is no `policy` option and no `allowActions` option. Permissions are OpenCo
 | `modules.speech` | boolean | `true` | When `false`, speech tools are not registered and `/utilities-speech-install` refuses. |
 | `stateRoot` | absolute path | `$XDG_DATA_HOME/opencode-utilities`, or `~/.local/share/opencode-utilities` | Timer stores and the default speech output directory. Must be mode `0700` and owned by the user. See [Symbolic links](#symbolic-links). |
 | `speech.assetsDir` | absolute path | unset | Flat pre-seed directory. See [Speech files](#speech-files). |
-| `allowUntestedHost` | boolean | `false` | When `true`, an untested OpenCode version loads and status shows `HOST_UNTESTED` with a warning. When `false` or omitted, setup throws. |
+| `allowUntestedHost` | boolean | `false` | When `true`, an OpenCode version outside `>=2.2.3 <2.3.0` loads, and status shows `host untested` with a warning. When `false` or omitted, setup throws for such a version. |
 
 Unknown keys are rejected. A relative path is rejected.
 
@@ -61,13 +61,13 @@ Inside those roots, the plugin refuses every symbolic link: a timer store, a job
 
 | Version | Result |
 | --- | --- |
-| 2.2.3, 2.2.4, 2.2.10 | Load. Tested line. The plugin is tested on 2.2.3 and 2.2.4. |
-| 2.2.2, 2.3.0, 3.0.0 | Refused, unless `allowUntestedHost` is `true`. |
-| Prerelease, dev build, `unknown` | Untested. Refused, unless `allowUntestedHost` is `true`. |
+| 2.2.3, 2.2.4, 2.2.5 | Load. These are the tested releases: status shows `tested`, and the status RPC `host.tested` is `true`. |
+| 2.2.6 or a later 2.2 release | Load, untested. Status shows `untested; supported range >=2.2.3 <2.3.0`, `state` is `host_untested`, and the next step names the tested releases. |
+| 2.2.2, 2.3.0, 3.0.0, a prerelease, a dev build, `unknown` | Refused, unless `allowUntestedHost` is `true`. With it, the plugin loads with a warning and `state` is `host_untested`. |
 
 Do not write the range as `^2.2.3`. That would accept 2.3.
 
-The refusal text is: `HOST_UNTESTED: Utilities is tested on OpenCode >=2.2.3 <2.3.0, found <version>. Next step: Use OpenCode 2.2.3 or a later 2.2.x release, or set the plugin option allowUntestedHost: true to run anyway.`
+The refusal text is: `HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0, found <version>. Next step: Use OpenCode 2.2.3, 2.2.4 or 2.2.5, or set the plugin option allowUntestedHost: true to run anyway.`
 
 ## Tools
 
@@ -161,7 +161,7 @@ A saved "Always allow" is project-wide. It applies to every agent in that projec
 
 ### Agents without the inserted rules
 
-OpenCode creates agents that are defined only in user config, and agents added by later plugins, after this plugin's transform. They do not receive the ask rules. Status names them.
+OpenCode creates agents that are defined only in user config, and agents added by later plugins, after this plugin's transform. They do not receive the ask rules. Status names such an agent only when its own rules would run a Utilities side effect (weather, a timer change, synthesis or the download) without asking: the last rule that matches is an allow. An agent whose rules ask or deny for all of them, such as one ending in `{ "action": "*", "resource": "*", "effect": "ask" }`, needs no fix and is not listed.
 
 Fix: put the block above **first** in that agent's own `permissions`, followed by any `utilities_*` rules you already have in the top-level `permissions`.
 
@@ -239,7 +239,17 @@ Use the engine name for the platform you run on. A hash mismatch or a missing fi
 | RPC `status` | The `utilities.tools` RPC's only method. Returns the same status object. The TUI imports its contract from its own bundle; the package does not export it. |
 | RPC `utilities.tools.tools` | The tools RPC for scripts: `describe`, plus one method per tool that changes nothing, run as a session and its agent. Asks are refused, not prompted. Timer writes and synthesis are not methods. See [scripting.md](scripting.md). |
 
-Status fields: host check (`required`, `found`, `availability`, optional `next`), platform package, per-module availability, weather tier and key, speech file states (`missing`, `cached` or `pre-seeded`), voices, cache directory, output directory, due timer count, ask-by-default actions, and agents that did not receive the ask rules.
+The status RPC starts with the fields every one of these plugins shares:
+
+| Field | Meaning |
+| --- | --- |
+| `version` | The plugin's version. |
+| `host` | `{ version, range, tested }`: OpenCode's version, the supported range `>=2.2.3 <2.3.0`, and whether the version is a tested release (2.2.3, 2.2.4, 2.2.5). `next` is added when it is not. |
+| `state` | `ready`; `host_untested` for an untested host; `failed` when every module that is on failed; `disabled` when every module is off. |
+| `unguardedAgents` | The agents without the default rules whose own rules would run a Utilities side effect without asking. Always present; `[]` when none. |
+| `nextStep` | Exactly the `Next step` row; `Nothing to do.` when nothing is needed. Missing speech files that download on first use, and the free weather tier, never set it. |
+
+Then Utilities' own: the platform package, per-module availability, the weather tier and key, speech file states (`missing`, `cached` or `pre-seeded`), voices, whether files are pre-seeded, the cache and output directories, the due timer count and the timer store, and the ask-by-default actions. An item's own `next` is its own next step. The `utilities_status` tool has the same fields, with `unguardedAgents` as a count, and a `nextStep` that points to `/utilities-status` for those agents.
 
 ## Bounds
 
@@ -269,7 +279,7 @@ A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next 
 | `OPTIONS_INVALID` | Fix the named option. |
 | `STATUS_UNAVAILABLE` | Run `/utilities-status` in a session to see the error, or check the OpenCode server log. |
 | `SKILLS_INVALID` | A skill file is missing or malformed; setup skips it with this warning. Reinstall the plugin. |
-| `HOST_UNTESTED` | Use a tested 2.2.x release, or set `allowUntestedHost`. |
+| `HOST_UNTESTED` | OpenCode is outside `>=2.2.3 <2.3.0`. Use 2.2.3, 2.2.4 or 2.2.5, or set `allowUntestedHost`. |
 | `DISABLED` | Set `modules.<name>` to `true`. |
 | `PLATFORM_PACKAGE_MISSING` | Reinstall so the platform package is present, or run `npm run native:build` in a checkout. |
 | `UNSUPPORTED_PLATFORM` | No build for this platform. Time and weather are unaffected when only speech lacks an engine. |
