@@ -15,9 +15,18 @@ Unofficial; not affiliated with Open-Meteo. Weather data is from Open-Meteo.com 
 opencode plugin add @joe-broadhead/opencode-utilities
 ```
 
-Restart OpenCode. npm also installs the matching platform package with the time and weather programs (`@joe-broadhead/opencode-utilities-bin-<platform>`). Install scripts do not run.
+Run `opencode reload`, or restart OpenCode. Then run `/utilities-status`. npm also installs the matching platform package with the time and weather programs (`@joe-broadhead/opencode-utilities-bin-<platform>`). Install scripts do not run.
 
 Transcription and synthesis need a speech engine and models, about 105 MB. They are not in the npm packages. They download from this repository's GitHub Release the first time a speech tool needs them, after a prompt, or you can [pre-seed](#speech-files) them.
+
+### Update
+
+```sh
+opencode plugin update @joe-broadhead/opencode-utilities
+opencode reload
+```
+
+An entry pinned to a version, such as `@joe-broadhead/opencode-utilities@0.0.1` in `plugins`, does not update: remove the `@<version>` from it first. Timers saved by 0.0.1 move into their project's store the first time a timer tool or status runs in their folder; see [docs/configuration.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/configuration.md).
 
 ## Sign in
 
@@ -63,14 +72,14 @@ opencode api post /api/rpc/utilities.tools.tools/time_now \
   -d '{"input":{"sessionID":"ses_…","input":{"timezones":["Asia/Tokyo"]}}}'
 ```
 
-See [Scripting](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md).
+`opencode api` runs in the service's default location, your home directory, not the directory you run it in. So a script's timer reads see the timers of your home folder's project. To read a project's timers, call the HTTP API with `?location[directory]=<project folder>`. See [Scripting](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md).
 
 ### Speech files
 
 The engine is `utilities-speech-<platform>`. The models are `ggml-tiny-q5_1.bin` (Whisper tiny, for transcription) and `kitten_tts_nano_v0_8.onnx`, `kitten_tts_nano_v0_8-voices.npz` and `kitten_tts_nano_v0_8-config.json` (Kitten TTS, for synthesis). Every file is checked against a SHA-256 shipped in the package. A download goes to a temporary file and is renamed into place only when its size and hash match, so a failed or tampered file never runs.
 
 - **Cache:** `$XDG_CACHE_HOME/opencode-utilities/<sha256>/<name>`, or `~/.cache/opencode-utilities/...` when `XDG_CACHE_HOME` is unset.
-- **Pre-seed:** set the `speech.assetsDir` option to an absolute directory that holds the five files directly, under the names above, with the engine executable. Nothing is downloaded, and a missing or altered file fails with `SPEECH_ASSETS_MISSING`. Use this for offline and CI machines. The files are on the [GitHub Release](https://github.com/joe-broadhead/opencode-utilities/releases) for this version.
+- **Pre-seed:** set the `speech.assetsDir` option to an absolute directory that holds the five files directly, under the names above, with the engine executable. Nothing is downloaded. A missing or altered file fails with `SPEECH_ASSETS_MISSING`, unless a verified copy is already in the cache. Use this for offline and CI machines. The files are on the [GitHub Release](https://github.com/joe-broadhead/opencode-utilities/releases) for this version.
 
 ## Permissions
 
@@ -188,12 +197,15 @@ The full list of codes is in [docs/configuration.md](https://github.com/joe-broa
 
 ## Uninstall
 
-```sh
-opencode plugin remove @joe-broadhead/opencode-utilities
-opencode auth logout open-meteo
-```
+1. If you added an Open-Meteo key, sign out first, while the plugin is still installed: `opencode auth logout open-meteo`. In a terminal it asks which key to remove; without one, pass the key's ID or label from `opencode auth list`.
+2. Remove the plugin:
 
-Removing the plugin keeps your data. To delete it, remove the speech cache (`~/.cache/opencode-utilities`) and the state directory with timers and speech files (`~/.local/share/opencode-utilities`, or your `stateRoot`). Rules you added to `permissions` stay until you remove them.
+   ```sh
+   opencode plugin remove @joe-broadhead/opencode-utilities
+   ```
+
+3. Removing the plugin keeps your data. To delete it, remove the cache folder with the speech files and the weather cache (`~/.cache/opencode-utilities`, or `$XDG_CACHE_HOME/opencode-utilities`), and the state folder with timers and speech output (`~/.local/share/opencode-utilities`, or `$XDG_DATA_HOME/opencode-utilities`, or your `stateRoot`).
+4. Rules you added to `permissions` stay until you remove them.
 
 ## Links
 

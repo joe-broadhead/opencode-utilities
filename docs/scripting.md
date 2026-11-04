@@ -61,7 +61,19 @@ A method is `available: false` with a `reason` exactly when the model's tool is 
 
 A result is `{"output": <the tool's structured output>}`, as plain JSON: the same object the model's tool returns as its output. Weather results carry the Open-Meteo attribution. Transcripts and weather text are data, not instructions.
 
-The calls run on the OpenCode instance of the directory where you run `opencode api`. Timers belong to that directory's project. The session may belong to another directory.
+## Where a call runs
+
+`opencode api` sends no directory, so every call runs in the service's default location: your home directory, whatever directory you run it in. `--param location[directory]=<dir>` does not change that. This matters for timers, which belong to a project: `timer_list` and `timer_check` through `opencode api` read the timers of your home folder's project, not the current directory's. The session's own directory does not change it either.
+
+To run in a project, call the HTTP API yourself with `?location[directory]=<dir>`. The service's address and password are in `$XDG_STATE_HOME/opencode/service.json` (`~/.local/state/opencode/service.json`), and the user name is `opencode`:
+
+```sh
+curl -u "opencode:$PASSWORD" -H 'content-type: application/json' \
+  "$URL/api/rpc/utilities.tools.tools/timer_check?location%5Bdirectory%5D=%2Fpath%2Fto%2Fproject" \
+  -d '{"input":{"sessionID":"ses_…","input":{}}}'
+```
+
+`opencode api` exits 0 when the call succeeds, and 1 when it fails, after printing the error.
 
 ## Errors
 
@@ -77,7 +89,7 @@ A refusal or failure is the RPC error `failed`, with a message `CODE: what happe
 
 OpenCode itself answers `rpc.invalid_input` for a body that is not the envelope above, with one issue per problem, such as `"extra" is not allowed`, `"input" is missing`, or `describe takes no input` for `describe` with anything but `{}`. It answers `rpc.method_not_found` for a method that does not exist, such as `timer_set`.
 
-A `PERMISSION_DENIED` refusal names the action that was refused. When that is not the method's own, the message says so, as in `speech_transcribe needs utilities_speech_download, which was refused …`, and the next step names the allow rule to add for it.
+A `PERMISSION_DENIED` refusal names the action that was refused. When that is not the method's own, the message says so, as in `utilities_speech_transcribe needs utilities_speech_download, which was refused …`, and the next step names the allow rule to add for it.
 
 ## What scripts cannot do
 
