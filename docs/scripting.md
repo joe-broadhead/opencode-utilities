@@ -89,7 +89,9 @@ A refusal or failure is the RPC error `failed`, with a message `CODE: what happe
 
 OpenCode itself answers `rpc.invalid_input` for a body that is not the envelope above, with one issue per problem, such as `"extra" is not allowed`, `"input" is missing`, or `describe takes no input` for `describe` with anything but `{}`. It answers `rpc.method_not_found` for a method that does not exist, such as `timer_set`.
 
-A `PERMISSION_DENIED` refusal names the action that was refused. When that is not the method's own, the message says so, as in `utilities_speech_transcribe needs utilities_speech_download, which was refused …`, and the next step names the allow rule to add for it.
+A `PERMISSION_DENIED` refusal names the action that was refused. When that is not the method's own, the message says so, as in `utilities_speech_transcribe needs utilities_speech_download, which was refused …`.
+- **An ask:** the next step names the allow rule to add.
+- **A deny rule:** the message says so (`… which a deny rule refuses …`), and the next step says to remove or narrow that deny rule in the agent or the session, add a later allow rule to the session, or use another agent.
 
 ## What scripts cannot do
 

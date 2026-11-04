@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Scripts: a tools RPC refusal by a deny rule now names the denied action and says to remove or narrow that rule (or add a later allow rule to the session). Before, it gave the same next step as an unanswered ask. The code is still `PERMISSION_DENIED`.
+
 ## [0.0.4] - 2026-11-04
 
 ### Added
