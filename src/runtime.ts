@@ -223,7 +223,7 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
     return {
       platform, modules: { time: time!, weather: weather!, speech: speech! },
       speech: {
-        assets: entries.map(e => ({ role: e.role, name: e.asset.name, bytes: e.asset.bytes, state: e.state })), voices: VOICES,
+        assets: entries.map(e => ({ role: e.role, name: e.asset.name, bytes: e.asset.bytes, state: e.state })), voices: VOICES, preseeded: assets.preseeded,
         cacheDirectory: options.cacheRoot, outputDirectory: paths.output,
         ...missing.length && options.modules.speech ? { next: assets.preseeded ? "Copy the missing speech files into speech.assetsDir." : `Run /utilities-speech-install to download ${files(missing.length)} (${megabytes(bytes)}), or pre-seed speech.assetsDir.` } : {},
       },

@@ -27,7 +27,7 @@ export function createPlugin({ createRuntime, packageRoot }: PluginSources): Plu
     async setup(ctx) {
       const config = loadConfig(ctx.options)
       const host = checkHost(ctx.app.version, config.allowUntestedHost)
-      if (host.next) console.warn(formatFailure({ code: "HOST_UNTESTED", message: `OpenCode ${host.found} is untested (tested: ${host.required}); Utilities runs because allowUntestedHost is set.`, hint: "Use a tested OpenCode version if something fails." }))
+      if (host.next) console.warn(formatFailure({ code: "HOST_UNTESTED", message: `OpenCode ${host.version} is not a tested host for Utilities (supported range ${host.range}).`, hint: host.next }))
       const version = (JSON.parse(readFileSync(join(packageRoot, "package.json"), "utf8")) as { version: string }).version
       const weather = createWeatherKey(ctx.integration)
       const runtime = await createRuntime({

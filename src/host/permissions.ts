@@ -1,6 +1,8 @@
 import type { Plugin } from "@opencode/plugin"
 import { fence } from "../domain/common.js"
-import { DEFAULT_ASK, type Authorize, type PermissionRequest } from "../domain/contract.js"
+import { DEFAULT_ASK, SPEECH_DOWNLOAD_ACTION, TOOLS, type Authorize, type PermissionRequest, type ToolName } from "../domain/contract.js"
+
+const WEATHER_TOOLS = (Object.keys(TOOLS) as ToolName[]).filter(tool => "module" in TOOLS[tool] && TOOLS[tool].module === "weather")
 
 type Rule = { action: string; resource: string; effect: "allow" | "ask" | "deny" }
 type Assert = Plugin.Context["permission"]["assert"]
@@ -19,10 +21,25 @@ export function insertDefaultRules(editor: { list(): readonly { readonly id: str
 
 const sameRule = (a: Rule, b: Rule) => a.action === b.action && a.resource === b.resource && a.effect === b.effect
 
+/** Host wildcards: `*` matches any run of characters and `?` one character, over the whole string. */
+const matches = (pattern: string, value: string) =>
+  new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`).test(value)
+/** The effect of `rules` for one request: the last matching rule wins, and no match asks. */
+export function evaluate(rules: readonly Rule[], action: string, resource: string): Rule["effect"] {
+  return rules.findLast(rule => matches(rule.action, action) && matches(rule.resource, resource))?.effect ?? "ask"
+}
+/** One request for each action the block asks, with a resource like the ones the tools assert. */
+const ASKED: readonly (readonly [action: string, resource: string])[] = [
+  ...WEATHER_TOOLS.map(tool => [`utilities_${tool}`, "api.open-meteo.com"] as const),
+  ["utilities_timer_set", "timer:name"], ["utilities_timer_delete", "timer:name"],
+  ["utilities_speech_synthesize", "kitten-nano-int8/Luna"], [SPEECH_DOWNLOAD_ACTION, "github.com"],
+]
+
 /**
- * Agents with a base allow that lack the inserted rules. OpenCode creates agents defined only in user config,
- * and agents added by later plugins, after this plugin's transform runs, so side effects there do not ask.
- * Other plugins insert their own blocks at the same index, so the block counts anywhere after the base allow.
+ * Agents that need the fix: a base allow, no block after it, and rules of their own that would run at least one of
+ * the block's actions without asking. OpenCode creates agents defined only in user config, and agents added by
+ * later plugins, after this plugin's transform runs. Other plugins insert their own blocks at the same index, so the
+ * block counts anywhere after the base allow. An agent whose rules already ask or deny every one is not listed.
  */
 export function unguardedAgents(agents: readonly { readonly id: string; readonly permissions: readonly Rule[] }[]) {
   return agents.filter(agent => {
@@ -30,16 +47,8 @@ export function unguardedAgents(agents: readonly { readonly id: string; readonly
     if (base === -1) return false
     for (let start = base + 1; start + DEFAULT_RULES.length <= rules.length; start++)
       if (DEFAULT_RULES.every((rule, offset) => sameRule(rules[start + offset]!, rule))) return false
-    return true
+    return ASKED.some(([action, resource]) => evaluate(rules, action, resource) === "allow")
   }).map(agent => agent.id)
-}
-
-/** The fix for unguarded agents: the block first in each agent's own list, followed by the user's existing utilities rules. */
-export function unguardedNext(agents: readonly string[]) {
-  if (agents.length === 0) return undefined
-  return `Weather, timer changes, speech synthesis and the speech download run without asking in ${agents.join(", ")}, because agents defined only in your config, or added by other plugins, do not get the default ask rules. `
-    + "Put the block shown with them first in each of those agents' own permissions (agents.<name>.permissions in opencode.json, or permissions in the agent's markdown front matter), "
-    + "followed by any rules you already have for utilities_* actions in the top-level permissions, so yours keep winning."
 }
 
 /** Waits for one plain assert, but gives up when `signal` aborts. A late approval cannot cause an effect: the fence rejects it. */
