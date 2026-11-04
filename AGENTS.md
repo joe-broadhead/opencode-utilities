@@ -35,7 +35,7 @@ This repository builds `@joe-broadhead/opencode-utilities`, an unofficial OpenCo
 - Only the `release.yml` guard checks `"private"`; no test or script asserts it. CONTRIBUTING's Releasing section describes the release.
 - No `peerDependencies`. `@opencode/plugin` is an exact `2.2.3` devDependency; OpenTUI and Solid are devDependencies.
 - `dist/` is exactly `index.js` and `tui.js`, built by esbuild with splitting off. The RPC contract is plain JSON Schema, never zod, so `tui.js` has no zod; zod stays in the server bundle for tool schemas. Neither file imports, dynamically imports or requires a relative path, so an in-place plugin update cannot load a stale sibling; the build and the pack test enforce it.
-- `files` is a whitelist: `dist`, `skills`, `manifest`, `README.md`, `LICENSE`, `NOTICE`, `CHANGELOG.md`. `NOTICE` covers exactly the packages bundled into `dist/`; the build checks it. No `.d.ts` files. `exports` lists only `.` and `./tui`; the TUI imports the RPC contract from its own bundle. Licence texts ship with what they cover (see `licenses/README.md`).
+- `files` is a whitelist: `dist`, `assets/icon.svg` (Jelly's icon, the only file from `assets`), `skills`, `manifest`, `README.md`, `LICENSE`, `NOTICE`, `CHANGELOG.md`. `NOTICE` covers exactly the packages bundled into `dist/`; the build checks it. No `.d.ts` files. `exports` lists only `.` and `./tui`; the TUI imports the RPC contract from its own bundle. Licence texts ship with what they cover (see `licenses/README.md`).
 - Every package is at the same version. Tests read it from `package.json`.
 
 ## Checks
