@@ -1,6 +1,6 @@
 {
   "name": "@joe-broadhead/opencode-utilities",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Unofficial OpenCode plugin: weather, time, polled timers and local speech tools",
   "keywords": ["opencode", "opencode-plugin", "utilities"],
   "homepage": "https://github.com/joe-broadhead/opencode-utilities#readme",
@@ -28,10 +28,10 @@
     "check": "npm run native:ensure && npm run typecheck && npm test && npm run build && npm run test:host && npm run test:tui && npm run lint && npm run test:pack"
   },
   "optionalDependencies": {
-    "@joe-broadhead/opencode-utilities-bin-darwin-arm64": "0.0.1",
-    "@joe-broadhead/opencode-utilities-bin-darwin-x64": "0.0.1",
-    "@joe-broadhead/opencode-utilities-bin-linux-x64-gnu": "0.0.1",
-    "@joe-broadhead/opencode-utilities-bin-linux-arm64-gnu": "0.0.1"
+    "@joe-broadhead/opencode-utilities-bin-darwin-arm64": "0.0.2",
+    "@joe-broadhead/opencode-utilities-bin-darwin-x64": "0.0.2",
+    "@joe-broadhead/opencode-utilities-bin-linux-x64-gnu": "0.0.2",
+    "@joe-broadhead/opencode-utilities-bin-linux-arm64-gnu": "0.0.2"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",
