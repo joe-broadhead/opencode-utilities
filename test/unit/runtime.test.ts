@@ -305,7 +305,7 @@ describe("timer store files", () => {
     const path = join(f.root, "store"); await mkdir(path, { mode: 0o700 })
     return { f, path }
   }
-  const context = (storePath: string, stage: string, run: (args: readonly string[]) => Promise<unknown>) => ({ store: storePath, stage, signal: new AbortController().signal, run })
+  const context = (storePath: string, stage: string, run: (args: readonly string[]) => Promise<unknown>) => ({ store: storePath, legacyStores: [], stage, signal: new AbortController().signal, run })
   test.each(sqlite)("a hardlinked %s planted by another actor is never read or changed", async file => {
     const { f, path } = await store(), foreign = join(f.root, "foreign.db")
     const row = { name: "foreign-owner", deadline: "2027-01-01T00:00:00Z", description: "synthetic foreign state" }

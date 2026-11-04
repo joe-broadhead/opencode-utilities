@@ -138,4 +138,5 @@ export const timeNative = {
   list: z.strictObject({ year: n.min(2000).max(2030), country_code: s, country: s, count: n.min(0).max(366), holidays: z.array(nativeHoliday).max(366), coverage }),
 }
 export type TimeOperation = keyof typeof timeInputs
+export type TimerRecord = z.output<typeof timerRecord>
 export type TimeInput = { [K in TimeOperation]: z.infer<typeof timeInputs[K]> }

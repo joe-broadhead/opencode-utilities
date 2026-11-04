@@ -13,6 +13,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- Timers are per project, as the docs said. Before, each folder of a project had its own timers, so a timer set at the project root was missing in a subfolder. Timers that 0.0.1 kept per folder move into the project's store the first time a timer tool or status runs in that folder: none are lost, a duplicate is kept once, and a different timer whose name is taken is kept as `<name> (2)`. Default synthesis files go to a per-project folder too.
+
 - Business days skip only the holidays a whole country observes. Before, `utilities_time_business_days` with `country: "GB"` also skipped holidays of only one nation, such as Scotland's Summer Bank Holiday, for all of the UK. A new optional `region` parameter (England, Wales, Scotland or Northern Ireland, with `country: "GB"`) counts that nation's holidays too. A count lists the regional holidays it did not skip in `regional_holidays_not_skipped`.
 - Holiday lists and checks still show regional holidays, now with `nationwide` and `regions` fields on every holiday, not only the bracket in the name. `utilities_time_holidays` takes `region` too.
 

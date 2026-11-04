@@ -83,7 +83,7 @@ A download goes to a private temporary file in the destination directory, never 
 
 `speech.assetsDir` skips the network. Each `<assetsDir>/<name>` is hash-checked. A miss or a mismatch is `SPEECH_ASSETS_MISSING`, not a download.
 
-Synthesis writes a PCM16 WAV. The default path is `$XDG_DATA_HOME/opencode-utilities/speech/<project-scope>/<id>.wav`. Files there older than 7 days, and `jobs/job-*` directories older than 10 minutes, are removed at startup. A path the caller chose is not swept. The tool returns the path, size, hash, duration, sample rate, channels and voice. There is no artifact broker.
+Synthesis writes a PCM16 WAV. The default path is `$XDG_DATA_HOME/opencode-utilities/speech/<project>/<id>.wav`, where `<project>` is a hash of the project ID. Files there older than 7 days, and `jobs/job-*` directories older than 10 minutes, are removed at startup. A path the caller chose is not swept. The tool returns the path, size, hash, duration, sample rate, channels and voice. There is no artifact broker.
 
 Transcription identifies the source before the prompt, re-checks it after approval, and refuses a symbolic link or a file that changed. The WAV parser accepts ancillary chunks (`JUNK`, `LIST`, `FLLR`, `bext` and others) and rejects compressed, float, extensible and malformed files. The bridge does not call ffmpeg.
 
