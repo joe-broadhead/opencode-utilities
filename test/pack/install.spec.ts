@@ -1,7 +1,8 @@
 // Packs the package as npm would publish it, installs the tarball into an empty project with scripts disabled,
-// imports its entries, and loads it on stock OpenCode 2.2.3 and 2.2.4. Run `npm run build` first.
-// OPENCODE_BIN_2_2_3 and OPENCODE_BIN_2_2_4 name the stock `opencode` binaries when set. When unset, each
-// release is installed into this test's temp project with --ignore-scripts. That is the CI path.
+// imports its entries, and loads it on each tested stock OpenCode release (TESTED_HOSTS: 2.2.3, 2.2.4 and 2.2.5).
+// Run `npm run build` first. OPENCODE_BIN_2_2_3, OPENCODE_BIN_2_2_4 and OPENCODE_BIN_2_2_5 name the stock
+// `opencode` binaries when set. When unset, each release is installed into this test's temp project with
+// --ignore-scripts, once per version.
 // PACKED_DIR names a folder of tarballs that are already packed, as release.yml does: the test then checks the
 // main tarball and this platform's tarball from there, the exact files that will be published.
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
@@ -14,14 +15,14 @@ import { join, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { DEFAULT_ASK, MODULES, PLATFORMS, PLUGIN_ID } from "../../src/domain/contract.js"
 import { detectTarget, isPlatform } from "../../src/domain/backends.js"
-import { HOST_RANGE } from "../../src/host/compat.js"
+import { HOST_RANGE, TESTED_HOSTS } from "../../src/host/versions.js"
 import { SCRIPT_TOOLS } from "../../src/host/scripting.js"
 import { TOOLS_RPC_ID } from "../../src/host/tools-rpc.js"
 
 setDefaultTimeout(300_000)
 const repo = fileURLToPath(new URL("../../", import.meta.url))
 const NAME = "@joe-broadhead/opencode-utilities"
-const VERSIONS = ["2.2.3", "2.2.4"] as const
+const VERSIONS = TESTED_HOSTS
 const source = JSON.parse(readFileSync(join(repo, "package.json"), "utf8")) as { version: string }
 const target = detectTarget()
 const platformPackage = isPlatform(target) ? PLATFORMS[target].package : undefined
@@ -285,8 +286,14 @@ async function script(host: { api: (method: string, path: string, body?: unknown
   return { type: body.type ?? body._tag, code: body.data?.code, next: body.data?.next, message: String(body.message ?? data) }
 }
 
-/** The stock CLI for `version`: the OPENCODE_BIN_* path when set, otherwise the npm release with scripts off. */
+/** The stock CLI for `version`: the OPENCODE_BIN_* path when set, otherwise the npm release with scripts off. Memoised: a second install would fail on its folder (EEXIST). */
+const binaries = new Map<string, string>()
 function stockBinary(version: string) {
+  let binary = binaries.get(version)
+  if (!binary) { binary = installStock(version); binaries.set(version, binary) }
+  return binary
+}
+function installStock(version: string) {
   const given = process.env[`OPENCODE_BIN_${version.replaceAll(".", "_")}`]
   if (given) {
     if (!existsSync(given)) throw new Error(`OPENCODE_BIN_${version.replaceAll(".", "_")} does not exist: ${given}`)
