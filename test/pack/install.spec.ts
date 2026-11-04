@@ -255,6 +255,11 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
         expect(result).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
         expect(result.message).toMatch(/cannot answer an approval prompt/)
         expect(Date.now() - started).toBeLessThan(5000)
+        // UTIL-6: the refusal names the ask that was refused, the download, not the transcription itself.
+        if (method === "speech_transcribe") {
+          expect(result.message).toContain("needs utilities_speech_download, which was refused")
+          expect(result.next).toStartWith("Add an allow rule for utilities_speech_download")
+        }
       }
       const pending = (await host.api("GET", "/api/permission/request")).data as { data: unknown[] }
       expect(pending.data.filter(request => JSON.stringify(request).includes(sessions.build!))).toEqual([])
@@ -277,7 +282,7 @@ async function script(host: { api: (method: string, path: string, body?: unknown
   const { status, data } = await host.api("POST", `/api/rpc/${TOOLS_RPC_ID}/${method}`, { input })
   const body = data as Record<string, any>
   if (status === 200) return { value: body.output }
-  return { type: body.type ?? body._tag, code: body.data?.code, message: String(body.message ?? data) }
+  return { type: body.type ?? body._tag, code: body.data?.code, next: body.data?.next, message: String(body.message ?? data) }
 }
 
 /** The stock CLI for `version`: the OPENCODE_BIN_* path when set, otherwise the npm release with scripts off. */
