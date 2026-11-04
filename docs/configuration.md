@@ -42,7 +42,12 @@ Unknown keys are rejected. A relative path is rejected.
 
 Timers are per project: a timer set at the project root is the same timer in every subfolder. OpenCode's project is the git repository; a folder outside any repository belongs to OpenCode's shared `global` project. Version 0.0.1 kept a store per folder instead, keyed by the project and the folder. The first timer call in a folder moves that folder's old stores, and its parents', into the project store, under both stores' locks. A store moves whole when the project has no timers yet; otherwise each timer is copied, an identical one is skipped, and a different timer with a name already taken is kept as `<name> (2)`, with its created time set to the move. An old store of a folder you never open again stays on disk until OpenCode runs there.
 
-The speech cache is not under `stateRoot`. It is `$XDG_CACHE_HOME/opencode-utilities` (`~/.cache/opencode-utilities` when unset).
+The caches are not under `stateRoot`. They are under `$XDG_CACHE_HOME/opencode-utilities` (`~/.cache/opencode-utilities` when unset):
+
+| Path under the cache | Contents |
+| --- | --- |
+| `<sha256>/<name>` | Speech engine and model files. |
+| `weather/weather-signal/<hash>.json` | Open-Meteo responses, one file per request URL, mode `0600` in a `0700` folder. A forecast is reused for 30 minutes and a place search for 30 days, so repeated calls cost no extra requests. Files older than 31 days are removed at startup. |
 
 ### Symbolic links
 
@@ -112,7 +117,7 @@ Integration ID `open-meteo`, method `key`, label "Open-Meteo commercial API key"
 
 There is no `env` method.
 
-Every weather output includes `attribution` with the value `Weather data by Open-Meteo.com (CC BY 4.0)`.
+Every weather output includes `attribution` with the value `Weather data by Open-Meteo.com (CC BY 4.0)`, and `cache`: `miss` for a fresh request, `hit` when the response came from the weather cache (see `stateRoot` layout above). The cache is shared by every project of this user. A connected key is never stored in it; requests with a key are cached apart from free-tier ones.
 
 ## Permissions
 

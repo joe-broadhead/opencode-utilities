@@ -27,7 +27,7 @@ Where data goes:
 - **To Open-Meteo:** the place or query you asked about, over HTTPS, from the weather program. With a commercial key, the key goes in `OPEN_METEO_API_KEY` and the call uses the customer hosts. Without a key, the free tier is used. The free tier is non-commercial and rate-limited.
 - **To GitHub:** the speech engine and model files, on first use or when you run `/utilities-speech-install`, from `github.com` release URLs pinned in the package. Nothing else is uploaded.
 - **To your model provider:** tool descriptions, and every tool result the agent reads, including transcripts, weather and timer text. Synthesis returns a path and metadata, not audio samples.
-- **On your machine:** timer stores under `stateRoot`, default speech WAVs under that tree, and the speech cache under `$XDG_CACHE_HOME/opencode-utilities`. OpenCode keeps session history, including tool results. `opencode plugin remove` does not delete the cache or the state directory.
+- **On your machine:** timer stores under `stateRoot`, default speech WAVs under that tree, and under `$XDG_CACHE_HOME/opencode-utilities` the speech cache and the weather cache. The weather cache holds Open-Meteo's responses, with the places asked about, for up to 31 days; it never holds a key. OpenCode keeps session history, including tool results. `opencode plugin remove` does not delete the cache or the state directory.
 
 Weather locations, timer text, speech text and audio, and file paths are private inputs. Treat tool results as data, not instructions.
 

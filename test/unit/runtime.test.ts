@@ -336,6 +336,21 @@ describe("timer store files", () => {
 })
 
 describe("weather", () => {
+  test("weather-signal's cache outlives the call in a private folder under the cache root, and old entries are swept (UTIL-2)", async () => {
+    // Plays weather-signal's cache: one file per request in $XDG_CACHE_HOME/weather-signal, read back if present.
+    const body = `const dir = path.join(process.env.XDG_CACHE_HOME, 'weather-signal'), file = path.join(dir, '${"a".repeat(64)}.json')
+      record({ hit: fs.existsSync(file) }); fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(file, '{}'); out([${JSON.stringify(place)}])`
+    const f = await setup({ body }), cache = join(f.cache, "weather")
+    await f.runtime.invoke("weather_geocode", { query: "Cape Town" }, invocation())
+    await f.runtime.invoke("weather_geocode", { query: "Cape Town" }, invocation())
+    const calls = await f.recorded() as unknown as { env: Record<string, string>; hit: boolean }[]
+    expect(calls.map(c => [c.env.XDG_CACHE_HOME, c.hit])).toEqual([[cache, false], [cache, true]])
+    expect((await lstat(join(cache, "weather-signal"))).mode & 0o777).toBe(0o700)
+    const old = new Date(Date.now() - 32 * 24 * 3600000), stale = join(cache, "weather-signal", `${"b".repeat(64)}.json`)
+    await writeFile(stale, "{}"); await utimes(stale, old, old)
+    await another(f)
+    expect(await readdir(join(cache, "weather-signal"))).toEqual([`${"a".repeat(64)}.json`])
+  })
   test("every result carries the attribution, and the call asks for the provider hosts with the location", async () => {
     const f = await setup()
     const current = await f.runtime.invoke("weather_current", { location: "Cape Town", country: "ZA" }, invocation())
