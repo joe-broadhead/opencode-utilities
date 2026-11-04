@@ -167,8 +167,9 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
     const view = (response.data as { output: Record<string, any> }).output
     expect(view.version).toBe(source.version)
     expect(view.host).toEqual({ version, range: HOST_RANGE, tested: true })
-    expect(view).toMatchObject({ state: "ready", unguardedAgents: [] })
-    expect(typeof view.nextStep).toBe("string")
+    // `locked`, defined only in config, missed the block and denies only the time tools, so weather would run there unasked.
+    expect(view).toMatchObject({ state: "ready", unguardedAgents: ["locked"] })
+    expect(view.nextStep).toStartWith("Put the block shown under Agents without default rules first in the own permissions of locked ")
     expect(view.platform).toMatchObject({ target, ...platformPackage ? { package: platformPackage } : {} })
     expect(Object.keys(view.modules).sort()).toEqual([...MODULES].sort())
     expect(view.permissions.askByDefault).toEqual([...DEFAULT_ASK])

@@ -110,9 +110,10 @@ export type GeocodeOutput<L> = WeatherOutput<{ readonly locations: readonly L[] 
 
 /**
  * The plugin's state in the shared machine form (S13). Utilities has no service to connect to, so it is `ready`,
- * unless the host is untested, every enabled module failed, or every module is off.
+ * unless every enabled module failed, or every module is off. It has no status-only mode: outside the supported range
+ * setup refuses, so `host_untested` never occurs; an untested host shows only in `host.tested` and the OpenCode row.
  */
-export const STATES = ["ready", "host_untested", "failed", "disabled"] as const
+export const STATES = ["ready", "failed", "disabled"] as const
 export type StatusState = typeof STATES[number]
 
 /**

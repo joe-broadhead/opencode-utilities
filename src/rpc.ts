@@ -98,9 +98,8 @@ export function nextStep(view: Omit<StatusFacts, "version" | "permissions">) {
     ?? view.timers.next ?? speech ?? NOTHING_TO_DO
 }
 
-/** ready, or why not: an untested host, every enabled module failed, or every module off. */
-export function stateOf(view: Pick<StatusFacts, "host" | "modules">): StatusState {
-  if (!view.host.tested) return "host_untested"
+/** ready, or why not: every enabled module failed, or every module is off. The host never changes it. */
+export function stateOf(view: Pick<StatusFacts, "modules">): StatusState {
   const on = MODULES.filter(m => view.modules[m].availability !== "DISABLED")
   if (on.length === 0) return "disabled"
   return on.some(m => registrable(m, view.modules[m].availability)) ? "ready" : "failed"
