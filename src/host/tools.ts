@@ -1,6 +1,6 @@
 import type { Plugin } from "@opencode/plugin"
 import { NAMESPACE, TOOLS, toolRegistrable, type AdapterResult, type Invocation, type Runtime, type StatusSummary, type StatusView, type ToolName } from "../domain/contract.js"
-import { NAMESPACE_DESCRIPTION, TOOL_DEFINITIONS } from "../domain/registry.js"
+import { namespaceDescription, TOOL_DEFINITIONS } from "../domain/registry.js"
 import { compactStatus, formatSummary } from "../rpc.js"
 import { isFailure, mapFailures } from "./errors.js"
 import type { WeatherKey } from "./weather.js"
@@ -38,8 +38,8 @@ export async function runTool(sources: Omit<ToolSources, "modules">, name: ToolN
 /** The tool transform. It is synchronous and replayed on every rebuild, so `ctx.tool.reload()` picks up availability changes. */
 export function toolTransform(sources: ToolSources) {
   return (editor: ToolEditor) => {
-    editor.namespace({ name: NAMESPACE, description: NAMESPACE_DESCRIPTION })
     const modules = sources.modules()
+    editor.namespace({ name: NAMESPACE, description: namespaceDescription((Object.keys(TOOLS) as ToolName[]).filter(name => toolRegistrable(name, modules))) })
     for (const tool of TOOL_DEFINITIONS) {
       const { name } = tool
       if (!toolRegistrable(name, modules)) continue

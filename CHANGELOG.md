@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.6] - 2026-11-05
+
+### Changed
+
+- The Code Mode `utilities` namespace text lists the call of each registered tool with its input keys, such as `time_business_days({mode: "between", from, to, country?, region?} | …)`, plus the UK `region` and declined-weather rules. A model can call a tool without first searching the catalog, which returned about 20 KB of signatures each time. A module that is off or unsupported is left out of the list.
+- The scripting docs and the time and weather skills say that a script, or a test of one, uses a session created for it, and never an existing session found through history or a session list, which would run it as that session's agent. The skills link to the plain `docs/scripting.md` file on raw.githubusercontent.com, which an agent can read, instead of its GitHub page.
+- `utilities_speech_transcribe` and `utilities_speech_synthesize` now start with "Call this even when speech files are missing; the download prompt is how the user agrees." Before, an agent sometimes asked the user in text and made no call, so the user never saw the download prompt that asks for their agreement.
+
 ## [0.0.5] - 2026-11-05
 
 ### Added
