@@ -59,7 +59,7 @@ if (argv.length) {
     else { fs.writeFileSync(p.outputPath, Buffer.from('${wav(0.5).toString("base64")}', 'base64')); reply({ outputPath: p.outputPath, meta: { schema_version: 1, sample_rate_hz: 16000, channels: 1, backend_kind: 'local', provider: 'local', model: 'kitten', voice: p.voice ?? 'Luna', language: 'en', duration_ms: 500, text_chars: p.text.length, text_truncated: false, chunk_count: 1, synthesized_chars: p.text.length } }) }
   })
 }`
-export function program(calls: string, body = DEFAULT) {
+function program(calls: string, body = DEFAULT) {
   return `#!${process.execPath}
 const fs = require('node:fs'), path = require('node:path'), argv = process.argv.slice(2)
 const record = v => fs.appendFileSync(${JSON.stringify(calls)}, JSON.stringify({ program: path.basename(__filename), argv, env: process.env, cwd: process.cwd(), files: fs.readdirSync(process.cwd()), ...v }) + '\\n')
@@ -119,7 +119,10 @@ export async function fixture(o: FixtureOptions = {}) {
 
 /** How the release server answers for one file. A Buffer is served in place of the real bytes. */
 export type Serve = "ok" | "tampered" | "short" | "long" | "length" | "interrupt" | "missing" | "slow" | Buffer
-/** A local stand-in for the GitHub release, counting requests per file. Call `use` with the fixture's files. */
+/**
+ * A local stand-in for the GitHub release, counting requests per file. Call `use` with the fixture's files. The
+ * manifest keeps the real HTTPS release URL (`url`); until `close`, fetch sends requests for it to this server.
+ */
 export async function releaseServer() {
   let byName = new Map<string, Buffer>(), behaviour: Partial<Record<string, Serve>> = {}
   const requests = new Map<string, number>()
@@ -139,14 +142,17 @@ export async function releaseServer() {
     res.writeHead(200, { "content-length": content.length }); res.end(content)
   })
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve))
+  const url = `https://github.com/joe-broadhead/opencode-utilities/releases/download/v${VERSION}`, local = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v${VERSION}`
+  const realFetch = globalThis.fetch
+  globalThis.fetch = Object.assign((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => realFetch(typeof input === "string" && input.startsWith(`${url}/`) ? local + input.slice(url.length) : input, init), realFetch)
   return {
-    url: `http://127.0.0.1:${(server.address() as AddressInfo).port}/v${VERSION}`, requests,
+    url, requests,
     use(files: ReadonlyMap<SpeechAssetRole, { name: string; content: Buffer }>, modes: Partial<Record<string, Serve>> = {}) {
       byName = new Map([...files.values()].map(f => [f.name, f.content])); behaviour = modes
     },
     /** Holds `slow` responses until `release()`. */
     hold() { hold = new Promise(resolve => { release = resolve }) },
     release: () => release(),
-    close: () => new Promise<void>(resolve => { server.closeAllConnections(); server.close(() => resolve()) }),
+    close: () => new Promise<void>(resolve => { globalThis.fetch = realFetch; server.closeAllConnections(); server.close(() => resolve()) }),
   }
 }

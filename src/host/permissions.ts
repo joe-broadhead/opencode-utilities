@@ -25,7 +25,7 @@ const sameRule = (a: Rule, b: Rule) => a.action === b.action && a.resource === b
 const matches = (pattern: string, value: string) =>
   new RegExp(`^${pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")}$`).test(value)
 /** The effect of `rules` for one request: the last matching rule wins, and no match asks. */
-export function evaluate(rules: readonly Rule[], action: string, resource: string): Rule["effect"] {
+function evaluate(rules: readonly Rule[], action: string, resource: string): Rule["effect"] {
   return rules.findLast(rule => matches(rule.action, action) && matches(rule.resource, resource))?.effect ?? "ask"
 }
 /** One request for each action the block asks, with a resource like the ones the tools assert. */

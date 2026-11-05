@@ -1,4 +1,4 @@
-import { formatFailure } from "../domain/common.js"
+import { FAILURES, formatFailure } from "../domain/common.js"
 import { HOST_RANGE, inRange, TESTED_TEXT, tested, type HostCheck } from "./versions.js"
 
 export { HOST_RANGE, TESTED_HOSTS, inRange, tested, type HostCheck } from "./versions.js"
@@ -11,6 +11,6 @@ export { HOST_RANGE, TESTED_HOSTS, inRange, tested, type HostCheck } from "./ver
 export function checkHost(found: string, allowUntestedHost: boolean): HostCheck {
   if (tested(found)) return { version: found, range: HOST_RANGE, tested: true }
   if (inRange(found)) return { version: found, range: HOST_RANGE, tested: false }
-  if (!allowUntestedHost) throw new Error(formatFailure({ code: "HOST_UNTESTED", message: `Utilities supports OpenCode ${HOST_RANGE}, found ${found}.`, hint: `Use ${TESTED_TEXT}, or set the plugin option allowUntestedHost: true to run anyway.` }))
+  if (!allowUntestedHost) throw new Error(formatFailure({ code: "HOST_UNTESTED", message: `Utilities supports OpenCode ${HOST_RANGE}, found ${found}.`, hint: FAILURES.HOST_UNTESTED[1] }))
   return { version: found, range: HOST_RANGE, tested: false, next: `This OpenCode version is outside ${HOST_RANGE} and runs only because allowUntestedHost is set. If something fails, use ${TESTED_TEXT}.` }
 }

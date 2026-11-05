@@ -1,4 +1,4 @@
-import type { z } from "zod"
+import type * as z from "zod"
 import { join } from "node:path"
 import { weatherArgv } from "./argv.js"
 import { weatherNativeOutputs, CURRENT_UNITS, DAILY_UNITS, HOURLY_UNITS, type WeatherInput, type WeatherOperation } from "./contracts.js"

@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "node:crypto"
 import { lstat, readdir, writeFile } from "node:fs/promises"
-import { dirname, extname, join, resolve } from "node:path"
+import { extname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type * as z from "zod"
-import { identifySource, type OutputTarget } from "./artifacts/audio.js"
+import { identifySource, readSource, type OutputTarget } from "./artifacts/audio.js"
 import { Backends, detectTarget, packageJson, verifier } from "./domain/backends.js"
 import { LIMITS, bounded, deadline, fail, fence, parse, UtilitiesError, abortCode } from "./domain/common.js"
 import { AVAILABILITY, SPEECH_MODEL_ROLES, TOOLS, type AdapterResult, type Availability, type Invocation, type Module, type ModuleTool, type PermissionRequest, type PlatformModule, type Runtime, type RuntimeOptions, type RuntimeStatus, type SpeechAssetRole, type SpeechInstallOutput, type SynthesisInput, type TranscriptionInput } from "./domain/contract.js"
@@ -15,7 +15,6 @@ import { weatherHosts } from "./modules/weather/argv.js"
 import { invoke as invokeSpeech, type EngineOperation, type SpeechJob } from "./modules/speech/adapter.js"
 import { invoke as invokeTime } from "./modules/time/adapter.js"
 import { invoke as invokeWeather } from "./modules/weather/adapter.js"
-import { cleanup } from "./modules/speech/cleanup.js"
 import { privateDirectory, removeOwned, resolveRoot, stage, sweep } from "./process/files.js"
 import { Queue } from "./process/queue.js"
 import { run } from "./process/run.js"
@@ -33,6 +32,8 @@ const files = (count: number) => `${count} file${count === 1 ? "" : "s"}`
 /** A call that passed availability checks, with the permission requests it needs. Nothing has been created yet. */
 interface Plan {
   readonly requests: PermissionRequest[]
+  /** The speech download request, asked on its own after `requests` and, for a transcription, after the source is checked. */
+  readonly download?: PermissionRequest
   readonly executable?: { readonly path: string; readonly sha256: string }
   readonly env?: Readonly<Record<string, string>>
   readonly commercial?: boolean
@@ -51,12 +52,8 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
   const location = { directory, projectDirectory: options.location.projectDirectory }
   // Timers and default speech files belong to the project, wherever in it OpenCode runs.
   const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
-  const scope = hash([options.location.project]), store = (key: string) => join(options.stateRoot, "projects", key, "timers")
-  const paths = { store: store(scope), jobs: join(options.stateRoot, "jobs"), speech: join(options.stateRoot, "speech"), output: join(options.stateRoot, "speech", scope), weatherCache: join(options.cacheRoot, "weather") }
-  // 0.0.1 kept a store per location directory, keyed by [project, directory]. Those of this directory and its parents
-  // are moved into the project store on first use; another folder's moves when OpenCode runs there.
-  const legacy: string[] = []
-  for (let dir = directory; ; dir = dirname(dir)) { legacy.push(store(hash([options.location.project, dir]))); if (dirname(dir) === dir) break }
+  const scope = hash([options.location.project])
+  const paths = { store: join(options.stateRoot, "projects", scope, "timers"), jobs: join(options.stateRoot, "jobs"), speech: join(options.stateRoot, "speech"), output: join(options.stateRoot, "speech", scope), weatherCache: join(options.cacheRoot, "weather") }
   const backends = new Backends(packageRoot, target)
   const assets = new SpeechAssets({ packageRoot, cacheRoot: options.cacheRoot, target, ...options.speechAssetsDir === undefined ? {} : { assetsDir: options.speechAssetsDir } })
   const shutdown = new AbortController(), queue = new Queue(), pending = new Set<Promise<unknown>>(), listeners = new Set<() => void>()
@@ -98,8 +95,7 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
       output = file ? { path: file.absolute, owned: false } : { path: join(paths.output, `${randomUUID()}.wav`), owned: true }
       requests = synthesisRequests(i.voice ?? DEFAULT_VOICE, i.text.length, file)
     }
-    if (missing.length) requests.push(assets.request(missing))
-    return { requests, missing, speech: { roles, ...source ? { source } : {}, ...output ? { output } : {} } }
+    return { requests, missing, ...missing.length ? { download: assets.request(missing) } : {}, speech: { roles, ...source ? { source } : {}, ...output ? { output } : {} } }
   }
 
   /** The admitted, approved part of a call. The module deadline starts here. */
@@ -126,7 +122,7 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
         // weather-signal keeps its cache in $XDG_CACHE_HOME/weather-signal; the plugin makes the folder private first.
         if (module === "weather") { await privateDirectory(join(paths.weatherCache, "weather-signal")); fence(work) }
         const ctx: ModuleContext = {
-          stage: job, store: paths.store, legacyStores: legacy, signal: work,
+          stage: job, store: paths.store, signal: work,
           async run(args, runOptions = {}) {
             // The program is verified again right before each spawn; unchanged files are not re-hashed.
             const checked = await verifier.check(program.path, program.sha256, true)
@@ -164,22 +160,23 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
     if (!options.modules[module]) fail("DISABLED")
     bounded(raw, LIMITS.input, "INPUT_LIMIT")
     const input = parse(INPUTS[module][TOOLS[tool].operation]!, raw, "INPUT_INVALID")
-    // Cleanup is plain string rules: no engine, no download, no queue and nothing to ask.
-    if (tool === "speech_cleanup") {
-      const { text, style } = input as z.output<typeof speechInputs.cleanup>, output = cleanup(text, style)
-      bounded(output, LIMITS.output, "OUTPUT_LIMIT")
-      return { output, text: output.text }
-    }
     const step = await plan(tool, input); fence(signal)
     // Permission errors propagate unchanged: no catch wraps this await.
     if (step.requests.length) await options.authorize(step.requests, { ...invocation, signal })
     fence(signal)
-    if (step.missing?.length) { await assets.download(step.missing, signal); changed() }
+    if (step.download) {
+      // A source that is not a usable WAV fails here, after its read was approved, so it never costs a 105 MB prompt.
+      const source = step.speech?.source
+      if (source) await readSource(source.path, source.identity ?? fail("SOURCE_REJECTED"), signal)
+      await options.authorize([step.download], { ...invocation, signal })
+      fence(signal)
+      await assets.download(step.missing!, signal); changed()
+    }
     return perform(tool, input, step, signal)
   }
 
   async function moduleStatus(module: Module, speech: Promise<Entry[]>): Promise<RuntimeStatus["modules"][Module]> {
-    if (!options.modules[module]) return { availability: "DISABLED", next: `Set modules.${module} to true in the utilities.tools plugin options.` }
+    if (!options.modules[module]) return { availability: "DISABLED", next: `Set modules.${module} to true in the Utilities plugin options in opencode.json.` }
     if (closed) return { availability: "CLOSED" }
     try {
       if (module !== "speech") await backends.executable(module as PlatformModule)
@@ -194,8 +191,7 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
   async function dueTimers(signal: AbortSignal): Promise<number | undefined> {
     if (!options.modules.time || closed) return undefined
     try {
-      const exists = (path: string) => lstat(path).then(() => true, () => false)
-      if (!(await Promise.all([paths.store, ...legacy].map(exists))).includes(true)) return 0
+      if (!await lstat(paths.store).then(() => true, () => false)) return 0
       const step = await plan("timer_check", { offset: 0, limit: 1 })
       const { output } = await perform("timer_check", parse(timeInputs.timer_check, { offset: 0, limit: 1 }), step, signal)
       return (output as { total: number }).total

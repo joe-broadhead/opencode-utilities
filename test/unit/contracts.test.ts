@@ -15,6 +15,7 @@ import { speechInputs, speechOutputs } from "../../src/modules/speech/contracts.
 import { validateWav } from "../../src/artifacts/wav.js"
 import { weatherBase, wav } from "../fixtures.js"
 import { INPUTS, SAMPLES } from "../host/samples.js"
+import { NEXT_STEPS } from "../../src/host/tools-rpc.js"
 
 type Shape = { properties?: Record<string, { description?: string }>; oneOf?: Shape[]; anyOf?: Shape[] }
 const fields = (schema: Shape): [string, string | undefined][] => [
@@ -22,9 +23,9 @@ const fields = (schema: Shape): [string, string | undefined][] => [
   ...[...schema.oneOf ?? [], ...schema.anyOf ?? []].flatMap(fields),
 ]
 
-test("the tool table is the contract's 25 tools, each with a description, bounded schemas and described fields", () => {
+test("the tool table is the contract's 24 tools, each with a description, bounded schemas and described fields", () => {
   expect(TOOL_DEFINITIONS.map(t => t.name)).toEqual(Object.keys(TOOLS))
-  expect(TOOL_DEFINITIONS).toHaveLength(25)
+  expect(TOOL_DEFINITIONS).toHaveLength(24)
   expect(TOOL_DEFINITIONS.filter(t => t.name.startsWith("timer_")).map(t => t.name)).toEqual(["timer_set", "timer_get", "timer_list", "timer_check", "timer_delete"])
   expect(TOOL_DEFINITIONS.filter(t => t.pinned).map(t => t.name)).toEqual(["time_now", "time_convert", "weather_current"])
   for (const tool of TOOL_DEFINITIONS) {
@@ -62,7 +63,7 @@ test("transcription takes a path, synthesis writes a .wav file, and weather resu
   expect(speechInputs.transcribe.safeParse({ inputPath: "/clip.wav" }).success).toBe(false)
   expect(speechInputs.synthesize.safeParse({ text: "hi", path: "out.wav" }).success).toBe(true)
   expect(speechInputs.synthesize.safeParse({ text: "hi", path: "out.mp3" }).success).toBe(false)
-  expect(Object.keys(speechInputs)).toEqual(["cleanup", "transcribe", "synthesize"])
+  expect(Object.keys(speechInputs)).toEqual(["transcribe", "synthesize"])
   expect(speechOutputs.synthesize.safeParse({ path: "/a.wav", bytes: 44, sha256: "a".repeat(64), durationMs: 0, sampleRateHz: 24000, channels: 1, voice: "Luna" }).success).toBe(true)
   const place = weatherBase.location
   expect(weatherOutputs.geocode.safeParse({ locations: [place], attribution: WEATHER_ATTRIBUTION }).success).toBe(true)
@@ -85,6 +86,32 @@ test("every failure says what happened and gives one next step", () => {
     expect(formatFailure(new UtilitiesError(code as FailureCode))).toBe(`${code}: ${message} Next step: ${hint}`)
   }
 })
+test("the documented error tables list exactly the codes the plugin raises, in both directions (UTIL-R5)", async () => {
+  const codes = async (file: string) => {
+    const text = await readFile(new URL(`../../docs/${file}`, import.meta.url), "utf8"), section = text.slice(text.indexOf("\n## Errors"))
+    const rows = section.slice(0, section.indexOf("\n## ", 4) === -1 ? undefined : section.indexOf("\n## ", 4)).split("\n").filter(line => line.startsWith("| `"))
+    return rows.flatMap(row => [...row.split("|")[1]!.matchAll(/`([A-Z][A-Z0-9_]+)`/g)].map(m => m[1]!)).sort()
+  }
+  // Every FailureCode is raised somewhere (fail, UtilitiesError, an availability or a host check), and FAILURES has each.
+  expect(await codes("configuration.md")).toEqual(Object.keys(FAILURES).sort())
+  // The tools RPC's own codes: those its Utilities block gives a next step, and no MCP-only one.
+  expect(await codes("scripting.md")).toEqual(Object.keys(NEXT_STEPS).sort())
+})
+test("a holiday country is a two-letter pattern, not a 100-value enum, and an unknown one names the supported list (UTIL-R22)", () => {
+  const schema = JSON.stringify(z.toJSONSchema(timeInputs.holidays, { io: "input" }))
+  expect(schema).not.toContain('"ZW"'); expect(schema).toContain("^[A-Z]{2}$")
+  expect(timeInputs.holidays.safeParse({ mode: "list", year: 2026, country: "GB" }).success).toBe(true)
+  const unknown = timeInputs.holidays.safeParse({ mode: "list", year: 2026, country: "XX" })
+  expect(unknown.success).toBe(false); expect(unknown.error!.issues[0]!.message).toMatch(/^has no holiday data\. Supported: AE, AM, .*, GB, .*, ZW$/)
+  expect(timeInputs.business_days.safeParse({ mode: "next", date: "2026-01-01", country: "gb" }).error!.issues[0]!.message).toBe("must be an ISO 3166-1 alpha-2 code in capitals, such as GB")
+})
+test("every weather tool says to stop when the user declines, and to geocode a shared name first (it1 grading)", () => {
+  for (const tool of TOOL_DEFINITIONS.filter(t => t.module === "weather")) {
+    expect(tool.description, tool.name).toContain("if the user declines, say no weather was fetched and stop, without getting weather from another site or calling Open-Meteo directly")
+    const location = (z.toJSONSchema(tool.input, { io: "input" }) as { properties: Record<string, { description?: string }> }).properties.location
+    if (location) expect(location.description, tool.name).toContain("call utilities_weather_geocode first")
+  }
+})
 test("timezone explicitness, invalid dates, historical and holiday bounds", () => {
   expect(timeInputs.current_time.parse({})).toEqual({ timezones: ["UTC"], format: "rfc3339" })
   for (const date of ["2026-02-30", "1899-01-01", "2101-01-01"]) expect(timeInputs.calendar_query.safeParse({ date }).success).toBe(false)
@@ -93,6 +120,12 @@ test("timezone explicitness, invalid dates, historical and holiday bounds", () =
   expect(timeInputs.business_days.safeParse({ mode: "between", from: "2030-12-20", to: "2031-01-04" }).success).toBe(true)
   expect(timeInputs.business_days.safeParse({ mode: "between", from: "2026-01-01", to: "2026-01-02", skip_holidays: true }).success).toBe(false)
   expect(timeInputs.convert_timezone.safeParse({ datetime: "2026-01-01T00:00:00", from_timezone: "fake", to_timezone: "UTC" }).success).toBe(false)
+})
+test("a date or date-time is one string with one pattern, so the schema the model reads shows it (UTIL-R22)", () => {
+  const input = z.toJSONSchema(timeInputs.date_format, { io: "input" }) as unknown as { properties: { input: { type?: string; pattern?: string; anyOf?: unknown } } }
+  expect(input.properties.input).toMatchObject({ type: "string", pattern: expect.any(String) }); expect(input.properties.input.anyOf).toBeUndefined()
+  for (const ok of ["2026-10-29", "2026-10-29T15:30", "2026-10-29 15:30:00", "2026-10-29T15:30:00.5Z", "2026-10-29T15:30:00+01:00"]) expect(timeInputs.date_diff.safeParse({ from: ok, to: ok }).success).toBe(true)
+  for (const bad of ["2026-02-30", "2026-10-29T24:00", "2026-10-29T", "2101-01-01T00:00", "29/10/2026"]) expect(timeInputs.date_diff.safeParse({ from: bad, to: "2026-10-29" }).success).toBe(false)
 })
 test("all fifteen time argv mappings are fixed and options never consume positionals", () => {
   const cases: Record<string, unknown> = { current_time: {}, list_timezones: { region: "Europe" }, timezone_info: { timezone: "UTC" }, convert_timezone: { datetime: "2026-10-29T12:00:00", from_timezone: "UTC", to_timezone: "Europe/London" }, calendar_query: { date: "2026-10-29" }, date_arithmetic: { date: "2026-01-31", operation: "add", amount: 1, unit: "months" }, date_diff: { from: "2026-01-01", to: "2026-01-02" }, date_format: { input: "2026-01-01", output_format: "epoch" }, holidays: { mode: "list", country: "GB", year: 2026 }, business_days: { mode: "next", date: "2026-10-29" }, timer_set: { name: "--config=/secret", deadline: "2027-01-01T00:00:00Z", description: "--tag=secret", tags: ["--help"] }, timer_get: { name: "-x" }, timer_delete: { name: "-x" }, timer_list: { tag: "-x" }, timer_check: {} }

@@ -10,7 +10,7 @@ A script can call Utilities' tools with no model: a cron job, a shell script, or
 | `time_now`, `time_zones`, `time_zone_info`, `time_convert`, `time_calendar`, `time_add`, `time_between`, `time_format`, `time_holidays`, `time_business_days` | the ten time tools |
 | `timer_get`, `timer_list`, `timer_check` | the timer reads |
 | `weather_geocode`, `weather_current`, `weather_daily`, `weather_hourly`, `weather_demand_signal`, `weather_summary` | the six weather tools |
-| `speech_cleanup`, `speech_transcribe` | text cleanup and transcription |
+| `speech_transcribe` | transcription |
 | `describe` | none: lists the methods, their permission actions, whether each can run here now, and each tool's input and output as JSON Schema |
 
 Each method runs the tool's own path, with the same input, the same checks and the same permission requests as the tool the model calls. Only the tools that change nothing are methods: `timer_set`, `timer_delete` and `speech_synthesize` are never methods, even with an allow rule.
@@ -21,7 +21,7 @@ Every call names a session, and the session must name an agent. The script runs 
 
 - A tool that the agent's rules or the session's rules hide from the model is refused. OpenCode hides a tool when the last rule that matches its permission name, such as `utilities_time_now`, on resource `*` is a `deny`.
 - The tool then asks for what it needs, as it does for the model: weather asks for `utilities_weather_<tool>` on the Open-Meteo hosts, transcription asks for `read` (and `external_directory` outside the project), and the first speech call asks for `utilities_speech_download`. OpenCode checks each request against the agent's rules, the session's rules, then saved approvals.
-- No one answers a prompt for a script, so an `ask` is refused with `PERMISSION_DENIED` at once, and no prompt is left waiting. The default rules ask for weather and the speech download, so a script needs an allow rule for those. Time, timer reads, status and speech cleanup ask for nothing.
+- No one answers a prompt for a script, so an `ask` is refused with `PERMISSION_DENIED` at once, and no prompt is left waiting. The default rules ask for weather and the speech download, so a script needs an allow rule for those. Time, timer reads and status ask for nothing.
 
 Create the session once, with the agent the script runs as, and keep its id:
 
@@ -89,7 +89,9 @@ A refusal or failure is the RPC error `failed`, with a message `CODE: what happe
 
 OpenCode itself answers `rpc.invalid_input` for a body that is not the envelope above, with one issue per problem, such as `"extra" is not allowed`, `"input" is missing`, or `describe takes no input` for `describe` with anything but `{}`. It answers `rpc.method_not_found` for a method that does not exist, such as `timer_set`.
 
-A `PERMISSION_DENIED` refusal names the action that was refused. When that is not the method's own, the message says so, as in `utilities_speech_transcribe needs utilities_speech_download, which was refused …`, and the next step names the allow rule to add for it.
+A `PERMISSION_DENIED` refusal names the action that was refused. When that is not the method's own, the message says so, as in `utilities_speech_transcribe needs utilities_speech_download, which was refused …`.
+- **An ask:** the next step names the allow rule to add.
+- **A deny rule:** the message says so (`… which a deny rule refuses …`), and the next step says to remove or narrow that deny rule in the agent or the session, add a later allow rule to the session, or use another agent.
 
 ## What scripts cannot do
 

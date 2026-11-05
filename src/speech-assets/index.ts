@@ -8,11 +8,10 @@ import { withLock } from "../process/lock.js"
 import { SPEECH_DOWNLOAD_ACTION, SPEECH_MODEL_ROLES, type PermissionRequest, type SpeechAsset, type SpeechAssetManifest, type SpeechAssetRole, type StatusView } from "../domain/contract.js"
 import { download } from "./download.js"
 
-const loopback = new Set(["127.0.0.1", "localhost", "[::1]"])
 const asset = z.strictObject({
   name: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/),
-  // Release assets are fetched over HTTPS; plain HTTP is accepted only from a loopback mirror.
-  url: z.string().max(2048).refine(value => { try { const url = new URL(value); return url.protocol === "https:" || url.protocol === "http:" && loopback.has(url.hostname) } catch { return false } }),
+  // Release assets are fetched over HTTPS only, as native-manifest.mjs writes them.
+  url: z.string().max(2048).refine(value => { try { return new URL(value).protocol === "https:" } catch { return false } }),
   sha256,
   bytes: z.number().int().positive().max(512 * 1024 * 1024),
 })

@@ -10,7 +10,7 @@ export function isFailure(error: unknown): error is Error & UtilitiesFailure {
 }
 
 /** What the model sees: the code, what happened and the next step. */
-export function toToolError(failure: UtilitiesFailure) {
+function toToolError(failure: UtilitiesFailure) {
   const hint = failure.hint ? { hint: failure.hint } : {}
   return new ToolError({ message: formatFailure(failure), metadata: { code: failure.code, ...hint } })
 }

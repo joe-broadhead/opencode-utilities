@@ -34,8 +34,9 @@ export const STATUS_JSON_SCHEMA = object({
     next,
   }, ["assets", "voices", "preseeded", "cacheDirectory", "outputDirectory"]),
   timers: object({ due: count, directory: text(4096), next }, ["directory"]),
+  shadowedSkills: list(object({ name: text(64), path: text(4096) }, ["name", "path"]), 8),
   permissions: object({ askByDefault: list(choice(DEFAULT_ASK), DEFAULT_ASK.length) }, ["askByDefault"]),
-}, ["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "permissions"])
+}, ["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "shadowedSkills", "permissions"])
 
 /** The plugin's only RPC method. The TUI view reads the status through it. */
 export const Utilities = Rpc.define({
@@ -55,7 +56,6 @@ const AVAILABILITY_TEXT: { readonly [A in Availability]: string } = {
   AVAILABLE: "ready",
   DISABLED: "disabled",
   CLOSED: "shutting down",
-  HOST_UNTESTED: "host untested",
   UNSUPPORTED_PLATFORM: "not supported on this platform",
   PLATFORM_PACKAGE_MISSING: "failed: platform package missing",
   BINARY_MISSING: "failed: program missing",
@@ -66,10 +66,9 @@ const AVAILABILITY_TEXT: { readonly [A in Availability]: string } = {
 }
 const MODULE_TEXT: { readonly [M in Module]: string } = { time: "Time and timers", weather: "Weather", speech: "Speech" }
 const megabytes = (bytes: number) => `${Math.round(bytes / 1e6)} MB`
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`
 
 export const STATUS_TITLE = "Utilities status"
-export const NOTHING_TO_DO = "Nothing to do."
+const NOTHING_TO_DO = "Nothing to do."
 const AGENTS_ROW = "Agents without default rules"
 
 /** One row: a label and its text, which may run over several lines. `ok` is false when the row needs the user. */
@@ -80,9 +79,17 @@ const line = (label: string, text: string, ok: boolean): StatusLine => ({ label,
 export const rulesToPaste = (view: Pick<StatusView, "permissions">) =>
   ["[", ...view.permissions.askByDefault.map((action, i, all) => `  ${JSON.stringify({ action, resource: "*", effect: "ask" })}${i < all.length - 1 ? "," : ""}`), "]"].join("\n")
 
-/** The fix for agents without the default rules, in one sentence. The block is shown with them. */
-export const agentFix = (agents: readonly string[]) =>
-  `Put the block shown under Agents without default rules first in the own permissions of ${agents.join(", ")} (agents.<name>.permissions in opencode.json, or the agent's front matter), followed by your top-level rules for utilities_* actions.`
+/** The fix for agents without the default rules: one fixed sentence, the same in every plugin of this family. The agents row lists them, with the block. */
+export const AGENT_FIX = `Put the default rules shown by /${COMMANDS.status} first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.`
+
+/** Rename or move the skills that take the place of the plugin's own, so OpenCode loads the plugin's. */
+export function shadowedFix(skills: StatusView["shadowedSkills"]) {
+  const list = (items: readonly string[]) => items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items.at(-1)}` : items[0]!
+  const paths = list(skills.map(skill => skill.path)), names = list(skills.map(skill => skill.name))
+  return skills.length > 1
+    ? `Rename or move the skills at ${paths}, which use the ids of the plugin's ${names} skills, so OpenCode loads them instead of the plugin's own.`
+    : `Rename or move the skill at ${paths}, which uses the id of the plugin's ${names} skill, so OpenCode loads it instead of the plugin's own.`
+}
 
 /**
  * The single next step: the first item that needs the user, from blocking problems down. Optional items never drive
@@ -94,12 +101,12 @@ export function nextStep(view: Omit<StatusFacts, "version" | "permissions">) {
   const optional = view.modules.speech.availability === "UNSUPPORTED_PLATFORM" || view.modules.speech.availability === "SPEECH_ASSETS_MISSING" && !view.speech.preseeded
   const speech = optional ? undefined : view.modules.speech.next
   return view.host.next ?? view.platform.next ?? view.modules.time.next ?? view.modules.weather.next
-    ?? (view.weather.key === "rejected" ? view.weather.next : undefined) ?? (view.unguardedAgents.length ? agentFix(view.unguardedAgents) : undefined)
-    ?? view.timers.next ?? speech ?? NOTHING_TO_DO
+    ?? (view.weather.key === "rejected" ? view.weather.next : undefined) ?? (view.unguardedAgents.length ? AGENT_FIX : undefined)
+    ?? (view.shadowedSkills.length ? shadowedFix(view.shadowedSkills) : undefined) ?? view.timers.next ?? speech ?? NOTHING_TO_DO
 }
 
 /** ready, or why not: every enabled module failed, or every module is off. The host never changes it. */
-export function stateOf(view: Pick<StatusFacts, "modules">): StatusState {
+function stateOf(view: Pick<StatusFacts, "modules">): StatusState {
   const on = MODULES.filter(m => view.modules[m].availability !== "DISABLED")
   if (on.length === 0) return "disabled"
   return on.some(m => registrable(m, view.modules[m].availability)) ? "ready" : "failed"
@@ -132,6 +139,7 @@ export function statusLines(view: StatusView, { paste, agents }: { readonly past
       : `${missing.length} of ${view.speech.assets.length} files missing (${megabytes(missing.reduce((n, a) => n + a.bytes, 0))})${download}`, missing.length === 0 || !view.speech.preseeded),
     line("Timers", `${view.timers.due === undefined ? "due count unknown" : `${view.timers.due} due`}. Stored in ${view.timers.directory}`, (view.timers.due ?? 0) === 0),
     line("Asks first", view.permissions.askByDefault.join(", "), true),
+    line("Skills", view.shadowedSkills.length ? view.shadowedSkills.map(skill => `${skill.name} is replaced by ${skill.path}`).join("; ") : "the plugin's own", view.shadowedSkills.length === 0),
     line("Tools", `${registered} available, 0 unknown`, true),
     line(AGENTS_ROW, agents ?? (unguarded.length ? `${unguarded.join(", ")}${paste ? `\n${rulesToPaste(view)}` : ""}` : "none"), agents ? agents === "none" : unguarded.length === 0),
     line("OpenCode", `${hostText(view.host)}. Utilities ${view.version}`, view.host.tested),
@@ -144,11 +152,9 @@ const render = (lines: readonly StatusLine[]) => [STATUS_TITLE, ...lines.map(l =
 /** `/utilities-status`: every row, the block for agents without default rules, and the next step. */
 export const formatStatus = (view: StatusView) => render(statusLines(view, { paste: true }))
 
-/** The status tool's output: the same view, but the unguarded agents as a count, and their next step points to /utilities-status. */
+/** The status tool's output: the same view, with the unguarded agents as a count. Their next step already points to /utilities-status. */
 export function compactStatus(view: StatusView): StatusSummary {
-  const count = view.unguardedAgents.length
-  const pointer = `${plural(count, "agent")} lack the default ask rules. Run /${COMMANDS.status} for the agents and the block to paste.`
-  return { ...view, unguardedAgents: count, nextStep: count && view.nextStep === agentFix(view.unguardedAgents) ? pointer : view.nextStep }
+  return { ...view, unguardedAgents: view.unguardedAgents.length }
 }
 export function formatSummary(summary: StatusSummary) {
   const view: StatusView = { ...summary, unguardedAgents: [] }

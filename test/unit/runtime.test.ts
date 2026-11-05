@@ -68,7 +68,7 @@ describe("execution", () => {
   })
   test("a disabled module never runs, and the others keep working", async () => {
     const f = await setup({ runtime: { modules: { weather: true, time: true, speech: false } } })
-    await expect(f.runtime.invoke("speech_cleanup", { text: "private" }, invocation())).rejects.toMatchObject({ code: "DISABLED" })
+    await expect(f.runtime.invoke("speech_transcribe", { path: "private.wav" }, invocation())).rejects.toMatchObject({ code: "DISABLED" })
     expect((await f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).output).toEqual(calendar)
     expect((await f.recorded()).map(c => c.program)).toEqual(["time-keep"])
   })
@@ -263,7 +263,7 @@ describe("timers", () => {
     const results = await Promise.allSettled([f.runtime.invoke("timer_set", input, invocation()), second.invoke("timer_set", input, invocation())])
     expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1)
     const rejected = (results.find(r => r.status === "rejected") as PromiseRejectedResult).reason
-    expect(rejected).toMatchObject({ code: "TIMER_EXISTS", message: "A timer named 'duplicate' already exists in this project.", hint: "Call utilities_timer_set with replace: true to overwrite it." })
+    expect(rejected).toMatchObject({ code: "TIMER_EXISTS", message: "A timer named 'duplicate' already exists in this project.", hint: "Ask the user whether to overwrite it, then call utilities_timer_set with replace: true, or choose another name." })
     expect((await second.invoke("timer_list", {}, invocation())).output).toMatchObject({ count: 1 })
     await second.invoke("timer_set", { ...input, replace: true }, invocation())
     expect((await f.recorded()).filter(c => c.argv.includes("set"))).toHaveLength(2)
@@ -307,7 +307,7 @@ describe("timer store files", () => {
     const path = join(f.root, "store"); await mkdir(path, { mode: 0o700 })
     return { f, path }
   }
-  const context = (storePath: string, stage: string, run: (args: readonly string[]) => Promise<unknown>) => ({ store: storePath, legacyStores: [], stage, signal: new AbortController().signal, run })
+  const context = (storePath: string, stage: string, run: (args: readonly string[]) => Promise<unknown>) => ({ store: storePath, stage, signal: new AbortController().signal, run })
   test.each(sqlite)("a hardlinked %s planted by another actor is never read or changed", async file => {
     const { f, path } = await store(), foreign = join(f.root, "foreign.db")
     const row = { name: "foreign-owner", deadline: "2027-01-01T00:00:00Z", description: "synthetic foreign state" }
@@ -382,6 +382,15 @@ describe("weather", () => {
     const error = await g.runtime.invoke("weather_current", { location: "Nowhere" }, invocation()).catch(e => e)
     expect(error).toMatchObject({ code: "BACKEND_FAILED", message: "Open-Meteo found no place with that name." }); expect(error.message + error.hint).not.toContain("Nowhere")
   })
+  test("the rate limit and any other request failure get their own text, per tier, without the location (UTIL-R25)", async () => {
+    const body = `record({}); process.stderr.write(JSON.stringify(argv.includes('Busy') ? { causes: ['API returned status 429 Too Many Requests for Busy'], error: 'weather request failed' } : { causes: ['connection reset while fetching Elsewhere'], error: 'weather request failed after 3 attempt(s)' })); process.exitCode = 1`
+    const free = await setup({ body }), paid = await setup({ body, runtime: { weatherKey: async () => "key" } })
+    await expect(free.runtime.invoke("weather_daily", { location: "Busy" }, invocation())).rejects.toMatchObject({ code: "BACKEND_FAILED", message: "Open-Meteo's rate limit was reached.", hint: expect.stringContaining("run /connect and choose Open-Meteo") })
+    await expect(paid.runtime.invoke("weather_daily", { location: "Busy" }, invocation())).rejects.toMatchObject({ code: "BACKEND_FAILED", hint: "Wait a moment and retry." })
+    const other = await free.runtime.invoke("weather_current", { location: "Elsewhere" }, invocation()).catch(e => e)
+    expect(other).toMatchObject({ code: "BACKEND_FAILED", message: "The Open-Meteo request failed.", hint: "Check the network and retry." })
+    expect(other.message + other.hint).not.toContain("Elsewhere")
+  })
 })
 
 describe("status", () => {
@@ -397,7 +406,7 @@ describe("status", () => {
   test("a disabled module says how to turn it on, and its files are not inspected", async () => {
     const f = await setup({ runtime: { modules: { weather: false, time: true, speech: false } } }), digest = vi.spyOn(verifier, "digest")
     const status = await f.runtime.status()
-    expect(status.modules.weather).toEqual({ availability: "DISABLED", next: "Set modules.weather to true in the utilities.tools plugin options." })
+    expect(status.modules.weather).toEqual({ availability: "DISABLED", next: "Set modules.weather to true in the Utilities plugin options in opencode.json." })
     expect(status.modules.speech.availability).toBe("DISABLED"); expect(status.speech.assets).toEqual([])
     expect(digest.mock.calls.map(([path]) => path).filter(path => path.startsWith(f.cache))).toEqual([])
   })

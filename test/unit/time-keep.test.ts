@@ -3,7 +3,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
-import { lstat, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises"
 import { createRequire } from "node:module"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
@@ -66,6 +66,27 @@ test("date-times without seconds work everywhere the schemas accept them", async
   await expect(call("time_format", { input: "2026-10-30T12:00Z", output_format: "epoch" })).resolves.toMatchObject({ output: { formatted: "1793361600" } })
   await expect(call("timer_set", { name: "minutes", deadline: "2026-11-02T09:00Z" })).resolves.toMatchObject({ output: { deadline_utc: "2026-11-02T09:00:00Z" } })
   await expect(call("time_convert", { datetime: "2026-10-30T12:00:00.5", from_timezone: "UTC", to_timezone: "UTC" })).rejects.toMatchObject({ code: "INPUT_INVALID", message: "The tool input is invalid. datetime: may have fractional seconds only with an offset, such as 2026-10-29T15:30:00.5+01:00." })
+})
+
+test("time_now names this machine's time zone, whatever zones it reports (UTIL-R4)", async () => {
+  const before = process.env.TZ
+  try {
+    process.env.TZ = "Asia/Tokyo"
+    await expect(call("time_now", {})).resolves.toMatchObject({ output: { machine_timezone: "Asia/Tokyo", times: [{ timezone: "UTC" }] } })
+    process.env.TZ = "America/Sao_Paulo"
+    await expect(call("time_now", { timezones: ["Europe/London"] })).resolves.toMatchObject({ output: { machine_timezone: "America/Sao_Paulo" } })
+  } finally { if (before === undefined) delete process.env.TZ; else process.env.TZ = before }
+})
+
+test("a date-time without Z or an offset is read as UTC, and epoch is the one Unix timestamp format (UTIL-R2)", async () => {
+  const naive = await call("time_format", { input: "2026-11-04T12:00:00", output_format: "epoch" })
+  const utc = await call("time_format", { input: "2026-11-04T12:00:00Z", output_format: "epoch" })
+  expect(naive.output).toMatchObject({ input_kind: "naive_datetime", formatted: "1793793600", timezone_present: false })
+  expect((utc.output as { formatted: string }).formatted).toBe("1793793600")
+  await expect(call("time_format", { input: "2026-11-04T12:00:00", output_format: "rfc3339" })).resolves.toMatchObject({ output: { formatted: "2026-11-04T12:00:00Z" } })
+  // A clock time with no zone has no daylight-saving changes: 24 hours across Europe's spring change is still one day.
+  await expect(call("time_between", { from: "2026-03-28T12:00:00", to: "2026-03-29T12:00:00" })).resolves.toMatchObject({ output: { signed_hours: 24 } })
+  await expect(call("time_format", { input: "2026-11-04T12:00:00", output_format: "unix-timestamp" })).rejects.toMatchObject({ code: "INPUT_INVALID", message: expect.stringContaining("output_format") })
 })
 
 test("out-of-range dates name the range, not only \"Invalid input\" (LIVE-5)", async () => {
@@ -134,6 +155,10 @@ describe("regional holidays (UTIL-4)", () => {
     await expect(next("2026-12-31", { region: "Scotland" })).resolves.toMatchObject({ business_date: "2027-01-05" })
     await expect(call("time_business_days", { mode: "prev", date: "2026-12-29", country: "GB" })).resolves.toMatchObject({ output: { business_date: "2026-12-24", direction: "previous", days_moved: 5 } })
     await expect(call("time_business_days", { mode: "prev", date: "2000-01-03", country: "GB" })).rejects.toMatchObject({ code: "HOLIDAY_COVERAGE" })
+    // Easter Monday is not nationwide in GB (Scotland does not observe it), so without region it is a working day (UTIL-R25).
+    await expect(next("2026-04-02")).resolves.toMatchObject({ business_date: "2026-04-06" })
+    await expect(next("2026-04-02", { region: "England" })).resolves.toMatchObject({ business_date: "2026-04-07", days_moved: 5 })
+    await expect(call("time_business_days", { mode: "prev", date: "2026-04-07", country: "GB", region: "Wales" })).resolves.toMatchObject({ output: { business_date: "2026-04-02" } })
   })
   test("region is only for GB", async () => {
     await expect(call("time_holidays", { mode: "list", year: 2026, country: "US", region: "England" })).rejects.toMatchObject({ code: "INPUT_INVALID", message: "The tool input is invalid. region: is only for country GB, the one country whose holiday data has regions." })
@@ -141,10 +166,10 @@ describe("regional holidays (UTIL-4)", () => {
   })
 })
 
-describe("timers belong to the project, and 0.0.1's per-directory stores move into it (UTIL-5)", () => {
+describe("timers belong to the project (UTIL-5)", () => {
   const timeKeep = join(dirname(createRequire(join(repo, "package.json")).resolve(`${PLATFORMS[detectTarget() as keyof typeof PLATFORMS].package}/package.json`)), "bin/time-keep")
   const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
-  /** A store exactly where 0.0.1 kept it: projects/sha256([project, directory])/timers. */
+  /** A store where 0.0.1 kept it, per folder: projects/sha256([project, directory])/timers. */
   async function legacy(state: string, project: string, directory: string, timers: { name: string; deadline: string; description?: string; tags?: string[] }[]) {
     const store = join(state, "projects", hash([project, directory]), "timers")
     await mkdir(store, { recursive: true, mode: 0o700 }); await writeFile(join(state, "empty.toml"), "")
@@ -172,39 +197,13 @@ describe("timers belong to the project, and 0.0.1's per-directory stores move in
     expect((await list(root)).map(t => t.name).sort()).toEqual(["from-root", "from-sub"])
     expect((await root.status()).timers.directory).toBe((await sub.status()).timers.directory)
   })
-  test("one old store moves whole into an empty project store, every field kept, and its folder goes", async () => {
-    const p = await project("p-whole", "repo"), dir = join(p.base, "repo")
-    const store = await legacy(p.state, "p-whole", dir, [{ name: "review", deadline: "2027-01-01T09:00:00+01:00", description: "Quarterly review", tags: ["work", "q1"] }, { name: "due", deadline: "2020-01-01T00:00:00Z" }])
-    const before = JSON.parse(execFileSync(timeKeep, ["--output=json", `--config=${join(p.state, "empty.toml")}`, `--data-dir=${store}`, "timer", "list"], { encoding: "utf8" })).timers
+  test("a timer read never touches another store, such as one 0.0.1 kept per folder (UTIL-R6)", async () => {
+    const p = await project("p-old", "repo"), dir = join(p.base, "repo")
+    const store = await legacy(p.state, "p-old", dir, [{ name: "old", deadline: "2020-01-01T00:00:00Z" }])
     const runtime = await p.open("repo")
-    // Status already counts the old store's due timer, which moves on that first use.
-    expect((await runtime.status()).timers).toMatchObject({ due: 1 })
-    const after = await list(runtime)
-    expect(after.map(({ remaining, remaining_seconds, status, overdue, ...t }: Record<string, unknown>) => t)).toEqual(before.map(({ remaining, remaining_seconds, status, overdue, ...t }: Record<string, unknown>) => t))
-    await expect(lstat(join(store, ".."))).rejects.toMatchObject({ code: "ENOENT" })
-  })
-  test("stores of this folder and its parents merge: identical timers once, a clashing name kept as name (2)", async () => {
-    const p = await project("p-merge", "repo/sub/deep"), repoDir = join(p.base, "repo"), subDir = join(repoDir, "sub")
-    const rootStore = await legacy(p.state, "p-merge", repoDir, [{ name: "shared", deadline: "2027-01-01T00:00:00Z", tags: ["a"] }, { name: "clash", deadline: "2027-02-01T00:00:00Z" }, { name: "root-only", deadline: "2027-03-01T00:00:00Z" }])
-    const subStore = await legacy(p.state, "p-merge", subDir, [{ name: "shared", deadline: "2027-01-01T00:00:00Z", tags: ["a"] }, { name: "clash", deadline: "2027-02-02T00:00:00Z", description: "the other one" }])
-    const other = await legacy(p.state, "p-other", repoDir, [{ name: "not-mine", deadline: "2027-01-01T00:00:00Z" }])
-    const deep = await p.open("repo/sub/deep")
-    const timers = await list(deep)
-    expect(timers.map(t => t.name).sort()).toEqual(["clash", "clash (2)", "root-only", "shared"])
-    // The nearest folder's store moves first, so the parent's different timer is the one renamed.
-    expect(timers.find(t => t.name === "clash")).toMatchObject({ deadline_utc: "2027-02-02T00:00:00Z", description: "the other one" })
-    expect(timers.find(t => t.name === "clash (2)")).toMatchObject({ deadline_utc: "2027-02-01T00:00:00Z" })
-    expect(timers.find(t => t.name === "shared")).toMatchObject({ tags: ["a"] })
-    for (const store of [rootStore, subStore]) await expect(lstat(store)).rejects.toMatchObject({ code: "ENOENT" })
-    // Another project's store is never touched, and the move does not repeat.
-    expect(await present(other)).toEqual(["timers.db"])
-    expect((await list(await p.open("repo"))).map(t => t.name).sort()).toEqual(["clash", "clash (2)", "root-only", "shared"])
-  })
-  test("a store a 0.0.1 process writes again after the move is merged on the next call; a repeated copy adds nothing", async () => {
-    const p = await project("p-again", "repo"), dir = join(p.base, "repo"), runtime = await p.open("repo")
-    await runtime.invoke("timer_set", { name: "kept", deadline: "2027-01-01T00:00:00Z" }, invocation())
-    await legacy(p.state, "p-again", dir, [{ name: "kept", deadline: "2027-01-01T00:00:00Z" }, { name: "late", deadline: "2027-05-01T00:00:00Z" }])
-    expect((await list(runtime)).map(t => t.name).sort()).toEqual(["kept", "late"])
+    expect(await list(runtime)).toEqual([])
+    expect((await runtime.status()).timers).toMatchObject({ due: 0 })
+    expect(await present(store)).toEqual(["timers.db"])
   })
 })
 const present = (store: string) => readdir(store).then(names => names.filter(name => name.startsWith("timers.db")))

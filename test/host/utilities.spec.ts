@@ -3,7 +3,8 @@
 // is the default-ask agent rules, and user rules and saved approvals win over them.
 import { HOST_VERSION, project, removeRoot, startHost } from "./harness.js"
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
-import { readFileSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { z } from "zod"
 import { DEFAULT_ASK, TOOLS, type ToolName } from "../../src/domain/contract.js"
@@ -32,7 +33,12 @@ const dirs = {
   allowed: project("allowed", { experimental: { schedules: true }, permissions: ["utilities_weather_*", "utilities_timer_*", "utilities_speech_*"].map(allow) }),
   denied: project("denied", { experimental: { schedules: true }, permissions: [{ action: "utilities_speech_*", resource: "*", effect: "deny" }] }),
   install: project("install", {}),
+  shadow: project("shadow", {}),
 }
+// A user's own skill with one of the plugin's ids, in the project's .opencode/skills, which OpenCode loads in place of the plugin's.
+const shadowSkill = join(dirs.shadow, ".opencode", "skills", "utilities-time", "SKILL.md")
+mkdirSync(dirname(shadowSkill), { recursive: true })
+writeFileSync(shadowSkill, "---\nname: utilities-time\ndescription: A user's own time notes that share the plugin's skill id.\n---\n\nNotes.\n")
 let host: Awaited<ReturnType<typeof startHost>>
 let calls = 0, closed = false
 
@@ -119,14 +125,24 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     expect(status.permissions.askByDefault).toEqual([...DEFAULT_ASK])
     expect(status.unguardedAgents).toContain("reviewer")
     expect(status.unguardedAgents).not.toContain("build")
-    expect(status.nextStep).toContain("agents.<name>.permissions")
+    expect(status.nextStep).toBe("Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.")
     expect(formatStatus(status)).toContain(DEFAULT_RULES.map(rule => JSON.stringify(rule)).join(",\n  "))
+  })
+
+  test("status names a user's skill that takes the place of the plugin's own, read through the public skill list", async () => {
+    expect((await host.sdk.rpc(Utilities).status({}, { location: { directory: dirs.main } })).shadowedSkills).toEqual([])
+    const status = await host.sdk.rpc(Utilities).status({}, { location: { directory: dirs.shadow } })
+    const all = (await host.sdk.skill.list({ location: { directory: dirs.shadow } })).data
+    const listed = all.find((s: { id: string }) => s.id === "utilities-time") as { path: string } | undefined
+    expect(listed?.path).toBe(shadowSkill)
+    expect(status.shadowedSkills).toEqual([{ name: "utilities-time", path: shadowSkill }])
+    expect(formatStatus(status)).toContain(`\nSkills: utilities-time is replaced by ${shadowSkill}\n`)
   })
 
   test("computation, timer reads and status run unattended through the host's tool path", async () => {
     const sessionID = await boot(dirs.main)
     const reads = NAMES.filter(n => TOOLS[n].effect === "compute" || TOOLS[n].effect === "read-state")
-    expect(reads.length).toBe(15)
+    expect(reads.length).toBe(14)
     expect(succeeded(await codemode(sessionID, program(reads)))).toEqual(Object.fromEntries(reads.map(name => [name, "ok"])))
   })
 
@@ -187,7 +203,7 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
 
   test("a user deny hides and blocks the tools it names", async () => {
     const sessionID = await boot(dirs.denied)
-    await expect(codemode(sessionID, program(["speech_cleanup"]))).rejects.toThrow("Permission denied: utilities_speech_cleanup")
+    await expect(codemode(sessionID, program(["speech_transcribe"]))).rejects.toThrow("Permission denied: utilities_speech_transcribe")
     expect(succeeded(await codemode(sessionID, program(["time_now"])))).toEqual({ time_now: "ok" })
   })
 
@@ -253,7 +269,7 @@ describe(`the tools RPC ${TOOLS_RPC_ID} on @opencode/sdk, host version ${HOST_VE
     const { value } = await script(directory, "describe", {})
     expect(value.id).toBe(TOOLS_RPC_ID)
     expect(value.methods.map((method: { name: string }) => method.name)).toEqual([...SCRIPT_TOOLS])
-    expect(SCRIPT_TOOLS).toHaveLength(22)
+    expect(SCRIPT_TOOLS).toHaveLength(21)
     for (const method of value.methods) expect(method).toMatchObject({ kind: "plugin", action: `utilities_${method.name}`, available: true, input: expect.any(Object), output: expect.any(Object) })
     for (const name of ["timer_set", "timer_delete", "speech_synthesize", "unknown_tool"]) {
       expect(SCRIPT_TOOLS).not.toContain(name as ToolName)

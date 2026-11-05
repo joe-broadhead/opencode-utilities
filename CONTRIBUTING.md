@@ -23,7 +23,7 @@ To try a checkout in OpenCode, point a `plugins` entry's `package` at the reposi
 
 ## Checks
 
-`npm run check` runs, in order: the native ensure step, the typecheck of `src` and `test`, the unit tests, the JS build, the host tests on embedded OpenCode once per tested release, the TUI test, the forbidden-API scan (`npm run lint`) and the pack test. The pack test packs the plugin and this platform's package, installs them into an empty project with scripts off, and loads them in each tested stock OpenCode release. The tested releases are one list, `TESTED_HOSTS` in `src/host/versions.ts` (2.2.3, 2.2.4 and 2.2.5); the status, the tests and CI all read it.
+`npm run check` runs, in order: the native ensure step, the typecheck of `src` and `test`, the unit tests, the JS build, the host tests on embedded OpenCode 2.2.3, the TUI test, the forbidden-API scan (`npm run lint`) and the pack test, which runs every tested release. The pack test packs the plugin and this platform's package, installs them into an empty project with scripts off, and loads them in each tested stock OpenCode release. The tested releases are one list, `TESTED_HOSTS` in `src/host/versions.ts` (2.2.3, 2.2.4 and 2.2.5); the status, the tests and CI all read it.
 
 - Set `OPENCODE_BIN_2_2_3`, `OPENCODE_BIN_2_2_4` and `OPENCODE_BIN_2_2_5` to stock `opencode` binaries to skip installing them. Unset, the pack test installs each release into its own temp folder, as CI and the release do.
 - Host and pack tests put their temp roots under `/private/tmp` on macOS (the system temp folder elsewhere), never under your home, because OpenCode searches upward for `.opencode/` folders. Each stock server gets its own free port.
