@@ -10,7 +10,7 @@ import { commandAuthorize, createAuthorize, DEFAULT_RULES, insertDefaultRules, u
 import { loadSkills, skillTransform } from "../../src/host/skills.js"
 import { buildStatus } from "../../src/host/status.js"
 import { toolTransform } from "../../src/host/tools.js"
-import { agentFix, compactStatus, completeStatus, formatStatus, formatSummary, nextStep, rulesToPaste, STATUS_JSON_SCHEMA } from "../../src/rpc.js"
+import { AGENT_FIX, compactStatus, completeStatus, formatStatus, formatSummary, nextStep, rulesToPaste, STATUS_JSON_SCHEMA } from "../../src/rpc.js"
 import { checkHost } from "../../src/host/compat.js"
 import { createWeatherKey } from "../../src/host/weather.js"
 import { VERSION } from "../fixtures.js"
@@ -151,9 +151,10 @@ describe("permissions", () => {
     expect(unguardedAgents(listed)).toEqual(["partial"])
   })
 
-  test("the per-agent fix names the agents and never the top-level permissions", () => {
-    const next = agentFix(["reviewer", "mdagent"])
-    expect(next).toBe("Put the block shown under Agents without default rules first in the own permissions of reviewer, mdagent (agents.<name>.permissions in opencode.json, or the agent's front matter), followed by your top-level rules for utilities_* actions.")
+  test("the per-agent fix is the one fixed sentence, and never the top-level permissions", () => {
+    const next = AGENT_FIX
+    // The one sentence every plugin of this family uses, verbatim (review TRIAGE, cross-plugin decision 1).
+    expect(next).toBe("Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.")
     expect(next).not.toContain("top-level permissions")
     expect(JSON.parse(rulesToPaste(VIEW))).toEqual(DEFAULT_RULES)
     expect(rulesToPaste(VIEW).split("\n")).toHaveLength(DEFAULT_RULES.length + 2) // one rule per line
@@ -267,7 +268,7 @@ describe("status rendering", () => {
     expect(text).toContain(`OpenCode: 2.2.3 (tested). Utilities ${VERSION}`)
     expect(text.match(/^Next step: /gm)).toHaveLength(1)
     expect(text.split("\n").at(-1)).toBe(`Next step: ${unguarded.nextStep}`)
-    expect(unguarded.nextStep).toBe(agentFix(["reviewer", "mdagent"]))
+    expect(unguarded.nextStep).toBe(AGENT_FIX)
     expect(formatStatus(VIEW).split("\n").at(-1)).toBe("Next step: Nothing to do.")
   })
 
@@ -316,7 +317,7 @@ describe("status rendering", () => {
   test("the next step goes from blocking problems to optional ones", () => {
     const facts = { ...FACTS, unguardedAgents: ["reviewer"] }
     expect(nextStep({ ...facts, host: { ...facts.host, tested: false, next: "host" } })).toBe("host")
-    expect(nextStep({ ...facts, weather: { ...VIEW.weather, next: "free tier" } })).toBe(agentFix(["reviewer"]))
+    expect(nextStep({ ...facts, weather: { ...VIEW.weather, next: "free tier" } })).toBe(AGENT_FIX)
     expect(nextStep({ ...FACTS, weather: { ...VIEW.weather, next: "free tier" } })).toBe("Nothing to do.")
     expect(nextStep({ ...facts, weather: { ...VIEW.weather, key: "rejected", next: "rejected" }, timers: { directory: "/t", due: 1, next: "timers" } })).toBe("rejected")
     expect(nextStep({ ...FACTS, timers: { directory: "/t", due: 1, next: "timers" } })).toBe("timers")
@@ -324,7 +325,7 @@ describe("status rendering", () => {
 
   test("the status tool counts the unguarded agents and points to /utilities-status instead of the rules", () => {
     const summary = compactStatus(unguarded), text = formatSummary(summary)
-    expect(summary).toMatchObject({ unguardedAgents: 2, nextStep: "2 agents lack the default ask rules. Run /utilities-status for the agents and the block to paste." })
+    expect(summary).toMatchObject({ unguardedAgents: 2, nextStep: AGENT_FIX })
     expect(labels(text)).toEqual(S9)
     expect(text).toContain("Agents without default rules: 2\n")
     expect(text).not.toContain("reviewer")
@@ -378,7 +379,7 @@ describe("weather key and status", () => {
       agents: async () => [{ id: "build", permissions: [{ action: "*", resource: "*", effect: "allow" }, ...DEFAULT_RULES] }, { id: "reviewer", permissions: [{ action: "*", resource: "*", effect: "allow" }] }],
     })
     expect(Object.keys(view)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "permissions"])
-    expect(view).toMatchObject({ state: "ready", unguardedAgents: ["reviewer"], nextStep: agentFix(["reviewer"]), permissions: { askByDefault: [...DEFAULT_ASK] } })
+    expect(view).toMatchObject({ state: "ready", unguardedAgents: ["reviewer"], nextStep: AGENT_FIX, permissions: { askByDefault: [...DEFAULT_ASK] } })
     expect(JSON.stringify(view)).toBe(JSON.stringify(JSON.parse(JSON.stringify(view))))
     expect("next" in view.host).toBe(false)
   })
