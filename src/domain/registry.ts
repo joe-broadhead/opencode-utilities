@@ -18,7 +18,7 @@ const DESCRIPTIONS: { readonly [K in ToolName]: string } = {
   time_calendar: "Calendar facts for a date: weekday, ISO week and year, day of year, quarter, days in the month and leap year.",
   time_add: "Add or subtract seconds, minutes, hours, days, weeks, months or years to a date or date-time. Month and year steps clamp to the month's last day.",
   time_between: "Signed difference between two dates or date-times in seconds, minutes, hours, days and weeks.",
-  time_format: "Reformat a date or date-time as ISO 8601, RFC 3339, RFC 2822 or a Unix timestamp.",
+  time_format: "Reformat a date or date-time as ISO 8601, RFC 3339, RFC 2822 or a Unix timestamp (epoch, in seconds). A value without Z or an offset is read as UTC.",
   time_holidays: "Public holidays from an offline calendar covering 2000-2030: check whether a date is a holiday in a country, or list a country's holidays for a year. Results include regional holidays, such as Scotland's in GB, each marked with nationwide and regions. With country GB, pass region to keep only that nation's holidays and the nationwide ones.",
   time_business_days: "Working-day maths: count business days between two dates, or find the next or previous business day. Weekends are Saturday and Sunday. With country, it also skips that country's nationwide public holidays. A regional holiday is skipped only for the region you pass (country GB: England, Wales, Scotland or Northern Ireland); otherwise a count lists it in regional_holidays_not_skipped.",
   timer_set: "Create or replace a named timer with a due date-time in this project. Timers never alert by themselves: check them with utilities_timer_check. Asks for permission by default.",

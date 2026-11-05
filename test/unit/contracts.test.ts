@@ -94,6 +94,12 @@ test("timezone explicitness, invalid dates, historical and holiday bounds", () =
   expect(timeInputs.business_days.safeParse({ mode: "between", from: "2026-01-01", to: "2026-01-02", skip_holidays: true }).success).toBe(false)
   expect(timeInputs.convert_timezone.safeParse({ datetime: "2026-01-01T00:00:00", from_timezone: "fake", to_timezone: "UTC" }).success).toBe(false)
 })
+test("a date or date-time is one string with one pattern, so the schema the model reads shows it (UTIL-R22)", () => {
+  const input = z.toJSONSchema(timeInputs.date_format, { io: "input" }) as unknown as { properties: { input: { type?: string; pattern?: string; anyOf?: unknown } } }
+  expect(input.properties.input).toMatchObject({ type: "string", pattern: expect.any(String) }); expect(input.properties.input.anyOf).toBeUndefined()
+  for (const ok of ["2026-10-29", "2026-10-29T15:30", "2026-10-29 15:30:00", "2026-10-29T15:30:00.5Z", "2026-10-29T15:30:00+01:00"]) expect(timeInputs.date_diff.safeParse({ from: ok, to: ok }).success).toBe(true)
+  for (const bad of ["2026-02-30", "2026-10-29T24:00", "2026-10-29T", "2101-01-01T00:00", "29/10/2026"]) expect(timeInputs.date_diff.safeParse({ from: bad, to: "2026-10-29" }).success).toBe(false)
+})
 test("all fifteen time argv mappings are fixed and options never consume positionals", () => {
   const cases: Record<string, unknown> = { current_time: {}, list_timezones: { region: "Europe" }, timezone_info: { timezone: "UTC" }, convert_timezone: { datetime: "2026-10-29T12:00:00", from_timezone: "UTC", to_timezone: "Europe/London" }, calendar_query: { date: "2026-10-29" }, date_arithmetic: { date: "2026-01-31", operation: "add", amount: 1, unit: "months" }, date_diff: { from: "2026-01-01", to: "2026-01-02" }, date_format: { input: "2026-01-01", output_format: "epoch" }, holidays: { mode: "list", country: "GB", year: 2026 }, business_days: { mode: "next", date: "2026-10-29" }, timer_set: { name: "--config=/secret", deadline: "2027-01-01T00:00:00Z", description: "--tag=secret", tags: ["--help"] }, timer_get: { name: "-x" }, timer_delete: { name: "-x" }, timer_list: { tag: "-x" }, timer_check: {} }
   for (const [name, value] of Object.entries(cases)) {
