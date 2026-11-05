@@ -16,7 +16,7 @@ For a question about the setup, not a request to transcribe, `utilities_status` 
 
 ## The first call and its prompts
 
-When the user asks for a transcription or for speech, make the call, even if the files are missing. The engine and models (about 105 MB) come from the plugin's GitHub Release and are checked by SHA-256. The call's download prompt is how the user agrees to that download, so making the call is not a change you make on your own. In your reply, say that the first use downloads about 105 MB.
+When the user asks for a transcription or for speech, make the call, even if the files are missing. The speech files (the engine and its models: every file `utilities_status` lists as missing, about 105 MB in all) come from the plugin's GitHub Release and are checked by SHA-256. The call's download prompt is how the user agrees to that download, so making the call is not a change you make on your own. Before the call, tell the user that the first use downloads about 105 MB of speech files.
 
 The prompts come in this order:
 1. a file outside the project asks to be read (`external_directory`, then `read`);
