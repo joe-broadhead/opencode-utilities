@@ -28,6 +28,7 @@ const view = (version: string, overrides: Partial<StatusView> = {}): StatusView 
   weather: { tier: "free", key: "none", attribution: "Weather data by Open-Meteo.com (CC BY 4.0)", next: "For commercial use, add an API key: run /connect and choose Open-Meteo." },
   speech: { assets: [{ role: "engine", name: "utilities-speech", bytes: 46_000_000, state: "missing" }], voices: [], preseeded: false, cacheDirectory: "/cache", outputDirectory: "/out", next: "Run /utilities-speech-install, or set the speech.assetsDir option." },
   timers: { due: 2, directory: "/state/timers" },
+  shadowedSkills: [],
   permissions: { askByDefault: ["utilities_weather_*", "utilities_timer_set", "utilities_timer_delete", "utilities_speech_synthesize", "utilities_speech_download"] },
   ...overrides,
 })
@@ -116,7 +117,8 @@ test("renders the status lines and the next steps from the status RPC", async ()
     "Speech: speech files not downloaded yet",
     "Timers: 2 due",
     "Asks first: utilities_weather_*",
-    "Tools: 25 available, 0 unknown",
+    "Skills: the plugin's own",
+    "Tools: 24 available, 0 unknown",
     "Agents without default rules: reviewer",
     "  {\"action\":\"utilities_weather_*\",\"resource\":\"*\",\"effect\":\"ask\"},",
     "  {\"action\":\"utilities_speech_download\",\"resource\":\"*\",\"effect\":\"ask\"}",

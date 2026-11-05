@@ -46,8 +46,12 @@ export function createPlugin({ createRuntime, packageRoot }: PluginSources): Plu
       try {
         let modules = (await runtime.status()).modules
         const enabled = (module: Module) => registrable(module, modules[module].availability)
-        const status = (): Promise<StatusView> => buildStatus({ version, host, runtime, weather, agents: async () => (await ctx.agent.list()).data })
         const skills = await loadSkills(packageRoot)
+        const status = (): Promise<StatusView> => buildStatus({
+          version, host, runtime, weather, agents: async () => (await ctx.agent.list()).data,
+          ownSkills: skills.map(skill => ({ name: skill.id, path: skill.info.path })),
+          skills: async () => (await ctx.skill.list({ location: { directory: ctx.location.directory } })).data,
+        })
         await registerWeatherIntegration(ctx.integration)
         await ctx.agent.transform(insertDefaultRules)
         const sources = { runtime, weather, status, modules: () => modules }

@@ -57,7 +57,7 @@ await tools.utilities.speech_synthesize({ text: "hello", path: "out.wav" })
 
 ### Status
 
-- `/utilities` (palette: **Utilities: Status**) opens the Utilities status dialog. Its rows are Connection (the optional Open-Meteo key), Account, Access, the platform package and each module, speech files, due timers, the actions that ask, Tools, Agents without default rules, OpenCode, and one Next step. Press `r` to refresh and `Esc` to close.
+- `/utilities` (palette: **Utilities: Status**) opens the Utilities status dialog. Its rows are Connection (the optional Open-Meteo key), Account, Access, the platform package and each module, speech files, due timers, the actions that ask, Skills, Tools, Agents without default rules, OpenCode, and one Next step. Press `r` to refresh and `Esc` to close.
 - `/utilities-status` posts the same status into the session, with the block for any agents without default rules.
 - `utilities_status` gives the model the same view, with those agents as a count.
 - `/utilities-speech-install` downloads the speech files after asking.
@@ -190,6 +190,7 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 | `TIMER_NOT_FOUND` | Call `utilities_timer_list`. Timers are per project. |
 | `TIMER_STATE_UNKNOWN` | Read the timer with `utilities_timer_get` before trying again. |
 | `WAV_INVALID`, `WAV_UNSUPPORTED`, `SOURCE_REJECTED` | Convert the audio to a PCM16 WAV file of at most 20 MiB, not a symbolic link. |
+| Skills: `<id>` is replaced by `<path>` | A skill of yours with the same id as one of the plugin's, such as `utilities-time`, loads instead of the plugin's. Rename its folder and its `name`, or move it, then restart OpenCode. |
 | Agents without default rules | Put the default rules shown by `/utilities-status` first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools. See [Permissions](#permissions). |
 
 The full list of codes is in [docs/configuration.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/configuration.md#errors). A script's errors from the tools RPC add a few codes of their own, listed in [Scripting](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md#errors). The plugin does not log tool input, paths, transcripts or timer text.

@@ -145,6 +145,8 @@ export interface StatusView {
     readonly next?: string
   }
   readonly timers: { readonly due?: number; readonly directory: string; readonly next?: string }
+  /** Skills with one of the plugin's ids that OpenCode loads instead of the plugin's own; empty when none. */
+  readonly shadowedSkills: readonly { readonly name: string; readonly path: string }[]
   readonly permissions: { readonly askByDefault: readonly DefaultAskAction[] }
 }
 

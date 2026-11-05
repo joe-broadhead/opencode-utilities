@@ -34,8 +34,9 @@ export const STATUS_JSON_SCHEMA = object({
     next,
   }, ["assets", "voices", "preseeded", "cacheDirectory", "outputDirectory"]),
   timers: object({ due: count, directory: text(4096), next }, ["directory"]),
+  shadowedSkills: list(object({ name: text(64), path: text(4096) }, ["name", "path"]), 8),
   permissions: object({ askByDefault: list(choice(DEFAULT_ASK), DEFAULT_ASK.length) }, ["askByDefault"]),
-}, ["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "permissions"])
+}, ["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "shadowedSkills", "permissions"])
 
 /** The plugin's only RPC method. The TUI view reads the status through it. */
 export const Utilities = Rpc.define({
@@ -81,6 +82,15 @@ export const rulesToPaste = (view: Pick<StatusView, "permissions">) =>
 /** The fix for agents without the default rules: one fixed sentence, the same in every plugin of this family. The agents row lists them, with the block. */
 export const AGENT_FIX = `Put the default rules shown by /${COMMANDS.status} first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.`
 
+/** Rename or move the skills that take the place of the plugin's own, so OpenCode loads the plugin's. */
+export function shadowedFix(skills: StatusView["shadowedSkills"]) {
+  const list = (items: readonly string[]) => items.length > 1 ? `${items.slice(0, -1).join(", ")} and ${items.at(-1)}` : items[0]!
+  const paths = list(skills.map(skill => skill.path)), names = list(skills.map(skill => skill.name))
+  return skills.length > 1
+    ? `Rename or move the skills at ${paths}, which use the ids of the plugin's ${names} skills, so OpenCode loads them instead of the plugin's own.`
+    : `Rename or move the skill at ${paths}, which uses the id of the plugin's ${names} skill, so OpenCode loads it instead of the plugin's own.`
+}
+
 /**
  * The single next step: the first item that needs the user, from blocking problems down. Optional items never drive
  * it: the free weather tier works without a key, and missing speech files download after a prompt on the first
@@ -92,7 +102,7 @@ export function nextStep(view: Omit<StatusFacts, "version" | "permissions">) {
   const speech = optional ? undefined : view.modules.speech.next
   return view.host.next ?? view.platform.next ?? view.modules.time.next ?? view.modules.weather.next
     ?? (view.weather.key === "rejected" ? view.weather.next : undefined) ?? (view.unguardedAgents.length ? AGENT_FIX : undefined)
-    ?? view.timers.next ?? speech ?? NOTHING_TO_DO
+    ?? (view.shadowedSkills.length ? shadowedFix(view.shadowedSkills) : undefined) ?? view.timers.next ?? speech ?? NOTHING_TO_DO
 }
 
 /** ready, or why not: every enabled module failed, or every module is off. The host never changes it. */
@@ -129,6 +139,7 @@ export function statusLines(view: StatusView, { paste, agents }: { readonly past
       : `${missing.length} of ${view.speech.assets.length} files missing (${megabytes(missing.reduce((n, a) => n + a.bytes, 0))})${download}`, missing.length === 0 || !view.speech.preseeded),
     line("Timers", `${view.timers.due === undefined ? "due count unknown" : `${view.timers.due} due`}. Stored in ${view.timers.directory}`, (view.timers.due ?? 0) === 0),
     line("Asks first", view.permissions.askByDefault.join(", "), true),
+    line("Skills", view.shadowedSkills.length ? view.shadowedSkills.map(skill => `${skill.name} is replaced by ${skill.path}`).join("; ") : "the plugin's own", view.shadowedSkills.length === 0),
     line("Tools", `${registered} available, 0 unknown`, true),
     line(AGENTS_ROW, agents ?? (unguarded.length ? `${unguarded.join(", ")}${paste ? `\n${rulesToPaste(view)}` : ""}` : "none"), agents ? agents === "none" : unguarded.length === 0),
     line("OpenCode", `${hostText(view.host)}. Utilities ${view.version}`, view.host.tested),
