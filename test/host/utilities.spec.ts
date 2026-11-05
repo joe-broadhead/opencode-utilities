@@ -187,7 +187,7 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
 
   test("a user deny hides and blocks the tools it names", async () => {
     const sessionID = await boot(dirs.denied)
-    await expect(codemode(sessionID, program(["speech_cleanup"]))).rejects.toThrow("Permission denied: utilities_speech_cleanup")
+    await expect(codemode(sessionID, program(["speech_transcribe"]))).rejects.toThrow("Permission denied: utilities_speech_transcribe")
     expect(succeeded(await codemode(sessionID, program(["time_now"])))).toEqual({ time_now: "ok" })
   })
 

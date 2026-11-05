@@ -23,9 +23,9 @@ const fields = (schema: Shape): [string, string | undefined][] => [
   ...[...schema.oneOf ?? [], ...schema.anyOf ?? []].flatMap(fields),
 ]
 
-test("the tool table is the contract's 25 tools, each with a description, bounded schemas and described fields", () => {
+test("the tool table is the contract's 24 tools, each with a description, bounded schemas and described fields", () => {
   expect(TOOL_DEFINITIONS.map(t => t.name)).toEqual(Object.keys(TOOLS))
-  expect(TOOL_DEFINITIONS).toHaveLength(25)
+  expect(TOOL_DEFINITIONS).toHaveLength(24)
   expect(TOOL_DEFINITIONS.filter(t => t.name.startsWith("timer_")).map(t => t.name)).toEqual(["timer_set", "timer_get", "timer_list", "timer_check", "timer_delete"])
   expect(TOOL_DEFINITIONS.filter(t => t.pinned).map(t => t.name)).toEqual(["time_now", "time_convert", "weather_current"])
   for (const tool of TOOL_DEFINITIONS) {
@@ -63,7 +63,7 @@ test("transcription takes a path, synthesis writes a .wav file, and weather resu
   expect(speechInputs.transcribe.safeParse({ inputPath: "/clip.wav" }).success).toBe(false)
   expect(speechInputs.synthesize.safeParse({ text: "hi", path: "out.wav" }).success).toBe(true)
   expect(speechInputs.synthesize.safeParse({ text: "hi", path: "out.mp3" }).success).toBe(false)
-  expect(Object.keys(speechInputs)).toEqual(["cleanup", "transcribe", "synthesize"])
+  expect(Object.keys(speechInputs)).toEqual(["transcribe", "synthesize"])
   expect(speechOutputs.synthesize.safeParse({ path: "/a.wav", bytes: 44, sha256: "a".repeat(64), durationMs: 0, sampleRateHz: 24000, channels: 1, voice: "Luna" }).success).toBe(true)
   const place = weatherBase.location
   expect(weatherOutputs.geocode.safeParse({ locations: [place], attribution: WEATHER_ATTRIBUTION }).success).toBe(true)

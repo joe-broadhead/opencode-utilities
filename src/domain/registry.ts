@@ -32,7 +32,6 @@ const DESCRIPTIONS: { readonly [K in ToolName]: string } = {
   weather_hourly: `Hourly forecast for a place for up to 384 hours: temperature, precipitation chance, wind and cloud cover. ${OPEN_METEO}`,
   weather_demand_signal: `Daily weather features for planning, for up to 16 days: values plus flags such as rain_likely, hot_day and windy_day. Flags are fixed thresholds, not predictions. ${OPEN_METEO}`,
   weather_summary: `A short forecast for a place for up to 16 days: a headline plus counts of risky, warm, hot, wet, windy and sunny days. ${OPEN_METEO}`,
-  speech_cleanup: "Tidy dictated or transcribed English text with fixed rules: fix spacing and filler words, or make a list, a formal version or a summary. Needs no download.",
   speech_transcribe: `Transcribe a WAV recording to text on this machine with Whisper tiny. Reading a file outside the project asks first. ${DOWNLOAD}`,
   speech_synthesize: `Turn text into speech on this machine with Kitten TTS and save it as a WAV file; the result gives the file path to play. Asks for permission by default. ${DOWNLOAD}`,
 }

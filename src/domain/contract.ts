@@ -14,7 +14,7 @@ export type Module = typeof MODULES[number]
 export const EFFECTS = ["compute", "read-state", "write-state", "network", "read-file", "write-file"] as const
 export type Effect = typeof EFFECTS[number]
 
-/** The 25 tools, registered in NAMESPACE as `utilities_<name>`. `module` and `operation` route a call to its adapter. */
+/** The 24 tools, registered in NAMESPACE as `utilities_<name>`. `module` and `operation` route a call to its adapter. */
 export const TOOLS = {
   status: { effect: "compute" },
   time_now: { effect: "compute", module: "time", operation: "current_time" },
@@ -38,7 +38,6 @@ export const TOOLS = {
   weather_hourly: { effect: "network", module: "weather", operation: "hourly" },
   weather_demand_signal: { effect: "network", module: "weather", operation: "demand_signal" },
   weather_summary: { effect: "network", module: "weather", operation: "summary" },
-  speech_cleanup: { effect: "compute", module: "speech", operation: "cleanup" },
   speech_transcribe: { effect: "read-file", module: "speech", operation: "transcribe" },
   speech_synthesize: { effect: "write-file", module: "speech", operation: "synthesize" },
 } as const satisfies Record<string, { readonly effect: Effect; readonly module?: Module; readonly operation?: string }>
@@ -158,12 +157,10 @@ export interface StatusSummary extends Omit<StatusView, "unguardedAgents"> {
 export function registrable(module: Module, availability: Availability) {
   return availability === "AVAILABLE" || (module === "speech" && availability === "SPEECH_ASSETS_MISSING")
 }
-/** Whether a tool is registered. Speech cleanup needs no engine, so it is registered whenever the speech module is on. */
+/** Whether a tool is registered: status always, every other tool when its module is registrable. */
 export function toolRegistrable(tool: ToolName, modules: { readonly [M in Module]: { readonly availability: Availability } }) {
   const entry = TOOLS[tool]
-  if (!("module" in entry)) return true
-  const { availability } = modules[entry.module]
-  return tool === "speech_cleanup" ? availability !== "DISABLED" && availability !== "CLOSED" : registrable(entry.module, availability)
+  return !("module" in entry) || registrable(entry.module, modules[entry.module].availability)
 }
 
 // Configuration and runtime

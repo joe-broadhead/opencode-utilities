@@ -73,7 +73,7 @@ The refusal text is: `HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0,
 
 Effective name `utilities_<name>`. `options.permission` is that name, so a deny with resource `*` hides the tool. Code Mode is on. Pinned: `utilities_time_now`, `utilities_time_convert`, `utilities_weather_current`.
 
-Only available modules are registered. Transcription and synthesis stay registered while their files are merely missing, so the first call can ask to download them. A disabled module, an unsupported platform, or a failed integrity check does not register that module's tools. `utilities_speech_cleanup` needs no engine, so it is registered whenever `modules.speech` is on. Availability changes (a finished download, for example) reload the tool list.
+Only available modules are registered. Transcription and synthesis stay registered while their files are merely missing, so the first call can ask to download them. A disabled module, an unsupported platform, or a failed integrity check does not register that module's tools. Availability changes (a finished download, for example) reload the tool list.
 
 | Tool | Effect | Permission |
 | --- | --- | --- |
@@ -82,7 +82,6 @@ Only available modules are registered. Transcription and synthesis stay register
 | `utilities_timer_get`, `utilities_timer_list`, `utilities_timer_check` | read-state | none |
 | `utilities_timer_set`, `utilities_timer_delete` | write-state | ask. Resource `timer:<name>`, save `timer:*`. |
 | `utilities_weather_geocode`, `utilities_weather_current`, `utilities_weather_daily`, `utilities_weather_hourly`, `utilities_weather_demand_signal`, `utilities_weather_summary` | network | ask. Resource and save are the provider hosts. `metadata.location` is the place or query. |
-| `utilities_speech_cleanup` | compute | none. It needs no engine or download. |
 | `utilities_speech_transcribe` | read-file | host `read`, and `external_directory` when the file is outside the location and the project |
 | `utilities_speech_synthesize` | write-file | ask `utilities_speech_synthesize`. Resource `kitten-nano-int8/<voice>`, save `*`. A given `path` also asserts `edit`, and `external_directory` outside the project. |
 
