@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- `utilities_speech_transcribe` and `utilities_speech_synthesize` now start with "Call this even when speech files are missing; the download prompt is how the user agrees." Before, an agent sometimes asked the user in text and made no call, so the user never saw the download prompt that asks for their agreement.
+
 ## [0.0.5] - 2026-11-05
 
 ### Added
