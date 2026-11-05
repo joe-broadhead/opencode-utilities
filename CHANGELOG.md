@@ -15,6 +15,10 @@ All notable changes to this project are documented here. The format follows [Kee
 - `utilities_speech_transcribe` checks that the file is a WAV it can read before it asks to download the speech files. Before, a file such as an `.m4a` asked for the 105 MB download first and then failed with `WAV_INVALID`. The download is now asked on its own, after any file read prompt.
 - `utilities_time_format`, `utilities_time_add` and `utilities_time_between` say that a date-time without `Z` or an offset is read as UTC. Before, nothing said so, and "3 pm my time as a Unix timestamp" came out hours off. Add the offset (`utilities_time_convert` gives it).
 
+### Removed
+
+- The move of timers that 0.0.1 kept per folder. Timer reads and status no longer rename or copy timer stores, so they never write. 0.0.2 and later already moved those timers on first use in each folder; a 0.0.1 store that was never opened since stays on disk, unread, under `projects/` in the state folder.
+
 ### Changed
 
 - The next step for agents without the default rules is one fixed sentence, the same in every plugin of this family: "Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools." It is the same in `/utilities-status`, the status RPC's `nextStep`, the `/utilities` dialog and the `utilities_status` tool, which used to say "N agents lack the default ask rules …". The Agents without default rules row still lists the agents.

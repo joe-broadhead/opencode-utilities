@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from "node:crypto"
 import { lstat, readdir, writeFile } from "node:fs/promises"
-import { dirname, extname, join, resolve } from "node:path"
+import { extname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type * as z from "zod"
 import { identifySource, readSource, type OutputTarget } from "./artifacts/audio.js"
@@ -53,12 +53,8 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
   const location = { directory, projectDirectory: options.location.projectDirectory }
   // Timers and default speech files belong to the project, wherever in it OpenCode runs.
   const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
-  const scope = hash([options.location.project]), store = (key: string) => join(options.stateRoot, "projects", key, "timers")
-  const paths = { store: store(scope), jobs: join(options.stateRoot, "jobs"), speech: join(options.stateRoot, "speech"), output: join(options.stateRoot, "speech", scope), weatherCache: join(options.cacheRoot, "weather") }
-  // 0.0.1 kept a store per location directory, keyed by [project, directory]. Those of this directory and its parents
-  // are moved into the project store on first use; another folder's moves when OpenCode runs there.
-  const legacy: string[] = []
-  for (let dir = directory; ; dir = dirname(dir)) { legacy.push(store(hash([options.location.project, dir]))); if (dirname(dir) === dir) break }
+  const scope = hash([options.location.project])
+  const paths = { store: join(options.stateRoot, "projects", scope, "timers"), jobs: join(options.stateRoot, "jobs"), speech: join(options.stateRoot, "speech"), output: join(options.stateRoot, "speech", scope), weatherCache: join(options.cacheRoot, "weather") }
   const backends = new Backends(packageRoot, target)
   const assets = new SpeechAssets({ packageRoot, cacheRoot: options.cacheRoot, target, ...options.speechAssetsDir === undefined ? {} : { assetsDir: options.speechAssetsDir } })
   const shutdown = new AbortController(), queue = new Queue(), pending = new Set<Promise<unknown>>(), listeners = new Set<() => void>()
@@ -127,7 +123,7 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
         // weather-signal keeps its cache in $XDG_CACHE_HOME/weather-signal; the plugin makes the folder private first.
         if (module === "weather") { await privateDirectory(join(paths.weatherCache, "weather-signal")); fence(work) }
         const ctx: ModuleContext = {
-          stage: job, store: paths.store, legacyStores: legacy, signal: work,
+          stage: job, store: paths.store, signal: work,
           async run(args, runOptions = {}) {
             // The program is verified again right before each spawn; unchanged files are not re-hashed.
             const checked = await verifier.check(program.path, program.sha256, true)
@@ -202,8 +198,7 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
   async function dueTimers(signal: AbortSignal): Promise<number | undefined> {
     if (!options.modules.time || closed) return undefined
     try {
-      const exists = (path: string) => lstat(path).then(() => true, () => false)
-      if (!(await Promise.all([paths.store, ...legacy].map(exists))).includes(true)) return 0
+      if (!await lstat(paths.store).then(() => true, () => false)) return 0
       const step = await plan("timer_check", { offset: 0, limit: 1 })
       const { output } = await perform("timer_check", parse(timeInputs.timer_check, { offset: 0, limit: 1 }), step, signal)
       return (output as { total: number }).total
