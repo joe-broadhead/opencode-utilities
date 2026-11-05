@@ -31,7 +31,7 @@ const platformPackage = isPlatform(target) ? PLATFORMS[target].package : undefin
 const workspaces = existsSync(join(repo, "npm")) ? readdirSync(join(repo, "npm")).filter(dir => existsSync(join(repo, "npm", dir, "package.json"))) : []
 const platformDir = platformPackage && workspaces.length > 0 ? join(repo, "npm", platformPackage.split("/")[1]!) : undefined
 // A speech engine is built where ONNX Runtime ships a static library (native/onnx-provenance.json): every target but
-// x86_64-apple-darwin, so darwin-x64 has text cleanup but no transcription or synthesis.
+// x86_64-apple-darwin, so darwin-x64 has no speech tools.
 const TRIPLES = { "darwin-arm64": "aarch64-apple-darwin", "darwin-x64": "x86_64-apple-darwin", "linux-x64-gnu": "x86_64-unknown-linux-gnu", "linux-arm64-gnu": "aarch64-unknown-linux-gnu" } as const
 const onnx = JSON.parse(readFileSync(join(repo, "native/onnx-provenance.json"), "utf8")) as { distributions: Record<string, unknown> }
 const speechEngine = isPlatform(target) && Boolean(onnx.distributions[TRIPLES[target]])
@@ -240,7 +240,6 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
       const result = await call("build", "time_now", { timezones: ["UTC"] })
       if (!platformDir) return void expect(result).toMatchObject({ type: "failed", code: "PLATFORM_PACKAGE_MISSING" })
       expect(result.value).toMatchObject({ format: "rfc3339", times: [{ timezone: "UTC", utc_offset: "+00:00" }] })
-      expect((await call("build", "speech_cleanup", { text: "um so hello  world" })).value).toMatchObject({ text: expect.stringContaining("hello world"), provider: "rules" })
       const session = (await host.api("GET", `/api/session/${sessions.build}`)).data as { data: { tokens: { input: number; output: number } } }
       expect(session.data.tokens).toMatchObject({ input: 0, output: 0 })
     })

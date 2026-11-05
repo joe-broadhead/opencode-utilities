@@ -24,12 +24,12 @@ describe("Utilities' tools RPC", () => {
     expect(KNOWN_READS).toEqual([])
   })
 
-  test("its methods are exactly the 22 tools that change nothing; timer writes and speech synthesis never are", () => {
+  test("its methods are exactly the 21 tools that change nothing; timer writes and speech synthesis never are", () => {
     expect([...SCRIPT_TOOLS]).toEqual([
       "status", "time_now", "time_zones", "time_zone_info", "time_convert", "time_calendar", "time_add", "time_between", "time_format", "time_holidays", "time_business_days",
       "timer_get", "timer_list", "timer_check",
       "weather_geocode", "weather_current", "weather_daily", "weather_hourly", "weather_demand_signal", "weather_summary",
-      "speech_cleanup", "speech_transcribe",
+      "speech_transcribe",
     ])
     const excluded = (Object.keys(TOOLS) as ToolName[]).filter(name => !SCRIPT_TOOLS.includes(name))
     expect(excluded).toEqual(["timer_set", "timer_delete", "speech_synthesize"])

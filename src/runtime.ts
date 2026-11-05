@@ -15,7 +15,6 @@ import { weatherHosts } from "./modules/weather/argv.js"
 import { invoke as invokeSpeech, type EngineOperation, type SpeechJob } from "./modules/speech/adapter.js"
 import { invoke as invokeTime } from "./modules/time/adapter.js"
 import { invoke as invokeWeather } from "./modules/weather/adapter.js"
-import { cleanup } from "./modules/speech/cleanup.js"
 import { privateDirectory, removeOwned, resolveRoot, stage, sweep } from "./process/files.js"
 import { Queue } from "./process/queue.js"
 import { run } from "./process/run.js"
@@ -161,12 +160,6 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
     if (!options.modules[module]) fail("DISABLED")
     bounded(raw, LIMITS.input, "INPUT_LIMIT")
     const input = parse(INPUTS[module][TOOLS[tool].operation]!, raw, "INPUT_INVALID")
-    // Cleanup is plain string rules: no engine, no download, no queue and nothing to ask.
-    if (tool === "speech_cleanup") {
-      const { text, style } = input as z.output<typeof speechInputs.cleanup>, output = cleanup(text, style)
-      bounded(output, LIMITS.output, "OUTPUT_LIMIT")
-      return { output, text: output.text }
-    }
     const step = await plan(tool, input); fence(signal)
     // Permission errors propagate unchanged: no catch wraps this await.
     if (step.requests.length) await options.authorize(step.requests, { ...invocation, signal })

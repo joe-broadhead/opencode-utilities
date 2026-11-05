@@ -68,7 +68,7 @@ describe("execution", () => {
   })
   test("a disabled module never runs, and the others keep working", async () => {
     const f = await setup({ runtime: { modules: { weather: true, time: true, speech: false } } })
-    await expect(f.runtime.invoke("speech_cleanup", { text: "private" }, invocation())).rejects.toMatchObject({ code: "DISABLED" })
+    await expect(f.runtime.invoke("speech_transcribe", { path: "private.wav" }, invocation())).rejects.toMatchObject({ code: "DISABLED" })
     expect((await f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).output).toEqual(calendar)
     expect((await f.recorded()).map(c => c.program)).toEqual(["time-keep"])
   })

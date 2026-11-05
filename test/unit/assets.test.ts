@@ -173,8 +173,6 @@ describe("manifest", () => {
     await expect(runtime.invoke("speech_synthesize", { text: "x" }, invocation())).rejects.toMatchObject({ code: "UNSUPPORTED_PLATFORM", message: "The speech engine has no build for this platform." })
     expect(f.authorize).not.toHaveBeenCalled()
     expect((await runtime.status()).speech.assets).toEqual([])
-    // Cleanup needs no engine, so it still works there.
-    expect((await runtime.invoke("speech_cleanup", { text: "um hello there" }, invocation())).output).toEqual({ text: "Hello there", style: "clean", provider: "rules" })
   })
   test("release URLs must be HTTPS, or plain HTTP from loopback only", async () => {
     const f = await setup({ release: `http://example.com/v${VERSION}` })

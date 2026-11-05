@@ -187,12 +187,6 @@
         "readOnly": true
       },
       {
-        "name": "utilities.speech_cleanup",
-        "permission": "utilities_speech_cleanup",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
         "name": "utilities.speech_transcribe",
         "permission": "utilities_speech_transcribe",
         "effect": "allow",

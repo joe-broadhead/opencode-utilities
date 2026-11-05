@@ -53,8 +53,7 @@ export function fakeRuntimes(initial: Partial<Record<Module, Availability>> = {}
         if (runtime.closed) throw failure("CLOSED", "Utilities is shutting down.", "Try again after OpenCode reloads the plugin.")
         runtime.calls.push({ tool, input })
         const { effect, module } = TOOLS[tool]
-        // Cleanup is plain TypeScript: only the engine tools need the speech files.
-        if (module === "speech" && tool !== "speech_cleanup") await download(requests => options.authorize(requests, invocation))
+        if (module === "speech") await download(requests => options.authorize(requests, invocation))
         const value = input as { name?: string; location?: string; path?: string }
         const requests: PermissionRequest[] =
           effect === "write-state" ? [{ action: `utilities_${tool}` as PermissionRequest["action"], resources: [`timer:${value.name}`], save: ["timer:*"] }]

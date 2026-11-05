@@ -4,10 +4,6 @@ import type { SynthesisInput, SynthesisOutput, TranscriptionInput } from "../../
 
 const style = z.enum(["raw", "clean", "bullets", "professional", "summary"])
 export const speechInputs = {
-  cleanup: z.strictObject({
-    text: text(5000).min(1).describe("Dictated or transcribed text to tidy, up to 5,000 characters."),
-    style: style.default("clean").describe("raw keeps the text, clean (default) fixes spacing and fillers, bullets makes a list, professional makes it formal, summary shortens it."),
-  }),
   transcribe: z.strictObject({
     path: text(4096).min(1).describe("WAV file to transcribe, relative to the project directory or absolute. PCM16, mono or stereo, 8-48 kHz, up to 20 MiB and ten minutes."),
     language: z.string().regex(/^(?:auto|[a-z]{2,3}(?:-[A-Z]{2})?)$/).optional().describe("Spoken language as an ISO code, for example en or pt-BR. Default: detect it."),
@@ -24,7 +20,6 @@ export const stt = z.strictObject({ schema_version: z.literal(2), text: text(480
 /** The bridge's synthesis metadata. */
 export const ttsMeta = z.strictObject({ schema_version: z.literal(1), sample_rate_hz: integer.min(8000).max(192000), channels: integer.min(1).max(2), backend_kind: text(64), provider: text(64), model: text(128), voice: text(64), language: text(32), duration_ms: integer.min(0).max(600000), text_chars: integer.min(0).max(5000), text_truncated: z.boolean(), chunk_count: integer.min(0).max(1000), synthesized_chars: integer.min(0).max(5000), adapter: text(64).optional(), trust: z.enum(["builtin", "verified", "local_unverified"]).optional(), provenance: z.enum(["builtin", "custom", "local_pack"]).optional() })
 export const speechOutputs = {
-  cleanup: z.strictObject({ text: text(48000), style, provider: z.literal("rules") }),
   transcribe: stt,
   synthesize: z.strictObject({
     path: text(4096),

@@ -17,6 +17,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Removed
 
+- `utilities_speech_cleanup`, its tools RPC method `speech_cleanup` and its `jelly` entry. Its fixed English rules did worse than the model rewriting the text itself, which is what to do instead: ask the model to tidy a transcript or dictation. On macOS x64, which has no speech engine, Utilities now has no speech tools and no speech skill.
+
 - The move of timers that 0.0.1 kept per folder. Timer reads and status no longer rename or copy timer stores, so they never write. 0.0.2 and later already moved those timers on first use in each folder; a 0.0.1 store that was never opened since stays on disk, unread, under `projects/` in the state folder.
 
 ### Changed

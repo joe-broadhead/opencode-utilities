@@ -18,7 +18,7 @@ const BRIDGE: Readonly<Record<string, FailureCode>> = {
   CANCELLED: "CANCELLED", DEADLINE_EXCEEDED: "DEADLINE_EXCEEDED", INVALID_AUDIO: "WAV_INVALID", OUTPUT_EXISTS: "OUTPUT_EXISTS",
   OUTPUT_LIMIT: "OUTPUT_LIMIT", INTEGRITY_MISMATCH: "INTEGRITY_MISMATCH", MODEL_MISSING: "SPEECH_ASSETS_MISSING",
 }
-/** The operations the speech engine runs. Cleanup is plain TypeScript (cleanup.ts). */
+/** The operations the speech engine runs. */
 export type EngineOperation = "transcribe" | "synthesize"
 export interface EngineInputs { transcribe: TranscriptionInput; synthesize: SynthesisInput }
 /** What the runtime resolved for this call: verified asset paths, the approved source, and the approved output target. */

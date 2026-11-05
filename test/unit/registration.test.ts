@@ -51,10 +51,10 @@ describe("tools", () => {
 
   test("only available modules register; speech stays while only its models are missing", () => {
     for (const [availability, registered] of [
-      [{}, 25],
-      [{ speech: "SPEECH_ASSETS_MISSING" }, 25],
-      [{ speech: "UNSUPPORTED_PLATFORM" }, 23],
-      [{ weather: "PLATFORM_PACKAGE_MISSING", time: "PLATFORM_PACKAGE_MISSING" }, 4],
+      [{}, 24],
+      [{ speech: "SPEECH_ASSETS_MISSING" }, 24],
+      [{ speech: "UNSUPPORTED_PLATFORM" }, 22],
+      [{ weather: "PLATFORM_PACKAGE_MISSING", time: "PLATFORM_PACKAGE_MISSING" }, 3],
       [{ weather: "DISABLED", time: "INTEGRITY_MISMATCH", speech: "DISABLED" }, 1],
     ] as const) {
       const { added, namespaces, editor } = toolEditor()
@@ -65,10 +65,9 @@ describe("tools", () => {
     }
     expect(registrable("speech", "SPEECH_ASSETS_MISSING")).toBe(true)
     expect(registrable("weather", "SPEECH_ASSETS_MISSING")).toBe(false)
-    // Cleanup needs no engine: registered on a platform without one, not when speech is turned off.
-    expect(toolRegistrable("speech_cleanup", modulesWith({ speech: "UNSUPPORTED_PLATFORM" }))).toBe(true)
     expect(toolRegistrable("speech_transcribe", modulesWith({ speech: "UNSUPPORTED_PLATFORM" }))).toBe(false)
-    expect(toolRegistrable("speech_cleanup", modulesWith({ speech: "DISABLED" }))).toBe(false)
+    expect(toolRegistrable("speech_transcribe", modulesWith({ speech: "SPEECH_ASSETS_MISSING" }))).toBe(true)
+    expect(toolRegistrable("speech_synthesize", modulesWith({ speech: "DISABLED" }))).toBe(false)
   })
 
   test("tools use the effective name as their permission and pin the three entry points", () => {
@@ -264,7 +263,7 @@ describe("status rendering", () => {
     expect(labels(text)).toEqual(S9)
     expect(text).toContain(`Agents without default rules: reviewer, mdagent\n${rulesToPaste(unguarded)}`)
     expect(text).toContain("Connection: not configured (the Open-Meteo key is optional)")
-    expect(text).toContain("Tools: 25 available, 0 unknown")
+    expect(text).toContain("Tools: 24 available, 0 unknown")
     expect(text).toContain(`OpenCode: 2.2.3 (tested). Utilities ${VERSION}`)
     expect(text.match(/^Next step: /gm)).toHaveLength(1)
     expect(text.split("\n").at(-1)).toBe(`Next step: ${unguarded.nextStep}`)

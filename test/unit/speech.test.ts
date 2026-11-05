@@ -17,13 +17,7 @@ async function setup(o: FixtureOptions = {}) {
 }
 const bridge = (reply: string) => `let input = ''; process.stdin.on('data', v => input += v); process.stdin.on('end', () => { const r = JSON.parse(input); record({ request: r }); ${reply} })`
 
-describe("cleanup and synthesis", () => {
-  test("cleanup runs no engine, needs no speech file and asks nothing", async () => {
-    const f = await setup({ speech: "missing" })
-    expect(await f.runtime.invoke("speech_cleanup", { text: " um, synthetic text you know " }, invocation())).toEqual({ output: { text: "Synthetic text.", style: "clean", provider: "rules" }, text: "Synthetic text." })
-    expect(f.authorize).not.toHaveBeenCalled()
-    expect(await f.recorded()).toEqual([])
-  })
+describe("synthesis", () => {
   test("the engine gets a private job cache and no time or weather config", async () => {
     const f = await setup()
     await f.runtime.invoke("speech_synthesize", { text: "hello" }, invocation())
