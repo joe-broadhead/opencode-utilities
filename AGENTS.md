@@ -41,7 +41,7 @@ This repository builds `@joe-broadhead/opencode-utilities`, an unofficial OpenCo
 ## Checks
 
 - `npm run check` is the one command. Host and pack runs set `HOME`, the XDG variables, `OPENCODE_TEST_HOME` and `TMPDIR` inside a temp root that is never under the real home, and assert that OpenCode's paths stay there.
-- The tested OpenCode releases are `TESTED_HOSTS` in `src/host/versions.ts`. Host, pack and stock stages, CI and the status's `tested` flag read that list; change it there only.
+- The tested OpenCode releases are `TESTED_HOSTS` in `src/host/versions.ts`. The pack and stock stages, CI and the status's `tested` flag read that list; change it there only. The host stage runs once, on the embedded `@opencode/sdk` 2.2.3, since a version label does not change that host.
 - Host tests pass `OpenCode.create({ app: { version } })`. Test doubles are narrow `Pick` types that typecheck against 2.2.3 and 2.2.4.
 - The default checks call no network service. Live weather is behind `UTILITIES_LIVE_WEATHER=1`.
 - Do not skip, weaken or delete a test to get green.

@@ -15,28 +15,20 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
 NATIVE_BUILD_ROOT="${NATIVE_BUILD_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/opencode-utilities-native-build}"
-case "$(uname -s)-$(uname -m)" in
-  Darwin-arm64) PLATFORM=darwin-arm64 ;;
-  Darwin-x86_64) PLATFORM=darwin-x64 ;;
-  Linux-x86_64) PLATFORM=linux-x64-gnu ;;
-  Linux-aarch64) PLATFORM=linux-arm64-gnu ;;
-  *) PLATFORM= ;;
-esac
+# The platform table is PLATFORMS in src/domain/contract.ts; node reads it (Node 24 strips the types).
+platforms() { node --input-type=module -e 'const [root, key, field] = process.argv.slice(1), { PLATFORMS } = await import(`${root}/src/domain/contract.ts`); console.log(key ? PLATFORMS[key]?.[field] ?? "" : Object.keys(PLATFORMS).join(" "))' "$ROOT" "$@"; }
+PLATFORM="$(node -p "process.platform === 'linux' ? 'linux-' + process.arch + '-gnu' : process.platform + '-' + process.arch")"
+ALL="$(platforms)"
+KNOWN=" $ALL "
 SPEECH=1
 for arg; do
   case "$arg" in
     --no-speech) SPEECH=0 ;;
-    darwin-arm64|darwin-x64|linux-x64-gnu|linux-arm64-gnu) PLATFORM="$arg" ;;
-    *) echo 'usage: native-build.sh [darwin-arm64|darwin-x64|linux-x64-gnu|linux-arm64-gnu] [--no-speech]' >&2; exit 2 ;;
+    *) if [[ "$KNOWN" == *" $arg "* ]]; then PLATFORM="$arg"; else echo "usage: native-build.sh [${ALL// /|}] [--no-speech]" >&2; exit 2; fi ;;
   esac
 done
-case "$PLATFORM" in
-  darwin-arm64) TARGET=aarch64-apple-darwin ;;
-  darwin-x64) TARGET=x86_64-apple-darwin ;;
-  linux-x64-gnu) TARGET=x86_64-unknown-linux-gnu ;;
-  linux-arm64-gnu) TARGET=aarch64-unknown-linux-gnu ;;
-  *) echo "There is no platform package for $(uname -s)-$(uname -m)." >&2; exit 2 ;;
-esac
+TARGET="$(platforms "$PLATFORM" triple)"
+[[ -n "$TARGET" ]] || { echo "There is no platform package for $(uname -s)-$(uname -m)." >&2; exit 2; }
 if [[ "$(uname -s)" == Linux && "$PLATFORM" == linux-* ]] && ! getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
   echo 'The Linux platform packages target glibc; build them on a glibc system.' >&2; exit 1
 fi

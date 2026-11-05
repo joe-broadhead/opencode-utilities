@@ -174,9 +174,11 @@ describe("manifest", () => {
     expect(f.authorize).not.toHaveBeenCalled()
     expect((await runtime.status()).speech.assets).toEqual([])
   })
-  test("release URLs must be HTTPS, or plain HTTP from loopback only", async () => {
-    const f = await setup({ release: `http://example.com/v${VERSION}` })
-    await expect(f.runtime.invoke("speech_synthesize", { text: "x" }, invocation())).rejects.toMatchObject({ code: "CONTRACT_MISMATCH" })
-    expect((await f.runtime.status()).modules.speech.availability).toBe("CONTRACT_MISMATCH")
+  test("release URLs must be HTTPS, loopback included (UTIL-R18)", async () => {
+    for (const release of [`http://example.com/v${VERSION}`, `http://127.0.0.1:9/v${VERSION}`]) {
+      const f = await setup({ release })
+      await expect(f.runtime.invoke("speech_synthesize", { text: "x" }, invocation())).rejects.toMatchObject({ code: "CONTRACT_MISMATCH" })
+      expect((await f.runtime.status()).modules.speech.availability).toBe("CONTRACT_MISMATCH")
+    }
   })
 })

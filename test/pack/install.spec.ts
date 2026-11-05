@@ -32,9 +32,8 @@ const workspaces = existsSync(join(repo, "npm")) ? readdirSync(join(repo, "npm")
 const platformDir = platformPackage && workspaces.length > 0 ? join(repo, "npm", platformPackage.split("/")[1]!) : undefined
 // A speech engine is built where ONNX Runtime ships a static library (native/onnx-provenance.json): every target but
 // x86_64-apple-darwin, so darwin-x64 has no speech tools.
-const TRIPLES = { "darwin-arm64": "aarch64-apple-darwin", "darwin-x64": "x86_64-apple-darwin", "linux-x64-gnu": "x86_64-unknown-linux-gnu", "linux-arm64-gnu": "aarch64-unknown-linux-gnu" } as const
 const onnx = JSON.parse(readFileSync(join(repo, "native/onnx-provenance.json"), "utf8")) as { distributions: Record<string, unknown> }
-const speechEngine = isPlatform(target) && Boolean(onnx.distributions[TRIPLES[target]])
+const speechEngine = isPlatform(target) && Boolean(onnx.distributions[PLATFORMS[target].triple])
 
 // Never under the real home: OpenCode searches upward for .opencode/ folders. Every server also gets its own port.
 const realHome = realpathSync(homedir())

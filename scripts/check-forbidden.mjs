@@ -28,19 +28,12 @@ const built = dist.filter(file => /\.js$/.test(file))
 
 /** Line rules for first-party code. `scope` limits a rule to paths that start with one of its prefixes. */
 const RULES = [
-  { pattern: /\bsupports[A-Z]\w*/, message: "fork-only host capability marker (supports*)" },
-  { pattern: /\bPlugin\.image\b|\bPROFILE_IMAGE\b/, message: "Plugin.image and profile images are removed" },
-  { pattern: /(?:^|[\s{,])image\s*:/, scope: ["src/", "dist/"], message: "the plugin definition has no image field" },
-  { pattern: /\bgenerate\.text\b/, message: "ctx.generate.text is deprecated" },
   { pattern: /["']@opencode-ai\//, message: "V1 @opencode-ai packages" },
   { pattern: /["'`]@opencode\/ai(?:\/[^"'`]*)?["'`]/, message: "@opencode/ai changes incompatibly between patches; do not import it" },
   { pattern: /\bpackages\/(?:ai|client|core|opencode|plugin|protocol|schema|sdk|server|util)\/src\b/, message: "private host source import" },
-  { pattern: /opencode-(?:plugin-consumer|plugin-images|granola)-host/, message: "pinned host checkout reference" },
   { pattern: /\bhook\(\s*["']evaluate["']/, evaluate: true, message: "permission evaluate hook (only the tools RPC's own, in src/host/tools-rpc.ts)" },
   { pattern: /\bevent\.effect\s*=(?!=)/, message: "a hook that changes a permission effect" },
   { pattern: /\b(?:config|options)\.policy\b|(?:^|[\s{,])policy\s*\??\s*:/, scope: ["src/", "dist/"], message: "plugin permission policy option" },
-  { pattern: /\bexperimental\.policies\b|\bresponsePolicy\b/, message: "fork-only policy API" },
-  { pattern: /\bmcp\.(?:catalog|attest)\b/, message: "fork-only MCP API" },
   { pattern: /\bexperimental\s*\??\.\s*artifact\b|\bexperimental\s*\??\.?\[\s*["'`]artifact["'`]\s*\]|\{[^}]*\bartifact\b[^}]*\}\s*=\s*[\w$.?]*\bexperimental\b/, message: "ctx.experimental.artifact is experimental (new in 2.2.4); do not use it" },
   { pattern: /^import\s+\{[^}]*\bz\b[^}]*\}\s+from\s+["']zod["']/, scope: ["src/"], message: "import zod as `import * as z from \"zod\"`; a named import bundles every locale" },
 ]

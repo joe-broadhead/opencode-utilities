@@ -1,5 +1,6 @@
 import * as z from "zod"
 import type { FailureCode, UtilitiesFailure } from "./contract.js"
+import { HOST_RANGE, TESTED_TEXT } from "../host/versions.js"
 
 /** Per-module bounds. Each module has its own queue; the deadline starts after admission and approval. */
 export const LIMITS = {
@@ -27,13 +28,12 @@ const ZONE = "must be an IANA time zone name, such as Europe/London; call utilit
 export const zone = z.string().max(80).regex(/^(?:UTC|[A-Za-z_+-]+(?:\/[A-Za-z0-9_+-]+)+)$/, ZONE).refine(s => {
   try { new Intl.DateTimeFormat("en", { timeZone: s }); return true } catch { return false }
 }, ZONE)
-export const empty = z.strictObject({})
 
 /** What happened and the user's next step, per code. Messages never contain private input values. */
 export const FAILURES: { readonly [C in FailureCode]: readonly [message: string, hint?: string] } = {
   DISABLED: ["This module is turned off in the plugin options.", "Set modules.<name> to true in the utilities.tools plugin options."],
   CLOSED: ["The Utilities plugin is shutting down.", "Retry after OpenCode has reloaded the plugin."],
-  HOST_UNTESTED: ["This OpenCode version is not a tested host for the Utilities plugin.", "Use OpenCode 2.2.x, or set allowUntestedHost: true in the plugin options."],
+  HOST_UNTESTED: [`Utilities supports OpenCode ${HOST_RANGE}.`, `Use ${TESTED_TEXT}, or set the plugin option allowUntestedHost: true to run anyway.`],
   UNSUPPORTED_PLATFORM: ["This module has no build for this platform.", "Call utilities_status to see which modules work here."],
   PLATFORM_PACKAGE_MISSING: ["The platform package with the time and weather programs is not installed.", "Reinstall the plugin so npm installs its platform package, then restart OpenCode."],
   BINARY_MISSING: ["A program the plugin needs is missing from its platform package.", "Reinstall the plugin, then restart OpenCode."],
