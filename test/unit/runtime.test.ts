@@ -263,7 +263,7 @@ describe("timers", () => {
     const results = await Promise.allSettled([f.runtime.invoke("timer_set", input, invocation()), second.invoke("timer_set", input, invocation())])
     expect(results.filter(r => r.status === "fulfilled")).toHaveLength(1)
     const rejected = (results.find(r => r.status === "rejected") as PromiseRejectedResult).reason
-    expect(rejected).toMatchObject({ code: "TIMER_EXISTS", message: "A timer named 'duplicate' already exists in this project.", hint: "Call utilities_timer_set with replace: true to overwrite it." })
+    expect(rejected).toMatchObject({ code: "TIMER_EXISTS", message: "A timer named 'duplicate' already exists in this project.", hint: "Ask the user whether to overwrite it, then call utilities_timer_set with replace: true, or choose another name." })
     expect((await second.invoke("timer_list", {}, invocation())).output).toMatchObject({ count: 1 })
     await second.invoke("timer_set", { ...input, replace: true }, invocation())
     expect((await f.recorded()).filter(c => c.argv.includes("set"))).toHaveLength(2)

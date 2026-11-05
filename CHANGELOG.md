@@ -10,12 +10,15 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- The errors table in `docs/configuration.md` lists every code the plugin raises; 23 were missing, such as `TIMER_QUOTA`, `SOURCE_CHANGED` and `OPERATION_FAILED`. A test keeps it complete.
+
 - `utilities_speech_transcribe` checks that the file is a WAV it can read before it asks to download the speech files. Before, a file such as an `.m4a` asked for the 105 MB download first and then failed with `WAV_INVALID`. The download is now asked on its own, after any file read prompt.
 - `utilities_time_format`, `utilities_time_add` and `utilities_time_between` say that a date-time without `Z` or an offset is read as UTC. Before, nothing said so, and "3 pm my time as a Unix timestamp" came out hours off. Add the offset (`utilities_time_convert` gives it).
 
 ### Changed
 
 - The next step for agents without the default rules is one fixed sentence, the same in every plugin of this family: "Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools." It is the same in `/utilities-status`, the status RPC's `nextStep`, the `/utilities` dialog and the `utilities_status` tool, which used to say "N agents lack the default ask rules …". The Agents without default rules row still lists the agents.
+- `TIMER_EXISTS` tells the model to ask the user before it overwrites the timer with `replace: true`.
 - `utilities_time_format` no longer takes `output_format: "unix-timestamp"`, which gave the same result as `epoch`. Use `epoch`.
 
 - Scripts: a tools RPC refusal by a deny rule now names the denied action and says to remove or narrow that rule (or add a later allow rule to the session). Before, it gave the same next step as an unanswered ask. The code is still `PERMISSION_DENIED`.

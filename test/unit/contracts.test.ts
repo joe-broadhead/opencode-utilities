@@ -15,6 +15,7 @@ import { speechInputs, speechOutputs } from "../../src/modules/speech/contracts.
 import { validateWav } from "../../src/artifacts/wav.js"
 import { weatherBase, wav } from "../fixtures.js"
 import { INPUTS, SAMPLES } from "../host/samples.js"
+import { NEXT_STEPS } from "../../src/host/tools-rpc.js"
 
 type Shape = { properties?: Record<string, { description?: string }>; oneOf?: Shape[]; anyOf?: Shape[] }
 const fields = (schema: Shape): [string, string | undefined][] => [
@@ -84,6 +85,17 @@ test("every failure says what happened and gives one next step", () => {
     expect(hint, code).toMatch(/^[A-Z].*\.$/)
     expect(formatFailure(new UtilitiesError(code as FailureCode))).toBe(`${code}: ${message} Next step: ${hint}`)
   }
+})
+test("the documented error tables list exactly the codes the plugin raises, in both directions (UTIL-R5)", async () => {
+  const codes = async (file: string) => {
+    const text = await readFile(new URL(`../../docs/${file}`, import.meta.url), "utf8"), section = text.slice(text.indexOf("\n## Errors"))
+    const rows = section.slice(0, section.indexOf("\n## ", 4) === -1 ? undefined : section.indexOf("\n## ", 4)).split("\n").filter(line => line.startsWith("| `"))
+    return rows.flatMap(row => [...row.split("|")[1]!.matchAll(/`([A-Z][A-Z0-9_]+)`/g)].map(m => m[1]!)).sort()
+  }
+  // Every FailureCode is raised somewhere (fail, UtilitiesError, an availability or a host check), and FAILURES has each.
+  expect(await codes("configuration.md")).toEqual(Object.keys(FAILURES).sort())
+  // The tools RPC's own codes: those its Utilities block gives a next step, and no MCP-only one.
+  expect(await codes("scripting.md")).toEqual(Object.keys(NEXT_STEPS).sort())
 })
 test("timezone explicitness, invalid dates, historical and holiday bounds", () => {
   expect(timeInputs.current_time.parse({})).toEqual({ timezones: ["UTC"], format: "rfc3339" })
