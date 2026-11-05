@@ -19,7 +19,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=2",
     "build": "node scripts/build.mjs",
-    "test:host": "node scripts/test-host.mjs",
+    "test:host": "bun test test/host",
     "test:tui": "bun test test/tui",
     "test:pack": "bun test test/pack",
     "lint": "node scripts/check-forbidden.mjs",

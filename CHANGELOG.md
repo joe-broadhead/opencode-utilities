@@ -25,6 +25,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 - The next step for agents without the default rules is one fixed sentence, the same in every plugin of this family: "Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools." It is the same in `/utilities-status`, the status RPC's `nextStep`, the `/utilities` dialog and the `utilities_status` tool, which used to say "N agents lack the default ask rules …". The Agents without default rules row still lists the agents.
 - `TIMER_EXISTS` tells the model to ask the user before it overwrites the timer with `replace: true`.
+- The status RPC's module and platform `availability` no longer lists `HOST_UNTESTED`, which no module ever reported. A host outside the range is still refused with `HOST_UNTESTED` at setup.
 - `utilities_time_format` no longer takes `output_format: "unix-timestamp"`, which gave the same result as `epoch`. Use `epoch`.
 
 - Scripts: a tools RPC refusal by a deny rule now names the denied action and says to remove or narrow that rule (or add a later allow rule to the session). Before, it gave the same next step as an unanswered ask. The code is still `PERMISSION_DENIED`.

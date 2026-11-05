@@ -8,12 +8,12 @@ import { join, sep } from "node:path"
 import type { Plugin } from "@opencode/plugin"
 import type { OpenCode } from "@opencode/sdk"
 
-/** The host version reported to plugins. Read before the environment is replaced. */
-export const HOST_VERSION = process.env.OPENCODE_HOST_VERSION ?? "2.2.3"
+/** The version of the embedded host, the exact @opencode/sdk devDependency. The pack test runs every tested release. */
+export const HOST_VERSION = "2.2.3"
 // Never under the real home: OpenCode searches upward for .opencode/ folders, which would bring in the user's own
 // agents and skills. /private/tmp on macOS; the system temp folder elsewhere.
 const realHome = realpathSync(homedir())
-export const root = realpathSync(mkdtempSync(join(existsSync("/private/tmp") ? "/private/tmp" : tmpdir(), "utilities-host-")))
+const root = realpathSync(mkdtempSync(join(existsSync("/private/tmp") ? "/private/tmp" : tmpdir(), "utilities-host-")))
 if (root === realHome || root.startsWith(realHome + sep)) throw new Error(`refusing to start: the test root ${root} is inside the home directory`)
 const home = join(root, "home")
 const previousDir = process.cwd()

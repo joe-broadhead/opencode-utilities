@@ -8,7 +8,7 @@ type SkillEditor = Parameters<Parameters<Plugin.Context["skill"]["transform"]>[0
 
 /** The hand-written skills and the module each one teaches. */
 export const SKILLS = { "utilities-time": "time", "utilities-weather": "weather", "utilities-speech": "speech" } as const satisfies Record<string, Module>
-export type SkillID = keyof typeof SKILLS
+type SkillID = keyof typeof SKILLS
 
 export interface LoadedSkill { readonly id: SkillID; readonly module: Module; readonly info: Skill.Info }
 

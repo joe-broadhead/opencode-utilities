@@ -10,8 +10,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PLATFORMS } from '../src/domain/contract.ts';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const TARGETS={'darwin-arm64':'aarch64-apple-darwin','darwin-x64':'x86_64-apple-darwin','linux-x64-gnu':'x86_64-unknown-linux-gnu','linux-arm64-gnu':'aarch64-unknown-linux-gnu'};
+const TARGETS=Object.fromEntries(Object.entries(PLATFORMS).map(([platform,p])=>[platform,p.triple]));
 const json=path=>JSON.parse(readFileSync(join(root,path),'utf8'));
 const stamp=platform=>join(root,'build',`native-${platform}.inputs`);
 

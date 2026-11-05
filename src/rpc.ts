@@ -55,7 +55,6 @@ const AVAILABILITY_TEXT: { readonly [A in Availability]: string } = {
   AVAILABLE: "ready",
   DISABLED: "disabled",
   CLOSED: "shutting down",
-  HOST_UNTESTED: "host untested",
   UNSUPPORTED_PLATFORM: "not supported on this platform",
   PLATFORM_PACKAGE_MISSING: "failed: platform package missing",
   BINARY_MISSING: "failed: program missing",
@@ -68,7 +67,7 @@ const MODULE_TEXT: { readonly [M in Module]: string } = { time: "Time and timers
 const megabytes = (bytes: number) => `${Math.round(bytes / 1e6)} MB`
 
 export const STATUS_TITLE = "Utilities status"
-export const NOTHING_TO_DO = "Nothing to do."
+const NOTHING_TO_DO = "Nothing to do."
 const AGENTS_ROW = "Agents without default rules"
 
 /** One row: a label and its text, which may run over several lines. `ok` is false when the row needs the user. */
@@ -97,7 +96,7 @@ export function nextStep(view: Omit<StatusFacts, "version" | "permissions">) {
 }
 
 /** ready, or why not: every enabled module failed, or every module is off. The host never changes it. */
-export function stateOf(view: Pick<StatusFacts, "modules">): StatusState {
+function stateOf(view: Pick<StatusFacts, "modules">): StatusState {
   const on = MODULES.filter(m => view.modules[m].availability !== "DISABLED")
   if (on.length === 0) return "disabled"
   return on.some(m => registrable(m, view.modules[m].availability)) ? "ready" : "failed"

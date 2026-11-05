@@ -13,7 +13,7 @@ const COVERAGE = "must be from 2000 to 2030, the years the offline holiday data 
 const covered = (s: string) => s >= "2000-01-01" && s <= "2030-12-31"
 const holidayDate = date.refine(covered, COVERAGE)
 // Match Rust str::trim, including NEL, without JS-only BOM trimming.
-export const timerName = text(128).min(1).refine(s => s === s.replace(/^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g, ""))
+const timerName = text(128).min(1).refine(s => s === s.replace(/^[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+|[\u0009-\u000d\u0020\u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000]+$/g, ""))
 const name = timerName.describe("Timer name, unique within this project. 1-128 characters, no leading or trailing spaces.")
 const tag = text(64).trim().min(1)
 const format = z.enum(["rfc3339", "iso8601", "epoch"])
@@ -107,7 +107,7 @@ const holiday = nativeHoliday.extend({
   regions: z.array(z.enum(GB_REGIONS)).max(GB_REGIONS.length).describe("The nations that observe a regional holiday, such as [\"Scotland\"]; empty when nationwide."),
 })
 const asked = z.enum(GB_REGIONS).nullable().describe("The region asked for, or null.")
-export const timerRecord = z.strictObject({ name: timerName, deadline_utc: s, original_deadline: s, timezone: s, description: byteText(2048).optional(), tags: z.array(tag).max(16), created_at_utc: s, updated_at_utc: s, status: s, overdue: b, remaining_seconds: n, remaining: s })
+const timerRecord = z.strictObject({ name: timerName, deadline_utc: s, original_deadline: s, timezone: s, description: byteText(2048).optional(), tags: z.array(tag).max(16), created_at_utc: s, updated_at_utc: s, status: s, overdue: b, remaining_seconds: n, remaining: s })
 export const timerList = z.strictObject({ tag: s.optional(), count: n.min(0).max(1000), timers: z.array(timerRecord).max(1000) }).refine(v => v.count === v.timers.length)
 export const timerCheck = z.strictObject({ generated_at_utc: s, count: n.min(0).max(1000), timers: z.array(timerRecord).max(1000) }).refine(v => v.count === v.timers.length)
 const timerPage = { total: n.min(0).max(1000), count: n.min(0).max(100), nextOffset: n.min(0).max(999).nullable(), timers: z.array(timerRecord).max(100) }
