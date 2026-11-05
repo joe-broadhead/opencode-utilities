@@ -46,4 +46,4 @@ Timers belong to the current project and never alert on their own: they are chec
 
 For an alert that fires by itself, suggest OpenCode's `schedule_*` tools, which need `"experimental": { "schedules": true }` in `opencode.json`.
 
-A cron job can call the read tools (not timer writes) with no model, through the RPC `utilities.tools.tools`: see https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md.
+A cron job can call the read tools (not timer writes) with no model, through the RPC `utilities.tools.tools`. It uses a session created for it (`opencode api post /api/session …`, keep `data.id`), and so does a test of a script. Never borrow a session found through history or a session list: the script would run as that session's agent, under its rules. Details: https://raw.githubusercontent.com/joe-broadhead/opencode-utilities/HEAD/docs/scripting.md.

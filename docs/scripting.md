@@ -23,11 +23,13 @@ Every call names a session, and the session must name an agent. The script runs 
 - The tool then asks for what it needs, as it does for the model: weather asks for `utilities_weather_<tool>` on the Open-Meteo hosts, transcription asks for `read` (and `external_directory` outside the project), and the first speech call asks for `utilities_speech_download`. OpenCode checks each request against the agent's rules, the session's rules, then saved approvals.
 - No one answers a prompt for a script, so an `ask` is refused with `PERMISSION_DENIED` at once, and no prompt is left waiting. The default rules ask for weather and the speech download, so a script needs an allow rule for those. Time, timer reads and status ask for nothing.
 
-Create the session once, with the agent the script runs as, and keep its id:
+Create a session for the script once, with the agent it runs as, and keep its id (`data.id` in the result):
 
 ```sh
 opencode api post /api/session -d '{"title":"morning check","agent":"build"}'
 ```
+
+A test of a script creates its own session in the same way. Never borrow an existing session found through history or a session list: the script would run as that session's agent, under that session's rules.
 
 Session rules come after the agent's, so a session can open or narrow what its script may do. This one may call `weather_current` and `weather_daily`, and nothing else from Utilities that asks:
 

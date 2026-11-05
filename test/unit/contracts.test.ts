@@ -112,6 +112,11 @@ test("every weather tool says to stop when the user declines, and to geocode a s
     if (location) expect(location.description, tool.name).toContain("call utilities_weather_geocode first")
   }
 })
+test("both speech tools start by saying to make the call while files are missing, since its download prompt is the consent (it3 grading)", () => {
+  for (const name of ["speech_transcribe", "speech_synthesize"] as const) {
+    expect(TOOL_DEFINITIONS.find(t => t.name === name)!.description, name).toMatch(/^Call this even when speech files are missing; the download prompt is how the user agrees\. Don't ask in text first\. /)
+  }
+})
 test("timezone explicitness, invalid dates, historical and holiday bounds", () => {
   expect(timeInputs.current_time.parse({})).toEqual({ timezones: ["UTC"], format: "rfc3339" })
   for (const date of ["2026-02-30", "1899-01-01", "2101-01-01"]) expect(timeInputs.calendar_query.safeParse({ date }).success).toBe(false)
