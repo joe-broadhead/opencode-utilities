@@ -18,6 +18,7 @@ import { detectTarget, isPlatform } from "../../src/domain/backends.js"
 import { HOST_RANGE, TESTED_HOSTS } from "../../src/host/versions.js"
 import { SCRIPT_TOOLS } from "../../src/host/scripting.js"
 import { TOOLS_RPC_ID } from "../../src/host/tools-rpc.js"
+import { wav } from "../fixtures.js"
 
 setDefaultTimeout(300_000)
 const repo = fileURLToPath(new URL("../../", import.meta.url))
@@ -320,6 +321,8 @@ async function serve(version: string, binary: string) {
   for (const dir of [join(home, ".config"), join(home, ".local/share"), join(home, ".cache"), join(home, ".local/state"), directory, tmp]) mkdirSync(dir, { recursive: true })
   // `locked`, an agent defined only in config, hides the time tools: the tools RPC tests use it.
   writeFileSync(join(directory, "opencode.json"), JSON.stringify({ plugins: [installed], agents: { locked: { mode: "primary", permissions: [rule("utilities_time_*", "deny")] } } }))
+  // A valid WAV in the project: a transcription is checked before it asks to download the speech files.
+  writeFileSync(join(directory, "clip.wav"), wav())
   const password = randomBytes(18).toString("base64url"), port = await freePort()
   const env = {
     HOME: home, OPENCODE_TEST_HOME: home, TMPDIR: tmp,

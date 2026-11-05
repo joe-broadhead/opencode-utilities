@@ -17,14 +17,19 @@ export async function identifySource(path: string): Promise<Identity> {
   if (!s.isFile() || s.nlink !== 1 || s.size > MAX_SOURCE) fail("SOURCE_REJECTED")
   return identity(s)
 }
-/** Copies the approved source into the job directory, failing if it is not the file that was approved. */
-export async function stageSource(path: string, source: Identity, directory: string, signal: AbortSignal) {
+/** Reads the approved source and checks that it is a WAV the engine takes, failing if it is not the file that was approved. */
+export async function readSource(path: string, source: Identity, signal: AbortSignal) {
   // Any change since approval (replaced, relinked, resized, removed) is SOURCE_CHANGED; cancellation stays itself.
   const bytes = await readRegular(path, MAX_SOURCE, signal, source).catch(error => {
     if (error instanceof UtilitiesError && (error.code === "CANCELLED" || error.code === "DEADLINE_EXCEEDED")) throw error
     return fail("SOURCE_CHANGED")
   })
   validateWav(bytes); fence(signal)
+  return bytes
+}
+/** Copies the approved source into the job directory, failing if it is not the file that was approved. */
+export async function stageSource(path: string, source: Identity, directory: string, signal: AbortSignal) {
+  const bytes = await readSource(path, source, signal)
   const staged = join(directory, "input.wav")
   await writeFile(staged, bytes, { flag: "wx", mode: 0o600 }); fence(signal)
   return staged

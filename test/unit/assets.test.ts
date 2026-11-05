@@ -3,7 +3,7 @@ import { lstat, mkdir, readdir, readFile, rm, rmdir, utimes, writeFile } from "n
 import { join } from "node:path"
 import { createRuntime } from "../../src/runtime.js"
 import type { Authorize, SpeechAssetRole } from "../../src/domain/contract.js"
-import { ENGINE, VERSION, fixture, invocation, releaseServer, sha, type FixtureOptions, type Serve } from "../fixtures.js"
+import { ENGINE, VERSION, fixture, invocation, releaseServer, sha, wav, type FixtureOptions, type Serve } from "../fixtures.js"
 
 const cleanups: Array<() => Promise<unknown>> = []
 afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close() })
@@ -23,14 +23,24 @@ async function setup(o: FixtureOptions & { serve?: (files: Awaited<ReturnType<ty
 }
 
 describe("first use", () => {
+  test("a transcription checks the WAV before the download ask, so a file it cannot use costs no download prompt", async () => {
+    const f = await setup()
+    await writeFile(join(f.project, "voice.m4a"), Buffer.from("not a RIFF file, but long enough to pass the size checks"))
+    await expect(f.runtime.invoke("speech_transcribe", { path: "voice.m4a" }, invocation())).rejects.toMatchObject({ code: "WAV_INVALID" })
+    expect(f.authorize.mock.calls.flatMap(c => c[0]).map(r => r.action)).toEqual(["read"])
+    expect(f.server.requests.size).toBe(0)
+    await writeFile(join(f.project, "voice.wav"), wav())
+    await f.runtime.invoke("speech_transcribe", { path: "voice.wav" }, invocation())
+    expect(f.authorize.mock.calls.slice(1).map(c => c[0].map(r => r.action))).toEqual([["read"], ["utilities_speech_download"]])
+  })
   test("a speech call asks for the download after its own request, then downloads, verifies and runs", async () => {
     const f = await setup(), host = new URL(f.server.url).host
     const result = await f.runtime.invoke("speech_synthesize", { text: "hello" }, invocation())
     expect(result.output).toMatchObject({ durationMs: 500 })
-    expect(f.authorize.mock.calls.map(c => c[0])).toEqual([[
-      { action: "utilities_speech_synthesize", resources: ["kitten-nano-int8/Luna"], save: ["*"], metadata: { voice: "Luna", characters: 5 } },
-      { action: "utilities_speech_download", resources: [host], save: [host], metadata: { bytes: f.bytes(KITTEN), files: KITTEN.map(f.name) } },
-    ]])
+    expect(f.authorize.mock.calls.map(c => c[0])).toEqual([
+      [{ action: "utilities_speech_synthesize", resources: ["kitten-nano-int8/Luna"], save: ["*"], metadata: { voice: "Luna", characters: 5 } }],
+      [{ action: "utilities_speech_download", resources: [host], save: [host], metadata: { bytes: f.bytes(KITTEN), files: KITTEN.map(f.name) } }],
+    ])
     for (const role of KITTEN) {
       expect(f.server.requests.get(f.name(role))).toBe(1)
       expect((await lstat(f.cached(role))).mode & 0o777).toBe(role === "engine" ? 0o700 : 0o600)
