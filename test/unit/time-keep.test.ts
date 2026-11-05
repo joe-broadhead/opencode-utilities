@@ -68,6 +68,17 @@ test("date-times without seconds work everywhere the schemas accept them", async
   await expect(call("time_convert", { datetime: "2026-10-30T12:00:00.5", from_timezone: "UTC", to_timezone: "UTC" })).rejects.toMatchObject({ code: "INPUT_INVALID", message: "The tool input is invalid. datetime: may have fractional seconds only with an offset, such as 2026-10-29T15:30:00.5+01:00." })
 })
 
+test("a date-time without Z or an offset is read as UTC, and epoch is the one Unix timestamp format (UTIL-R2)", async () => {
+  const naive = await call("time_format", { input: "2026-11-04T12:00:00", output_format: "epoch" })
+  const utc = await call("time_format", { input: "2026-11-04T12:00:00Z", output_format: "epoch" })
+  expect(naive.output).toMatchObject({ input_kind: "naive_datetime", formatted: "1793793600", timezone_present: false })
+  expect((utc.output as { formatted: string }).formatted).toBe("1793793600")
+  await expect(call("time_format", { input: "2026-11-04T12:00:00", output_format: "rfc3339" })).resolves.toMatchObject({ output: { formatted: "2026-11-04T12:00:00Z" } })
+  // A clock time with no zone has no daylight-saving changes: 24 hours across Europe's spring change is still one day.
+  await expect(call("time_between", { from: "2026-03-28T12:00:00", to: "2026-03-29T12:00:00" })).resolves.toMatchObject({ output: { signed_hours: 24 } })
+  await expect(call("time_format", { input: "2026-11-04T12:00:00", output_format: "unix-timestamp" })).rejects.toMatchObject({ code: "INPUT_INVALID", message: expect.stringContaining("output_format") })
+})
+
 test("out-of-range dates name the range, not only \"Invalid input\" (LIVE-5)", async () => {
   await expect(call("time_holidays", { mode: "check", date: "2031-01-01", country: "GB" })).rejects.toMatchObject({ code: "INPUT_INVALID", message: "The tool input is invalid. date: must be from 2000 to 2030, the years the offline holiday data covers." })
   await expect(call("time_holidays", { mode: "list", year: 2031, country: "GB" })).rejects.toMatchObject({ message: "The tool input is invalid. year: must be from 2000 to 2030, the years the offline holiday data covers." })
@@ -134,6 +145,10 @@ describe("regional holidays (UTIL-4)", () => {
     await expect(next("2026-12-31", { region: "Scotland" })).resolves.toMatchObject({ business_date: "2027-01-05" })
     await expect(call("time_business_days", { mode: "prev", date: "2026-12-29", country: "GB" })).resolves.toMatchObject({ output: { business_date: "2026-12-24", direction: "previous", days_moved: 5 } })
     await expect(call("time_business_days", { mode: "prev", date: "2000-01-03", country: "GB" })).rejects.toMatchObject({ code: "HOLIDAY_COVERAGE" })
+    // Easter Monday is not nationwide in GB (Scotland does not observe it), so without region it is a working day (UTIL-R25).
+    await expect(next("2026-04-02")).resolves.toMatchObject({ business_date: "2026-04-06" })
+    await expect(next("2026-04-02", { region: "England" })).resolves.toMatchObject({ business_date: "2026-04-07", days_moved: 5 })
+    await expect(call("time_business_days", { mode: "prev", date: "2026-04-07", country: "GB", region: "Wales" })).resolves.toMatchObject({ output: { business_date: "2026-04-02" } })
   })
   test("region is only for GB", async () => {
     await expect(call("time_holidays", { mode: "list", year: 2026, country: "US", region: "England" })).rejects.toMatchObject({ code: "INPUT_INVALID", message: "The tool input is invalid. region: is only for country GB, the one country whose holiday data has regions." })

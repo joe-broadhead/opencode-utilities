@@ -19,7 +19,10 @@ export const date = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be a date as Y
 export const datetime = z.string().max(80).regex(/^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})?$/, "must be a date-time such as 2026-10-29T15:30:00, optionally ending in Z or an offset such as +01:00")
   .refine(s => date.safeParse(s.slice(0, 10)).success && Number(s.slice(11, 13)) < 24 && Number(s.slice(14, 16)) < 60 && (s.length < 19 || Number(s.slice(17, 19)) < 60), "must be a real date-time from 1900 to 2100")
 export const instant = datetime.refine(s => /(?:Z|[+-]\d{2}:\d{2})$/.test(s) && Number.isFinite(Date.parse(s)), "must end in Z or a UTC offset such as +01:00")
-export const dateOrTime = z.union([date, datetime], { error: "must be a date as YYYY-MM-DD or a date-time such as 2026-10-29T15:30:00, from 1900 to 2100" })
+const DATE_OR_TIME = "must be a date as YYYY-MM-DD or a date-time such as 2026-10-29T15:30:00, from 1900 to 2100"
+/** One string with one pattern, so the schema the model reads shows it (a union of two strings renders as `string | string`). */
+export const dateOrTime = z.string().max(80).regex(/^\d{4}-\d{2}-\d{2}(?:[T ]\d{2}:\d{2}(:\d{2}(\.\d{1,9})?)?(Z|[+-]\d{2}:\d{2})?)?$/, DATE_OR_TIME)
+  .refine(s => (s.length === 10 ? date : datetime).safeParse(s).success, DATE_OR_TIME)
 const ZONE = "must be an IANA time zone name, such as Europe/London; call utilities_time_zones to find one"
 export const zone = z.string().max(80).regex(/^(?:UTC|[A-Za-z_+-]+(?:\/[A-Za-z0-9_+-]+)+)$/, ZONE).refine(s => {
   try { new Intl.DateTimeFormat("en", { timeZone: s }); return true } catch { return false }

@@ -38,18 +38,18 @@ export const timeInputs = {
   }),
   calendar_query: z.strictObject({ date: date.describe("Date as YYYY-MM-DD, between 1900 and 2100.") }),
   date_arithmetic: z.strictObject({
-    date: dateOrTime.describe("Start date (YYYY-MM-DD) or date-time."),
+    date: dateOrTime.describe("Start date (YYYY-MM-DD) or date-time. Without Z or an offset it is a clock time read as UTC, so daylight-saving changes are ignored; for a local time, add its offset (utilities_time_convert gives it)."),
     operation: z.enum(["add", "subtract"]).describe("Whether to add or subtract the amount."),
     amount: integer.min(0).max(100000).describe("How many units to add or subtract."),
     unit: z.enum(["seconds", "minutes", "hours", "days", "weeks", "months", "years"]).describe("Unit of the amount. Month and year steps clamp to the month's last day."),
   }),
   date_diff: z.strictObject({
-    from: dateOrTime.describe("Start date (YYYY-MM-DD) or date-time."),
-    to: dateOrTime.describe("End date (YYYY-MM-DD) or date-time."),
+    from: dateOrTime.describe("Start date (YYYY-MM-DD) or date-time. Without Z or an offset it is read as UTC; for a local time, add its offset (utilities_time_convert gives it)."),
+    to: dateOrTime.describe("End date (YYYY-MM-DD) or date-time, read the same way."),
   }),
   date_format: z.strictObject({
-    input: dateOrTime.describe("Date (YYYY-MM-DD) or date-time to reformat."),
-    output_format: z.enum(["iso8601", "rfc3339", "rfc2822", "epoch", "unix-timestamp"]).describe("Format to produce."),
+    input: dateOrTime.describe("Date (YYYY-MM-DD) or date-time. A value without Z or an offset is read as UTC, so \"3 pm my time\" needs its offset (utilities_time_convert gives it)."),
+    output_format: z.enum(["iso8601", "rfc3339", "rfc2822", "epoch"]).describe("Format to produce. epoch is a Unix timestamp in seconds."),
   }),
   holidays: z.discriminatedUnion("mode", [
     z.strictObject({
