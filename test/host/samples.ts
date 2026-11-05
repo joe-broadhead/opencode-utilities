@@ -63,6 +63,6 @@ export const SAMPLES: { readonly [K in Exclude<ToolName, "status">]: { readonly 
   weather_hourly: { output: { ...base, hourly: series(HOURLY_UNITS, "2026-10-30T12:00"), units: HOURLY_UNITS, attribution }, text: `1 hour. ${attribution}` },
   weather_demand_signal: { output: { ...signals, attribution }, text: `1 day. ${attribution}` },
   weather_summary: { output: { ...signals, headline: "Mild", total_days: 1, risk_days: 0, warm_days: 0, hot_days: 0, wet_days: 0, windy_days: 0, sunny_days: 0, attribution }, text: `Mild. ${attribution}` },
-  speech_transcribe: { output: { schema_version: 2, text: "hello", language: "en", model: "tiny-q5_1", provider: "local", duration_secs: 0.1, backend_kind: "asr", timestamps_reliable: true, cleanup_style: "raw", segments: [{ start: 0, end: 0.1, text: "hello", timestamp_source: "native_model" }] }, text: "hello" },
+  speech_transcribe: { output: { text: "hello", language: "en", duration_secs: 0.1, segments: [{ start: 0, end: 0.1, text: "hello" }] }, text: "hello" },
   speech_synthesize: { output: { path: "/synthetic/speech/out.wav", bytes: 3244, sha256: "a".repeat(64), durationMs: 100, sampleRateHz: 24000, channels: 1, voice: "Luna" }, text: "Saved 0.1 s of speech to /synthetic/speech/out.wav." },
 }

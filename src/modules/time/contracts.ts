@@ -2,10 +2,13 @@ import * as z from "zod"
 import { date, dateOrTime, datetime, instant, zone, text, byteText, integer } from "../../domain/common.js"
 import { GB_REGIONS } from "./regions.js"
 
-const country = z.enum("AE AM AO AR AT AU AW AZ BA BD BE BG BI BO BR BW BY CA CH CL CN CO CU CW CY CZ DE DJ DK DO EE EG ES ET FI FR GB GE GR HK HN HR HU ID IE IL IM IN IS IT JM JP KE KR KZ LI LS LT LU LV MA MD MG MK MT MW MX MY MZ NA NG NI NL NO NZ PE PK PL PT PY RO RS RU SA SE SG SI SK SZ TN TR TW UA US UY UZ VE VN ZA ZM ZW".split(" "))
-const holidayCountry = country.describe("ISO 3166-1 alpha-2 country code, for example GB or US.")
+/** The countries the offline holiday data covers. A string with a pattern, not an enum, so the schema the model reads stays small. */
+const COUNTRIES = "AE AM AO AR AT AU AW AZ BA BD BE BG BI BO BR BW BY CA CH CL CN CO CU CW CY CZ DE DJ DK DO EE EG ES ET FI FR GB GE GR HK HN HR HU ID IE IL IM IN IS IT JM JP KE KR KZ LI LS LT LU LV MA MD MG MK MT MW MX MY MZ NA NG NI NL NO NZ PE PK PL PT PY RO RS RU SA SE SG SI SK SZ TN TR TW UA US UY UZ VE VN ZA ZM ZW".split(" ")
+const country = z.string().regex(/^[A-Z]{2}$/, "must be an ISO 3166-1 alpha-2 code in capitals, such as GB")
+  .refine(code => COUNTRIES.includes(code), `has no holiday data. Supported: ${COUNTRIES.join(", ")}`)
+const holidayCountry = country.describe("ISO 3166-1 alpha-2 country code, for example GB or US. An unsupported code fails with the supported list.")
 const region = z.enum(GB_REGIONS).optional()
-  .describe("Only with country GB: England, Wales, Scotland or Northern Ireland. That nation's own holidays then count as well as the nationwide ones.")
+  .describe("Only with country GB: England, Wales, Scotland or Northern Ireland. That nation's own holidays then count as well as the nationwide ones. For a UK user, always pass it; ask the nation if you don't know it.")
 const regionNeedsGB = (v: { country?: string; region?: string }, ctx: z.core.$RefinementCtx) => {
   if (v.region !== undefined && v.country !== "GB") ctx.addIssue({ code: "custom", path: ["region"], message: "is only for country GB, the one country whose holiday data has regions" })
 }
@@ -70,7 +73,7 @@ export const timeInputs = {
       mode: z.literal("between").describe("between: count business days from one date to another, both inclusive."),
       from: date.describe("First date as YYYY-MM-DD."),
       to: date.describe("Last date as YYYY-MM-DD, at most 366 days from the first."),
-      country: country.optional().describe("ISO country code whose nationwide public holidays to skip as well as weekends. Both dates must then be within 2000-2030."),
+      country: country.optional().describe("ISO country code, such as GB, whose nationwide public holidays to skip as well as weekends. Both dates must then be within 2000-2030."),
       region,
     }),
     z.strictObject({
@@ -88,7 +91,7 @@ export const timeInputs = {
   }),
   timer_set: z.strictObject({
     name,
-    deadline: instant.describe("When the timer is due, as a date-time with a zone offset, for example 2026-11-02T09:00:00Z."),
+    deadline: instant.describe("When the timer is due, as a date-time with Z or an offset, for example 2026-11-02T09:00:00+01:00. For a local time, utilities_time_convert gives the offset; utilities_time_now gives this machine's zone."),
     description: byteText(2048).optional().describe("What the timer is for, up to 2 KB."),
     tags: z.array(tag).max(16).default([]).describe("Up to 16 tags for filtering with utilities_timer_list."),
     replace: z.boolean().default(false).describe("Overwrite a timer with the same name. Default false: an existing name is an error."),
