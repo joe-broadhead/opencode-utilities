@@ -7,23 +7,23 @@ description: On-device speech through Utilities' speech tools. Transcribe a WAV 
 
 Transcription and synthesis run on this machine with a local engine and models. No audio or text leaves it.
 
+## The first call and its prompts
+
+When the user asks for a transcription or for speech, make the call, even if the files are missing. The speech files (the engine and its models: every file `utilities_status` lists as missing, about 105 MB in all) come from the plugin's GitHub Release and are checked by SHA-256. The call's download prompt is how the user agrees to that download, so making the call is not a change you make on your own. That holds even when the user wants to be asked before any change: the prompt is that ask. Tell the user that the first use downloads about 105 MB of speech files, then make the call without waiting for a reply; don't ask in text first.
+
+The prompts come in this order:
+1. a file outside the project asks to be read (`external_directory`, then `read`);
+2. for a transcription, the tool checks the WAV itself, before any download ask, so don't inspect the file in the shell;
+3. the download, if files are missing.
+
+If the user declines the download, nothing was downloaded or transcribed. Say so, and name `/utilities-speech-install` (and `speech.assetsDir` for offline use). Don't retry, and don't transcribe another way.
+
 ## Is speech set up?
 
 For a question about the setup, not a request to transcribe, `utilities_status` is the whole answer. Its speech section lists each file as missing, cached or pre-seeded, with sizes, and the voices. Don't make a trial transcription to find out (it raises a 105 MB download prompt), and don't look for other transcribers in the shell. When files are missing, there are three ways in:
 - approve the download on the first transcription or synthesis;
 - run `/utilities-speech-install` beforehand;
 - for an offline machine, the `speech.assetsDir` plugin option, pointing at copies already on disk.
-
-## The first call and its prompts
-
-When the user asks for a transcription or for speech, make the call, even if the files are missing. The speech files (the engine and its models: every file `utilities_status` lists as missing, about 105 MB in all) come from the plugin's GitHub Release and are checked by SHA-256. The call's download prompt is how the user agrees to that download, so making the call is not a change you make on your own. Before the call, tell the user that the first use downloads about 105 MB of speech files.
-
-The prompts come in this order:
-1. a file outside the project asks to be read (`external_directory`, then `read`);
-2. for a transcription, the file is checked to be a usable WAV;
-3. the download, if files are missing.
-
-If the user declines the download, nothing was downloaded or transcribed. Say so, and name `/utilities-speech-install` (and `speech.assetsDir` for offline use). Don't retry, and don't transcribe another way.
 
 ## Transcribe
 
