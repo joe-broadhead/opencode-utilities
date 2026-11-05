@@ -10,7 +10,7 @@ import { commandAuthorize, createAuthorize, DEFAULT_RULES, insertDefaultRules, u
 import { loadSkills, skillTransform } from "../../src/host/skills.js"
 import { buildStatus } from "../../src/host/status.js"
 import { toolTransform } from "../../src/host/tools.js"
-import { agentFix, compactStatus, completeStatus, formatStatus, formatSummary, nextStep, rulesToPaste, STATUS_JSON_SCHEMA } from "../../src/rpc.js"
+import { AGENT_FIX, compactStatus, completeStatus, formatStatus, formatSummary, nextStep, rulesToPaste, STATUS_JSON_SCHEMA } from "../../src/rpc.js"
 import { checkHost } from "../../src/host/compat.js"
 import { createWeatherKey } from "../../src/host/weather.js"
 import { VERSION } from "../fixtures.js"
@@ -38,6 +38,7 @@ const FACTS: StatusFacts = {
   weather: { tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION },
   speech: { assets: [], voices: [], preseeded: false, cacheDirectory: "/cache", outputDirectory: "/out" },
   timers: { directory: "/timers" },
+  shadowedSkills: [],
   permissions: { askByDefault: [...DEFAULT_ASK] },
 }
 const VIEW: StatusView = completeStatus(FACTS)
@@ -51,10 +52,10 @@ describe("tools", () => {
 
   test("only available modules register; speech stays while only its models are missing", () => {
     for (const [availability, registered] of [
-      [{}, 25],
-      [{ speech: "SPEECH_ASSETS_MISSING" }, 25],
-      [{ speech: "UNSUPPORTED_PLATFORM" }, 23],
-      [{ weather: "PLATFORM_PACKAGE_MISSING", time: "PLATFORM_PACKAGE_MISSING" }, 4],
+      [{}, 24],
+      [{ speech: "SPEECH_ASSETS_MISSING" }, 24],
+      [{ speech: "UNSUPPORTED_PLATFORM" }, 22],
+      [{ weather: "PLATFORM_PACKAGE_MISSING", time: "PLATFORM_PACKAGE_MISSING" }, 3],
       [{ weather: "DISABLED", time: "INTEGRITY_MISMATCH", speech: "DISABLED" }, 1],
     ] as const) {
       const { added, namespaces, editor } = toolEditor()
@@ -65,10 +66,9 @@ describe("tools", () => {
     }
     expect(registrable("speech", "SPEECH_ASSETS_MISSING")).toBe(true)
     expect(registrable("weather", "SPEECH_ASSETS_MISSING")).toBe(false)
-    // Cleanup needs no engine: registered on a platform without one, not when speech is turned off.
-    expect(toolRegistrable("speech_cleanup", modulesWith({ speech: "UNSUPPORTED_PLATFORM" }))).toBe(true)
     expect(toolRegistrable("speech_transcribe", modulesWith({ speech: "UNSUPPORTED_PLATFORM" }))).toBe(false)
-    expect(toolRegistrable("speech_cleanup", modulesWith({ speech: "DISABLED" }))).toBe(false)
+    expect(toolRegistrable("speech_transcribe", modulesWith({ speech: "SPEECH_ASSETS_MISSING" }))).toBe(true)
+    expect(toolRegistrable("speech_synthesize", modulesWith({ speech: "DISABLED" }))).toBe(false)
   })
 
   test("tools use the effective name as their permission and pin the three entry points", () => {
@@ -151,9 +151,10 @@ describe("permissions", () => {
     expect(unguardedAgents(listed)).toEqual(["partial"])
   })
 
-  test("the per-agent fix names the agents and never the top-level permissions", () => {
-    const next = agentFix(["reviewer", "mdagent"])
-    expect(next).toBe("Put the block shown under Agents without default rules first in the own permissions of reviewer, mdagent (agents.<name>.permissions in opencode.json, or the agent's front matter), followed by your top-level rules for utilities_* actions.")
+  test("the per-agent fix is the one fixed sentence, and never the top-level permissions", () => {
+    const next = AGENT_FIX
+    // The one sentence every plugin of this family uses, verbatim (review TRIAGE, cross-plugin decision 1).
+    expect(next).toBe("Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.")
     expect(next).not.toContain("top-level permissions")
     expect(JSON.parse(rulesToPaste(VIEW))).toEqual(DEFAULT_RULES)
     expect(rulesToPaste(VIEW).split("\n")).toHaveLength(DEFAULT_RULES.length + 2) // one rule per line
@@ -255,7 +256,7 @@ describe("skills", () => {
 describe("status rendering", () => {
   const unguarded = status({ unguardedAgents: ["reviewer", "mdagent"] })
   const labels = (text: string) => text.split("\n").slice(1).filter(l => /^[A-Z][\w ]*: /.test(l)).map(l => l.slice(0, l.indexOf(":")))
-  const S9 = ["Connection", "Account", "Access", "Platform", "Weather", "Time and timers", "Speech", "Speech files", "Timers", "Asks first", "Tools", "Agents without default rules", "OpenCode", "Next step"]
+  const S9 = ["Connection", "Account", "Access", "Platform", "Weather", "Time and timers", "Speech", "Speech files", "Timers", "Asks first", "Skills", "Tools", "Agents without default rules", "OpenCode", "Next step"]
 
   test("the command shows the S9 rows in order, the block one rule per line, and exactly one next step", () => {
     const text = formatStatus(unguarded)
@@ -263,11 +264,11 @@ describe("status rendering", () => {
     expect(labels(text)).toEqual(S9)
     expect(text).toContain(`Agents without default rules: reviewer, mdagent\n${rulesToPaste(unguarded)}`)
     expect(text).toContain("Connection: not configured (the Open-Meteo key is optional)")
-    expect(text).toContain("Tools: 25 available, 0 unknown")
+    expect(text).toContain("Tools: 24 available, 0 unknown")
     expect(text).toContain(`OpenCode: 2.2.3 (tested). Utilities ${VERSION}`)
     expect(text.match(/^Next step: /gm)).toHaveLength(1)
     expect(text.split("\n").at(-1)).toBe(`Next step: ${unguarded.nextStep}`)
-    expect(unguarded.nextStep).toBe(agentFix(["reviewer", "mdagent"]))
+    expect(unguarded.nextStep).toBe(AGENT_FIX)
     expect(formatStatus(VIEW).split("\n").at(-1)).toBe("Next step: Nothing to do.")
   })
 
@@ -316,7 +317,7 @@ describe("status rendering", () => {
   test("the next step goes from blocking problems to optional ones", () => {
     const facts = { ...FACTS, unguardedAgents: ["reviewer"] }
     expect(nextStep({ ...facts, host: { ...facts.host, tested: false, next: "host" } })).toBe("host")
-    expect(nextStep({ ...facts, weather: { ...VIEW.weather, next: "free tier" } })).toBe(agentFix(["reviewer"]))
+    expect(nextStep({ ...facts, weather: { ...VIEW.weather, next: "free tier" } })).toBe(AGENT_FIX)
     expect(nextStep({ ...FACTS, weather: { ...VIEW.weather, next: "free tier" } })).toBe("Nothing to do.")
     expect(nextStep({ ...facts, weather: { ...VIEW.weather, key: "rejected", next: "rejected" }, timers: { directory: "/t", due: 1, next: "timers" } })).toBe("rejected")
     expect(nextStep({ ...FACTS, timers: { directory: "/t", due: 1, next: "timers" } })).toBe("timers")
@@ -324,7 +325,7 @@ describe("status rendering", () => {
 
   test("the status tool counts the unguarded agents and points to /utilities-status instead of the rules", () => {
     const summary = compactStatus(unguarded), text = formatSummary(summary)
-    expect(summary).toMatchObject({ unguardedAgents: 2, nextStep: "2 agents lack the default ask rules. Run /utilities-status for the agents and the block to paste." })
+    expect(summary).toMatchObject({ unguardedAgents: 2, nextStep: AGENT_FIX })
     expect(labels(text)).toEqual(S9)
     expect(text).toContain("Agents without default rules: 2\n")
     expect(text).not.toContain("reviewer")
@@ -371,14 +372,30 @@ describe("weather key and status", () => {
     expect(flagged.reports).toEqual([{ integrationID: "open-meteo", connection: connection({ status: "needs_auth", message: "x" }), status: undefined }])
     expect(await createWeatherKey(integration(undefined)).key()).toBeUndefined()
   })
+  test("status names a skill with one of the plugin's ids that takes the place of its own, with the fix (TRIAGE 8)", async () => {
+    const runtime = await fakeRuntimes().create({ location: { project: "p", directory: "/d", projectDirectory: "/d" }, authorize: async () => {}, modules: { weather: true, time: true, speech: true }, stateRoot: "/state", cacheRoot: "/cache" })
+    const own = [{ name: "utilities-time", path: "/pkg/skills/utilities-time/SKILL.md" }, { name: "utilities-weather", path: "/pkg/skills/utilities-weather/SKILL.md" }]
+    const view = await buildStatus({
+      version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) },
+      agents: async () => [], ownSkills: own,
+      skills: async () => [{ id: "utilities-time", path: "/elsewhere/skills/utilities-time/SKILL.md" }, { id: "utilities-weather", path: own[1]!.path }, { id: "other", path: "/x/SKILL.md" }],
+    })
+    expect(view.shadowedSkills).toEqual([{ name: "utilities-time", path: "/elsewhere/skills/utilities-time/SKILL.md" }])
+    expect(view.nextStep).toBe("Rename or move the skill at /elsewhere/skills/utilities-time/SKILL.md, which uses the id of the plugin's utilities-time skill, so OpenCode loads it instead of the plugin's own.")
+    expect(formatStatus(view)).toContain("\nSkills: utilities-time is replaced by /elsewhere/skills/utilities-time/SKILL.md\n")
+    // A skill list that fails only hides shadowed skills.
+    const failed = await buildStatus({ version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) }, agents: async () => [], ownSkills: own, skills: async () => { throw new Error("x") } })
+    expect(failed).toMatchObject({ shadowedSkills: [], nextStep: "Nothing to do." })
+  })
   test("the status joins runtime and host items and drops undefined fields", async () => {
     const runtime = await fakeRuntimes().create({ location: { project: "p", directory: "/d", projectDirectory: "/d" }, authorize: async () => {}, modules: { weather: true, time: true, speech: true }, stateRoot: "/state", cacheRoot: "/cache" })
     const view = await buildStatus({
       version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) },
       agents: async () => [{ id: "build", permissions: [{ action: "*", resource: "*", effect: "allow" }, ...DEFAULT_RULES] }, { id: "reviewer", permissions: [{ action: "*", resource: "*", effect: "allow" }] }],
+      ownSkills: [], skills: async () => [],
     })
-    expect(Object.keys(view)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "permissions"])
-    expect(view).toMatchObject({ state: "ready", unguardedAgents: ["reviewer"], nextStep: agentFix(["reviewer"]), permissions: { askByDefault: [...DEFAULT_ASK] } })
+    expect(Object.keys(view)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "skills", "permissions"].map(k => k === "skills" ? "shadowedSkills" : k))
+    expect(view).toMatchObject({ state: "ready", unguardedAgents: ["reviewer"], nextStep: AGENT_FIX, permissions: { askByDefault: [...DEFAULT_ASK] } })
     expect(JSON.stringify(view)).toBe(JSON.stringify(JSON.parse(JSON.stringify(view))))
     expect("next" in view.host).toBe(false)
   })
@@ -394,7 +411,7 @@ describe("setup", () => {
     agent: { transform: async () => registration, list: async () => ({ data: [] }) },
     tool: { transform: async () => { if (fail) throw new Error("registration failed"); return registration }, reload: async () => {} },
     rpc: { register: async (contract: { id: string }) => ({ dispose: async () => void disposed.push(contract.id) }) }, command: { transform: async () => registration },
-    skill: { transform: async () => registration, reload: async () => {} }, session: { synthetic: async () => {} },
+    skill: { transform: async () => registration, reload: async () => {}, list: async () => ({ data: [] }) }, session: { synthetic: async () => {} },
   }) as never
   test("the runtime's location carries the project ID, the location directory and the project directory", async () => {
     const runtimes = fakeRuntimes()

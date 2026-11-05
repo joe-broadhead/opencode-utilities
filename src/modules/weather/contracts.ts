@@ -3,7 +3,7 @@ import { text, finite, integer } from "../../domain/common.js"
 import { WEATHER_ATTRIBUTION, type GeocodeOutput, type WeatherOutput } from "../../domain/contract.js"
 
 const country = z.string().regex(/^[A-Z]{2}$/).optional().describe("ISO 3166-1 alpha-2 country code that narrows the place search, for example GB.")
-const location = text(256).trim().min(1).describe("Place name, for example \"Cape Town\", or coordinates as \"latitude,longitude\", for example \"-33.92,18.42\".")
+const location = text(256).trim().min(1).describe("Place name, for example \"Cape Town\", or coordinates as \"latitude,longitude\", for example \"-33.92,18.42\". For a name several places share, such as \"Springfield\", call utilities_weather_geocode first and let the user choose: each call asks, so don't try several guesses.")
 const days = integer.min(1).max(16).default(7).describe("Number of days to forecast, 1-16. Default 7.")
 export const weatherInputs = {
   geocode: z.strictObject({
@@ -18,7 +18,7 @@ export const weatherInputs = {
   summary: z.strictObject({ location, country, days }),
 }
 export const locationOutput = z.strictObject({ id: integer.nullable(), name: text(), country: text().nullable(), country_code: text(2).nullable(), admin1: text().nullable(), latitude: finite.min(-90).max(90), longitude: finite.min(-180).max(180), timezone: text(80).nullable(), population: integer.nonnegative().nullable() })
-const base = { source: z.literal("open-meteo"), location: locationOutput, fetched_at: text(80), cache: z.enum(["hit", "miss", "refresh"]), timezone: text(80) }
+const base = { source: z.literal("open-meteo"), location: locationOutput, fetched_at: text(80), cache: z.enum(["hit", "miss", "refresh"]), timezone: text(80).describe("The place's time zone. Every time and date in the result is local to it.") }
 export const CURRENT_UNITS = { temperature_2m: "°C", relative_humidity_2m: "%", apparent_temperature: "°C", precipitation: "mm", rain: "mm", showers: "mm", snowfall: "cm", weather_code: "WMO code", cloud_cover: "%", wind_speed_10m: "km/h", wind_gusts_10m: "km/h" }
 export const HOURLY_UNITS = { temperature_2m: "°C", apparent_temperature: "°C", precipitation_probability: "%", precipitation: "mm", rain: "mm", weather_code: "WMO code", cloud_cover: "%", wind_speed_10m: "km/h", wind_gusts_10m: "km/h", is_day: "boolean 0/1" }
 export const DAILY_UNITS = { weather_code: "WMO code", temperature_2m_max: "°C", temperature_2m_min: "°C", apparent_temperature_max: "°C", apparent_temperature_min: "°C", precipitation_sum: "mm", precipitation_hours: "h", precipitation_probability_max: "%", wind_speed_10m_max: "km/h", wind_gusts_10m_max: "km/h", sunshine_duration: "s", uv_index_max: "index" }

@@ -13,7 +13,7 @@ declaration, because that schema accepts no unknown keys.
 
 ## Tools and permissions
 
-26 tools are declared (22 read-only). Jelly's agents have no base "allow everything"
+25 tools are declared (21 read-only): the 24 tools and the speech download. Jelly's agents have no base "allow everything"
 rule, so this plugin's own default rules, which it puts after that rule, never reach them. Jelly
 writes each declared `ask` or `deny` as that tool's default instead (the person's own choice
 replaces it), and denies a read-only helper every tool not marked `readOnly`. A declared `allow`

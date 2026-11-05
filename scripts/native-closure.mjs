@@ -3,10 +3,11 @@
 // Usage: node scripts/native-closure.mjs <platform> <binary>...
 import { execFileSync } from 'node:child_process';
 import { basename } from 'node:path';
+import { PLATFORMS } from '../src/domain/contract.ts';
 const [platform,...binaries]=process.argv.slice(2);
 const run=(command,args)=>execFileSync(command,args,{encoding:'utf8',maxBuffer:64*1024*1024});
 // Mach-O: lipo architecture. ELF: objdump file format.
-const ARCH={'darwin-arm64':'arm64','darwin-x64':'x86_64','linux-x64-gnu':'elf64-x86-64','linux-arm64-gnu':'elf64-littleaarch64'};
+const ARCH=Object.fromEntries(Object.entries(PLATFORMS).map(([platform,p])=>[platform,p.arch]));
 // glibc and the GCC runtimes that every glibc distribution ships. ONNX Runtime needs libstdc++ on Linux.
 const LINUX=new Set(['libc.so.6','libm.so.6','libpthread.so.0','libdl.so.2','librt.so.1','libgcc_s.so.1','libstdc++.so.6','ld-linux-x86-64.so.2','ld-linux-aarch64.so.1']);
 if(!ARCH[platform] || !binaries.length)throw new Error('usage: native-closure.mjs <platform> <binary>...');

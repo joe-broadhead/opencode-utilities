@@ -37,13 +37,12 @@ export const INPUTS: { readonly [K in ToolName]: object } = {
   weather_hourly: { location: "Amsterdam", hours: 1 },
   weather_demand_signal: { location: "Amsterdam", days: 1 },
   weather_summary: { location: "Amsterdam", days: 1 },
-  speech_cleanup: { text: "um hello there" },
   speech_transcribe: { path: "clip.wav" },
   speech_synthesize: { text: "hello", path: "out.wav" },
 }
 
 export const SAMPLES: { readonly [K in Exclude<ToolName, "status">]: { readonly output: unknown; readonly text: string } } = {
-  time_now: { output: { generated_at_utc: "2026-10-30T12:00:00Z", format: "rfc3339", times: [snapshot] }, text: "It is 21:00 in Asia/Tokyo." },
+  time_now: { output: { generated_at_utc: "2026-10-30T12:00:00Z", format: "rfc3339", times: [snapshot], machine_timezone: "Europe/London" }, text: "It is 21:00 in Asia/Tokyo." },
   time_zones: { output: { region: "Asia", count: 1, timezones: ["Asia/Tokyo"] }, text: "1 zone." },
   time_zone_info: { output: { timezone: "Asia/Tokyo", current: snapshot, next_transition: null }, text: "Asia/Tokyo is UTC+09:00." },
   time_convert: { output: { input_datetime: "2026-10-30T12:00:00", from_timezone: "UTC", to_timezone: "Asia/Tokyo", source: snapshot, target: snapshot }, text: "21:00 in Asia/Tokyo." },
@@ -64,7 +63,6 @@ export const SAMPLES: { readonly [K in Exclude<ToolName, "status">]: { readonly 
   weather_hourly: { output: { ...base, hourly: series(HOURLY_UNITS, "2026-10-30T12:00"), units: HOURLY_UNITS, attribution }, text: `1 hour. ${attribution}` },
   weather_demand_signal: { output: { ...signals, attribution }, text: `1 day. ${attribution}` },
   weather_summary: { output: { ...signals, headline: "Mild", total_days: 1, risk_days: 0, warm_days: 0, hot_days: 0, wet_days: 0, windy_days: 0, sunny_days: 0, attribution }, text: `Mild. ${attribution}` },
-  speech_cleanup: { output: { text: "Hello there", style: "clean", provider: "rules" }, text: "Hello there" },
-  speech_transcribe: { output: { schema_version: 2, text: "hello", language: "en", model: "tiny-q5_1", provider: "local", duration_secs: 0.1, backend_kind: "asr", timestamps_reliable: true, cleanup_style: "raw", segments: [{ start: 0, end: 0.1, text: "hello", timestamp_source: "native_model" }] }, text: "hello" },
+  speech_transcribe: { output: { text: "hello", language: "en", duration_secs: 0.1, segments: [{ start: 0, end: 0.1, text: "hello" }] }, text: "hello" },
   speech_synthesize: { output: { path: "/synthetic/speech/out.wav", bytes: 3244, sha256: "a".repeat(64), durationMs: 100, sampleRateHz: 24000, channels: 1, voice: "Luna" }, text: "Saved 0.1 s of speech to /synthetic/speech/out.wav." },
 }

@@ -25,6 +25,7 @@ export const StatusSchema = z.strictObject({
     next,
   }),
   timers: z.strictObject({ due: z.number().int().nonnegative().optional(), directory: z.string().max(4096), next }),
+  shadowedSkills: z.array(z.strictObject({ name: z.string().max(64), path: z.string().max(4096) })).max(8),
   permissions: z.strictObject({ askByDefault: z.array(z.enum(DEFAULT_ASK)).max(DEFAULT_ASK.length) }),
 }) satisfies z.ZodType<StatusView>
 /** The status tool's output schema: the unguarded agents are a count, and `nextStep` points to /utilities-status for them. */

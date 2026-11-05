@@ -40,7 +40,7 @@ Unknown keys are rejected. A relative path is rejected.
 | `speech/<scope>/<id>.wav` | This project's default synthesis files. Removed at startup when older than 7 days. |
 | `jobs/job-*` | Per-call scratch. Removed at startup when older than 10 minutes. |
 
-Timers are per project: a timer set at the project root is the same timer in every subfolder. OpenCode's project is the git repository; a folder outside any repository belongs to OpenCode's shared `global` project. Version 0.0.1 kept a store per folder instead, keyed by the project and the folder. The first timer call in a folder moves that folder's old stores, and its parents', into the project store, under both stores' locks. A store moves whole when the project has no timers yet; otherwise each timer is copied, an identical one is skipped, and a different timer with a name already taken is kept as `<name> (2)`, with its created time set to the move. An old store of a folder you never open again stays on disk until OpenCode runs there.
+Timers are per project: a timer set at the project root is the same timer in every subfolder. OpenCode's project is the git repository; a folder outside any repository belongs to OpenCode's shared `global` project.
 
 The caches are not under `stateRoot`. They are under `$XDG_CACHE_HOME/opencode-utilities` (`~/.cache/opencode-utilities` when unset):
 
@@ -73,7 +73,7 @@ The refusal text is: `HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0,
 
 Effective name `utilities_<name>`. `options.permission` is that name, so a deny with resource `*` hides the tool. Code Mode is on. Pinned: `utilities_time_now`, `utilities_time_convert`, `utilities_weather_current`.
 
-Only available modules are registered. Transcription and synthesis stay registered while their files are merely missing, so the first call can ask to download them. A disabled module, an unsupported platform, or a failed integrity check does not register that module's tools. `utilities_speech_cleanup` needs no engine, so it is registered whenever `modules.speech` is on. Availability changes (a finished download, for example) reload the tool list.
+Only available modules are registered. Transcription and synthesis stay registered while their files are merely missing, so the first call can ask to download them. A disabled module, an unsupported platform, or a failed integrity check does not register that module's tools. Availability changes (a finished download, for example) reload the tool list.
 
 | Tool | Effect | Permission |
 | --- | --- | --- |
@@ -82,7 +82,6 @@ Only available modules are registered. Transcription and synthesis stay register
 | `utilities_timer_get`, `utilities_timer_list`, `utilities_timer_check` | read-state | none |
 | `utilities_timer_set`, `utilities_timer_delete` | write-state | ask. Resource `timer:<name>`, save `timer:*`. |
 | `utilities_weather_geocode`, `utilities_weather_current`, `utilities_weather_daily`, `utilities_weather_hourly`, `utilities_weather_demand_signal`, `utilities_weather_summary` | network | ask. Resource and save are the provider hosts. `metadata.location` is the place or query. |
-| `utilities_speech_cleanup` | compute | none. It needs no engine or download. |
 | `utilities_speech_transcribe` | read-file | host `read`, and `external_directory` when the file is outside the location and the project |
 | `utilities_speech_synthesize` | write-file | ask `utilities_speech_synthesize`. Resource `kitten-nano-int8/<voice>`, save `*`. A given `path` also asserts `edit`, and `external_directory` outside the project. |
 
@@ -163,7 +162,7 @@ A saved "Always allow" is project-wide. It applies to every agent in that projec
 
 OpenCode creates agents that are defined only in user config, and agents added by later plugins, after this plugin's transform. They do not receive the ask rules. Status names such an agent only when its own rules would run a Utilities side effect (weather, a timer change, synthesis or the download) without asking: the last rule that matches is an allow. An agent whose rules ask or deny for all of them, such as one ending in `{ "action": "*", "resource": "*", "effect": "ask" }`, needs no fix and is not listed.
 
-Fix: put the block above **first** in that agent's own `permissions`, followed by any `utilities_*` rules you already have in the top-level `permissions`.
+Status's next step is: Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools. That is, the block above goes **first** in that agent's own `permissions`, followed by any `utilities_*` rules you already have in the top-level `permissions`.
 
 ```jsonc
 {
@@ -233,7 +232,7 @@ Use the engine name for the platform you run on. A hash mismatch or a missing fi
 | Surface | What it does |
 | --- | --- |
 | `utilities_status` | Returns the status object, with the agents without default rules as a count and one next step. Compute. Does not ask. |
-| `/utilities-status` | Posts the full status into the session: the rows Connection, Account, Access, the modules, Tools, Agents without default rules (names, then the block, one rule per line), OpenCode, and one Next step (`Nothing to do.` when nothing is needed). |
+| `/utilities-status` | Posts the full status into the session: the rows Connection, Account, Access, the modules, Skills, Tools, Agents without default rules (names, then the block, one rule per line), OpenCode, and one Next step (`Nothing to do.` when nothing is needed). |
 | `/utilities-speech-install` | Asserts `utilities_speech_download`, then downloads missing files. |
 | `/utilities` | TUI dialog, palette "Utilities: Status". Reads the `status` RPC method only, when it opens, and on server, agent and Open-Meteo key events, which it hears only while open. Shows the same lines as `/utilities-status`. `r` refreshes, `Esc` closes. The key hint reads `r refresh · esc close`. |
 | RPC `status` | The `utilities.tools` RPC's only method. Returns the same status object. The TUI imports its contract from its own bundle; the package does not export it. |
@@ -249,7 +248,7 @@ The status RPC starts with the fields every one of these plugins shares:
 | `unguardedAgents` | The agents without the default rules whose own rules would run a Utilities side effect without asking. Always present; `[]` when none. |
 | `nextStep` | Exactly the `Next step` row; `Nothing to do.` when nothing is needed. Missing speech files that download on first use, and the free weather tier, never set it. |
 
-Then Utilities' own: the platform package, per-module availability, the weather tier and key, speech file states (`missing`, `cached` or `pre-seeded`), voices, whether files are pre-seeded, the cache and output directories, the due timer count and the timer store, and the ask-by-default actions. An item's own `next` is its own next step. The `utilities_status` tool has the same fields, with `unguardedAgents` as a count, and a `nextStep` that points to `/utilities-status` for those agents.
+Then Utilities' own: the platform package, per-module availability, the weather tier and key, speech file states (`missing`, `cached` or `pre-seeded`), voices, whether files are pre-seeded, the cache and output directories, the due timer count and the timer store, `shadowedSkills` (each `{ name, path }`: a skill with one of the plugin's skill ids, such as one in `.opencode/skills/utilities-time/`, that OpenCode loads instead of the plugin's own; `[]` when none), and the ask-by-default actions. An item's own `next` is its own next step. The `utilities_status` tool has the same fields, with `unguardedAgents` as a count. For those agents, `nextStep` is: Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.
 
 ## Bounds
 
@@ -272,34 +271,50 @@ Then Utilities' own: the platform package, per-module availability, the weather 
 
 ## Errors
 
-A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next step: What to do.` and `metadata.code` plus `metadata.hint`. Host permission errors propagate unchanged and have no plugin code.
+A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next step: What to do.` and `metadata.code` plus `metadata.hint`. Host permission errors propagate unchanged and have no plugin code. Every code the plugin raises is in this table, and a unit test checks that both lists match.
 
 | Code | Next step |
 | --- | --- |
-| `OPTIONS_INVALID` | Fix the named option. |
+| `OPTIONS_INVALID` | Fix the named option in the Utilities plugin options in `opencode.json`. |
 | `STATUS_UNAVAILABLE` | Run `/utilities-status` in a session to see the error, or check the OpenCode server log. |
 | `SKILLS_INVALID` | A skill file is missing or malformed; setup skips it with this warning. Reinstall the plugin. |
 | `HOST_UNTESTED` | OpenCode is outside `>=2.2.3 <2.3.0`. Use 2.2.3, 2.2.4 or 2.2.5, or set `allowUntestedHost`. |
 | `DISABLED` | Set `modules.<name>` to `true`. |
+| `CLOSED` | The plugin is shutting down. Retry after OpenCode has reloaded it. |
 | `PLATFORM_PACKAGE_MISSING` | Reinstall so the platform package is present, or run `npm run native:build` in a checkout. |
 | `UNSUPPORTED_PLATFORM` | No build for this platform. Time and weather are unaffected when only speech lacks an engine. |
 | `BINARY_MISSING`, `INTEGRITY_MISMATCH` | Reinstall. For speech, delete the cache and run `/utilities-speech-install`. |
+| `CONTRACT_MISMATCH` | The plugin's files, or a program's output, do not match this version. Reinstall; if it persists, report it with the `utilities_status` output. |
 | `SPEECH_ASSETS_MISSING` | Approve the download, run `/utilities-speech-install`, or pre-seed. |
 | `DOWNLOAD_FAILED` | Check the network and retry, or pre-seed. |
 | `INPUT_INVALID` | Correct the named field. The message names the rule, such as the 2000–2030 holiday range, never the value. |
+| `INPUT_LIMIT`, `OUTPUT_LIMIT` | The input is over 32 KiB, or the result over 64 KiB. Send less, or narrow the request (fewer days, hours or results). |
+| `QUEUE_FULL` | Wait, then retry. Each module has its own queue. |
+| `CANCELLED` | The call was cancelled. Call the tool again if you still need the result. |
+| `DEADLINE_EXCEEDED` | The call ran past its time limit (see [Bounds](#bounds)). Retry, or narrow the request. |
+| `SPAWN_FAILED` | The program behind the tool could not start. Call `utilities_status`; reinstall if a module is unavailable. |
+| `BACKEND_FAILED` | A program reported another error. For weather the message says which: no such place, the rate limit, or a failed request. |
+| `BACKEND_JSON_INVALID`, `STDOUT_LIMIT`, `STDERR_LIMIT` | The program's output was unreadable or too large. Narrow the request and retry; if it persists, reinstall. |
 | `TIME_NONEXISTENT` | The local time is skipped by a daylight-saving change in `from_timezone`. Use a time outside the change, or add the UTC offset the user means. |
 | `TIME_AMBIGUOUS` | The local time happens twice at a daylight-saving change. The message gives both UTC offsets and instants. Add the offset the user means, or ask which one. |
 | `TIME_OFFSET_MISMATCH` | The `datetime` has an offset that `from_timezone` does not use at that moment. Remove it, or use the zone's own. |
 | `HOLIDAY_COVERAGE` | The call needs holiday data outside 2000–2030, for example the next business day after 2030-12-31. Use dates in range, or leave out `country` to count weekends only. |
 | `TIME_OUT_OF_RANGE` | The result is outside what the time engine supports. Use a smaller amount or a nearer date. |
-| `BACKEND_FAILED` | A program reported another error. For weather the message says which: no such place, the rate limit, or a failed request. |
-| `TIMER_EXISTS` | `utilities_timer_set` with `replace: true`. |
+| `TIMER_EXISTS` | Ask the user whether to overwrite it; then `utilities_timer_set` with `replace: true`, or another name. |
 | `TIMER_NOT_FOUND` | `utilities_timer_list`. |
+| `TIMER_QUOTA`, `TIMER_BYTE_QUOTA` | The project has 1,000 timers, or its store is full. Delete timers, or use shorter descriptions and tags. |
 | `TIMER_STATE_UNKNOWN` | Read the timer before retrying. The change may or may not have been saved. |
+| `STATE_FILE_UNSAFE` | A timer store file is a link or not a regular file. Remove it from the project's timer directory. |
 | `WEATHER_KEY_REJECTED` | Reconnect, or log out for the free tier. |
 | `SOURCE_REJECTED` | A regular `.wav` file, not a symbolic link, at most 20 MiB. |
+| `SOURCE_CHANGED` | The audio file changed while the call waited for approval. Call the tool again. |
 | `WAV_INVALID`, `WAV_UNSUPPORTED` | Convert to 16-bit PCM WAV. The hint includes an `ffmpeg` example. |
+| `AUDIO_DURATION_LIMIT` | The audio is over ten minutes. Split it into shorter files. |
+| `SPEECH_FAILED` | The speech engine failed; the message names the engine's code. Retry; if it persists, call `utilities_status`. |
+| `BRIDGE_CORRELATION`, `OUTPUT_PATH_MISMATCH` | The speech engine answered another request, or wrote somewhere unexpected. Retry; if it persists, delete the speech cache and run `/utilities-speech-install`. |
 | `OUTPUT_EXISTS` | Choose another path, or delete the file. The output is created exclusively. |
-| `QUEUE_FULL` | Wait, then retry. Each module has its own queue. |
 | `UNSAFE_PATH` | A file or folder inside the plugin's own directories is a symbolic link, or not the expected type. Replace the link with the real file or folder, or reinstall. Links above those directories are fine. See [Symbolic links](#symbolic-links). |
 | `STATE_NOT_PRIVATE` | Run `chmod 700` on the `stateRoot` directory. |
+| `FILE_REJECTED`, `FILE_CHANGED` | A file the plugin reads (its manifests or programs) is not a regular file, too large, or changed while being read. Retry; if it persists, reinstall. |
+| `UNSAFE_CLEANUP`, `CLEANUP_FAILED` | The plugin refused to delete a path outside its own folders, or could not remove its temporary files. Retry; leftovers go at the next start. Report `UNSAFE_CLEANUP` with the `utilities_status` output. |
+| `OPERATION_FAILED` | The tool failed unexpectedly. Retry; if it persists, call `utilities_status`. |

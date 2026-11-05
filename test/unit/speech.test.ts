@@ -17,13 +17,7 @@ async function setup(o: FixtureOptions = {}) {
 }
 const bridge = (reply: string) => `let input = ''; process.stdin.on('data', v => input += v); process.stdin.on('end', () => { const r = JSON.parse(input); record({ request: r }); ${reply} })`
 
-describe("cleanup and synthesis", () => {
-  test("cleanup runs no engine, needs no speech file and asks nothing", async () => {
-    const f = await setup({ speech: "missing" })
-    expect(await f.runtime.invoke("speech_cleanup", { text: " um, synthetic text you know " }, invocation())).toEqual({ output: { text: "Synthetic text.", style: "clean", provider: "rules" }, text: "Synthetic text." })
-    expect(f.authorize).not.toHaveBeenCalled()
-    expect(await f.recorded()).toEqual([])
-  })
+describe("synthesis", () => {
   test("the engine gets a private job cache and no time or weather config", async () => {
     const f = await setup()
     await f.runtime.invoke("speech_synthesize", { text: "hello" }, invocation())
@@ -46,6 +40,12 @@ describe("cleanup and synthesis", () => {
     await f.runtime.invoke("speech_synthesize", { text: "hello", voice: "Bella" }, invocation())
     const [call] = await f.recorded()
     expect(call!.request!.payload).toMatchObject({ modelPath: f.cached("kitten-model"), voicesPath: f.cached("kitten-voices"), configPath: f.cached("kitten-config"), voice: "Bella" })
+  })
+  test("a voice that does not exist is refused before any prompt, naming the eight voices (UTIL-R8)", async () => {
+    const f = await setup()
+    const error = await f.runtime.invoke("speech_synthesize", { text: "hello", voice: "Nobody" }, invocation()).catch(e => e)
+    expect(error).toMatchObject({ code: "INPUT_INVALID", message: expect.stringContaining('"Bella"|"Jasper"|"Luna"|"Bruno"|"Rosie"|"Hugo"|"Kiki"|"Leo"') })
+    expect(f.authorize).not.toHaveBeenCalled(); expect(await f.recorded()).toEqual([])
   })
   test("a bridge answer for another request, or an output elsewhere, is refused", async () => {
     const f = await setup({ body: bridge(`out({ protocolVersion: 1, requestId: '00000000-0000-4000-8000-000000000000', ok: true, result: {} })`) })
@@ -79,7 +79,8 @@ describe("files the user names", () => {
   test("transcription reads a location-relative WAV under the host's read rule", async () => {
     const f = await setup(); await mkdir(join(f.project, "audio")); await writeFile(join(f.project, "audio/in.wav"), wav())
     const result = await f.runtime.invoke("speech_transcribe", { path: "audio/in.wav", language: "en" }, invocation())
-    expect(result.output).toMatchObject({ schema_version: 2, text: "synthetic transcript", segments: [{ timestamp_source: "native_model" }] })
+    // Only the transcript, its language and duration, and its timed parts: no engine metadata (UTIL-R22).
+    expect(result.output).toEqual({ text: "synthetic transcript", language: "en", duration_secs: 0.1, segments: [{ start: 0, end: 0.1, text: "synthetic transcript" }] })
     expect(result.text).toBe("Transcript (en, 0.1 s):\nsynthetic transcript")
     const [call] = await f.recorded()
     expect(call!.request!.payload).toMatchObject({ modelPath: f.cached("tiny-q5_1"), language: "en" }); expect(call!.files).toContain("input.wav")

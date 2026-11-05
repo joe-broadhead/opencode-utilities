@@ -7,7 +7,7 @@ Unofficial; not affiliated with Open-Meteo. Weather data is from Open-Meteo.com 
 ## Requirements
 
 - OpenCode `>=2.2.3 <2.3.0`, tested on 2.2.3, 2.2.4 and 2.2.5. Another 2.2 release runs, and status calls it untested. Outside that range the plugin does not start, unless you set `allowUntestedHost`.
-- macOS 14 or later (arm64 or x64), or Linux (x64 or arm64) with glibc 2.39 or later, such as Ubuntu 24.04, Debian 13 or Fedora 40. macOS x64 has no speech engine, so it has text cleanup but not transcription or synthesis. Windows and musl are not supported.
+- macOS 14 or later (arm64 or x64), or Linux (x64 or arm64) with glibc 2.39 or later, such as Ubuntu 24.04, Debian 13 or Fedora 40. macOS x64 has no speech engine, so it has no speech tools. Windows and musl are not supported.
 
 ## Install
 
@@ -26,7 +26,7 @@ opencode plugin update @joe-broadhead/opencode-utilities
 opencode reload
 ```
 
-An entry pinned to a version, such as `@joe-broadhead/opencode-utilities@0.0.1` in `plugins`, does not update: remove the `@<version>` from it first. Timers saved by 0.0.1 move into their project's store the first time a timer tool or status runs in their folder; see [docs/configuration.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/configuration.md).
+An entry pinned to a version, such as `@joe-broadhead/opencode-utilities@<version>` in `plugins`, does not update: remove the `@<version>` from it first.
 
 ## Sign in
 
@@ -44,28 +44,27 @@ await tools.utilities.time_convert({ datetime: "2026-10-30T12:00:00", from_timez
 await tools.utilities.time_holidays({ mode: "list", year: 2026, country: "GB" })
 await tools.utilities.time_business_days({ mode: "between", from: "2026-12-21", to: "2026-12-31", country: "GB" })
 await tools.utilities.weather_current({ location: "Amsterdam" })
-await tools.utilities.speech_cleanup({ text: "um hello there", style: "clean" })
 await tools.utilities.speech_transcribe({ path: "clip.wav" })
 await tools.utilities.speech_synthesize({ text: "hello", path: "out.wav" })
 ```
 
 - **Time.** Ten tools for the current time, zones, conversion, calendar facts, date maths, formatting, public holidays (offline, 2000–2030) and business days. With `country`, business days skip that country's nationwide public holidays as well as weekends. Holiday lists also show regional holidays, such as Scotland's in the UK, marked with `nationwide` and `regions`; with `country: "GB"`, pass `region` (England, Wales, Scotland or Northern Ireland) to count that nation's holidays as well.
-- **Timers.** `timer_set`, `timer_get`, `timer_list`, `timer_check` and `timer_delete`. Timers belong to the current project, the same in every folder of it, and never fire on their own: the model calls `utilities_timer_check`, or you look at `/utilities`. The deadline needs a zone offset. An existing name is an error unless you pass `replace: true`. For an alert that fires by itself, use OpenCode's `schedule_*` tools instead.
+- **Timers.** `timer_set`, `timer_get`, `timer_list`, `timer_check` and `timer_delete`. Timers belong to the current project, the same in every folder of it, and never fire on their own: the model calls `utilities_timer_check`, or you look at `/utilities`. The deadline needs a zone offset. An existing name is an error unless you pass `replace: true`. For an alert that fires by itself, use OpenCode's `schedule_*` tools instead, which need `"experimental": { "schedules": true }` in `opencode.json`.
 - **Weather.** Six tools: geocode, current, daily, hourly, a demand signal and a summary. Every result carries `Weather data by Open-Meteo.com (CC BY 4.0)`. Show it when you present the data. Responses are cached under `~/.cache/opencode-utilities/weather`: a forecast for 30 minutes, a place search for 30 days.
-- **Speech.** `speech_cleanup` tidies dictated text with fixed rules (`clean`, `bullets`, `professional`, `summary` or `raw`); it needs no download. `speech_transcribe` reads a PCM16 WAV, mono or stereo, 8–48 kHz, up to 20 MiB and ten minutes. `speech_synthesize` writes a WAV file and returns its path; without `path` it goes under the plugin's state directory and is removed after 7 days.
+- **Speech.** `speech_transcribe` reads a PCM16 WAV, mono or stereo, 8–48 kHz, up to 20 MiB and ten minutes. `speech_synthesize` writes a WAV file and returns its path; without `path` it goes under the plugin's state directory and is removed after 7 days.
 
 `utilities_time_now`, `utilities_time_convert` and `utilities_weather_current` are pinned. The model finds the others through the namespace. Three skills cover the same ground: `utilities-time`, `utilities-weather` and `utilities-speech`. Each is offered only while its module is available, so macOS x64, which has no speech engine, has no `utilities-speech`.
 
 ### Status
 
-- `/utilities` (palette: **Utilities: Status**) opens the Utilities status dialog. Its rows are Connection (the optional Open-Meteo key), Account, Access, the platform package and each module, speech files, due timers, the actions that ask, Tools, Agents without default rules, OpenCode, and one Next step. Press `r` to refresh and `Esc` to close.
+- `/utilities` (palette: **Utilities: Status**) opens the Utilities status dialog. Its rows are Connection (the optional Open-Meteo key), Account, Access, the platform package and each module, speech files, due timers, the actions that ask, Skills, Tools, Agents without default rules, OpenCode, and one Next step. Press `r` to refresh and `Esc` to close.
 - `/utilities-status` posts the same status into the session, with the block for any agents without default rules.
 - `utilities_status` gives the model the same view, with those agents as a count.
 - `/utilities-speech-install` downloads the speech files after asking.
 
 ### Scripts
 
-A script or a cron job can call the tools that change nothing (time, timer reads, weather, speech cleanup and transcription, and status) with no model, through `opencode api`. It runs as a session and its agent, under that agent's permission rules and the session's own. Weather and the speech download ask by default, and a script cannot answer a prompt, so they need an allow rule. Timer writes and synthesis are never scriptable.
+A script or a cron job can call the tools that change nothing (time, timer reads, weather, transcription and status) with no model, through `opencode api`. It runs as a session and its agent, under that agent's permission rules and the session's own. Weather and the speech download ask by default, and a script cannot answer a prompt, so they need an allow rule. Timer writes and synthesis are never scriptable.
 
 ```sh
 opencode api post /api/rpc/utilities.tools.tools/time_now \
@@ -97,7 +96,7 @@ What each call asserts:
 
 | Call | Asks? | What is asserted |
 | --- | --- | --- |
-| `utilities_status`, the ten `utilities_time_*` tools, `utilities_speech_cleanup` | No | Nothing. |
+| `utilities_status` and the ten `utilities_time_*` tools | No | Nothing. |
 | `utilities_timer_get`, `utilities_timer_list`, `utilities_timer_check` | No | Nothing. Timer data is project-scoped plugin state. |
 | `utilities_timer_set`, `utilities_timer_delete` | Yes | The tool's action, resource `timer:<name>`, saved as `timer:*`. |
 | `utilities_weather_*` | Yes | The tool's action. Resource and save are the Open-Meteo hosts the call contacts (`api.open-meteo.com` and `geocoding-api.open-meteo.com`, or the `customer-*` hosts with a key). `metadata.location` is the place. |
@@ -183,15 +182,16 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 | `DOWNLOAD_FAILED` | Check the network or proxy, then retry, or pre-seed `speech.assetsDir`. |
 | `DISABLED` | Set `modules.<name>` to `true`. |
 | `WEATHER_KEY_REJECTED` | Run `/connect` and choose Open-Meteo, then enter a valid key, or run `opencode auth logout open-meteo` for the free tier. |
-| Weather `429` | The free-tier rate limit was reached. Wait, or add a commercial key. |
+| `BACKEND_FAILED` (rate limit) | Open-Meteo's free-tier rate limit was reached. Wait, or add a commercial key. |
 | `UNSAFE_PATH` | A file or folder inside the plugin's state, cache or install directory is a symbolic link. Replace it with the real file or folder. Links above those directories, such as macOS `/tmp` or Fedora Atomic `/home`, are fine. |
 | `TIME_NONEXISTENT`, `TIME_AMBIGUOUS` | The local time falls in a daylight-saving change. `TIME_AMBIGUOUS` gives both UTC offsets: add the one you mean to the `datetime`. |
 | `HOLIDAY_COVERAGE` | Holiday data covers 2000–2030. Use dates in that range, or leave out `country`. |
-| `TIMER_EXISTS` | Call `utilities_timer_set` with `replace: true`, or pick another name. |
+| `TIMER_EXISTS` | Confirm with the user, then call `utilities_timer_set` with `replace: true`, or pick another name. |
 | `TIMER_NOT_FOUND` | Call `utilities_timer_list`. Timers are per project. |
 | `TIMER_STATE_UNKNOWN` | Read the timer with `utilities_timer_get` before trying again. |
 | `WAV_INVALID`, `WAV_UNSUPPORTED`, `SOURCE_REJECTED` | Convert the audio to a PCM16 WAV file of at most 20 MiB, not a symbolic link. |
-| Agents without default rules | Put the block shown by `/utilities-status` first in those agents' own permissions. See [Permissions](#permissions). |
+| Skills: `<id>` is replaced by `<path>` | A skill of yours with the same id as one of the plugin's, such as `utilities-time`, loads instead of the plugin's. Rename its folder and its `name`, or move it, then restart OpenCode. |
+| Agents without default rules | Put the default rules shown by `/utilities-status` first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools. See [Permissions](#permissions). |
 
 The full list of codes is in [docs/configuration.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/configuration.md#errors). A script's errors from the tools RPC add a few codes of their own, listed in [Scripting](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md#errors). The plugin does not log tool input, paths, transcripts or timer text.
 

@@ -11,10 +11,10 @@ export const MODULES = ["weather", "time", "speech"] as const
 export type Module = typeof MODULES[number]
 
 /** What a call does. compute and read-state assert nothing; the other classes decide the permission requests. */
-export const EFFECTS = ["compute", "read-state", "write-state", "network", "read-file", "write-file"] as const
+const EFFECTS = ["compute", "read-state", "write-state", "network", "read-file", "write-file"] as const
 export type Effect = typeof EFFECTS[number]
 
-/** The 25 tools, registered in NAMESPACE as `utilities_<name>`. `module` and `operation` route a call to its adapter. */
+/** The 24 tools, registered in NAMESPACE as `utilities_<name>`. `module` and `operation` route a call to its adapter. */
 export const TOOLS = {
   status: { effect: "compute" },
   time_now: { effect: "compute", module: "time", operation: "current_time" },
@@ -38,7 +38,6 @@ export const TOOLS = {
   weather_hourly: { effect: "network", module: "weather", operation: "hourly" },
   weather_demand_signal: { effect: "network", module: "weather", operation: "demand_signal" },
   weather_summary: { effect: "network", module: "weather", operation: "summary" },
-  speech_cleanup: { effect: "compute", module: "speech", operation: "cleanup" },
   speech_transcribe: { effect: "read-file", module: "speech", operation: "transcribe" },
   speech_synthesize: { effect: "write-file", module: "speech", operation: "synthesize" },
 } as const satisfies Record<string, { readonly effect: Effect; readonly module?: Module; readonly operation?: string }>
@@ -50,11 +49,11 @@ export type EffectiveToolName = `${typeof NAMESPACE}_${ToolName}`
 export const SPEECH_DOWNLOAD_ACTION = "utilities_speech_download"
 /** Inserted as `{ action, resource: "*", effect: "ask" }` directly after each agent's base `* * allow` rule. */
 export const DEFAULT_ASK = ["utilities_weather_*", "utilities_timer_set", "utilities_timer_delete", "utilities_speech_synthesize", SPEECH_DOWNLOAD_ACTION] as const
-export type DefaultAskAction = typeof DEFAULT_ASK[number]
+type DefaultAskAction = typeof DEFAULT_ASK[number]
 
 type AssertedTool = { [K in ToolName]: typeof TOOLS[K]["effect"] extends "write-state" | "network" | "write-file" ? K : never }[ToolName]
 /** Tool actions for write-state, network and write-file calls; host `read`, `edit` and `external_directory` for file paths. */
-export type PermissionAction = `${typeof NAMESPACE}_${AssertedTool}` | typeof SPEECH_DOWNLOAD_ACTION | "read" | "edit" | "external_directory"
+type PermissionAction = `${typeof NAMESPACE}_${AssertedTool}` | typeof SPEECH_DOWNLOAD_ACTION | "read" | "edit" | "external_directory"
 export interface PermissionRequest {
   readonly action: PermissionAction
   readonly resources: readonly string[]
@@ -68,12 +67,12 @@ export type Authorize = (requests: readonly PermissionRequest[], invocation: Inv
 // Availability and failures
 
 export const AVAILABILITY = [
-  "AVAILABLE", "DISABLED", "CLOSED", "HOST_UNTESTED", "UNSUPPORTED_PLATFORM", "PLATFORM_PACKAGE_MISSING",
+  "AVAILABLE", "DISABLED", "CLOSED", "UNSUPPORTED_PLATFORM", "PLATFORM_PACKAGE_MISSING",
   "BINARY_MISSING", "INTEGRITY_MISMATCH", "CONTRACT_MISMATCH", "SPEECH_ASSETS_MISSING", "UNSAFE_PATH",
 ] as const
 export type Availability = typeof AVAILABILITY[number]
 export type FailureCode = Exclude<Availability, "AVAILABLE">
-  | "OPTIONS_INVALID" | "STATUS_UNAVAILABLE" | "SKILLS_INVALID" | "INPUT_INVALID" | "INPUT_LIMIT" | "OUTPUT_LIMIT" | "QUEUE_FULL" | "CANCELLED" | "DEADLINE_EXCEEDED"
+  | "HOST_UNTESTED" | "OPTIONS_INVALID" | "STATUS_UNAVAILABLE" | "SKILLS_INVALID" | "INPUT_INVALID" | "INPUT_LIMIT" | "OUTPUT_LIMIT" | "QUEUE_FULL" | "CANCELLED" | "DEADLINE_EXCEEDED"
   | "SPAWN_FAILED" | "BACKEND_FAILED" | "BACKEND_JSON_INVALID" | "STDOUT_LIMIT" | "STDERR_LIMIT"
   | "TIME_NONEXISTENT" | "TIME_AMBIGUOUS" | "TIME_OFFSET_MISMATCH" | "TIME_OUT_OF_RANGE" | "HOLIDAY_COVERAGE"
   | "TIMER_EXISTS" | "TIMER_NOT_FOUND" | "TIMER_QUOTA" | "TIMER_BYTE_QUOTA" | "TIMER_STATE_UNKNOWN"
@@ -146,6 +145,8 @@ export interface StatusView {
     readonly next?: string
   }
   readonly timers: { readonly due?: number; readonly directory: string; readonly next?: string }
+  /** Skills with one of the plugin's ids that OpenCode loads instead of the plugin's own; empty when none. */
+  readonly shadowedSkills: readonly { readonly name: string; readonly path: string }[]
   readonly permissions: { readonly askByDefault: readonly DefaultAskAction[] }
 }
 
@@ -158,12 +159,10 @@ export interface StatusSummary extends Omit<StatusView, "unguardedAgents"> {
 export function registrable(module: Module, availability: Availability) {
   return availability === "AVAILABLE" || (module === "speech" && availability === "SPEECH_ASSETS_MISSING")
 }
-/** Whether a tool is registered. Speech cleanup needs no engine, so it is registered whenever the speech module is on. */
+/** Whether a tool is registered: status always, every other tool when its module is registrable. */
 export function toolRegistrable(tool: ToolName, modules: { readonly [M in Module]: { readonly availability: Availability } }) {
   const entry = TOOLS[tool]
-  if (!("module" in entry)) return true
-  const { availability } = modules[entry.module]
-  return tool === "speech_cleanup" ? availability !== "DISABLED" && availability !== "CLOSED" : registrable(entry.module, availability)
+  return !("module" in entry) || registrable(entry.module, modules[entry.module].availability)
 }
 
 // Configuration and runtime
@@ -217,12 +216,16 @@ export type CreateRuntime = (options: RuntimeOptions) => Promise<Runtime>
 
 // Native distribution
 
-/** One optional npm package per platform holds the time and weather binaries. */
+/**
+ * One optional npm package per platform holds the time and weather binaries. The one platform table: the native
+ * scripts import it too. `triple` is the Rust target; `arch` is what `file` (macOS) or `objdump -f` (Linux) reports
+ * for a binary built for it.
+ */
 export const PLATFORMS = {
-  "darwin-arm64": { package: "@joe-broadhead/opencode-utilities-bin-darwin-arm64", os: "darwin", cpu: "arm64" },
-  "darwin-x64": { package: "@joe-broadhead/opencode-utilities-bin-darwin-x64", os: "darwin", cpu: "x64" },
-  "linux-x64-gnu": { package: "@joe-broadhead/opencode-utilities-bin-linux-x64-gnu", os: "linux", cpu: "x64", libc: "glibc" },
-  "linux-arm64-gnu": { package: "@joe-broadhead/opencode-utilities-bin-linux-arm64-gnu", os: "linux", cpu: "arm64", libc: "glibc" },
+  "darwin-arm64": { package: "@joe-broadhead/opencode-utilities-bin-darwin-arm64", os: "darwin", cpu: "arm64", triple: "aarch64-apple-darwin", arch: "arm64" },
+  "darwin-x64": { package: "@joe-broadhead/opencode-utilities-bin-darwin-x64", os: "darwin", cpu: "x64", triple: "x86_64-apple-darwin", arch: "x86_64" },
+  "linux-x64-gnu": { package: "@joe-broadhead/opencode-utilities-bin-linux-x64-gnu", os: "linux", cpu: "x64", libc: "glibc", triple: "x86_64-unknown-linux-gnu", arch: "elf64-x86-64" },
+  "linux-arm64-gnu": { package: "@joe-broadhead/opencode-utilities-bin-linux-arm64-gnu", os: "linux", cpu: "arm64", libc: "glibc", triple: "aarch64-unknown-linux-gnu", arch: "elf64-littleaarch64" },
 } as const
 export type Platform = keyof typeof PLATFORMS
 export type PlatformPackage = typeof PLATFORMS[Platform]["package"]
@@ -233,7 +236,7 @@ export interface BackendManifest {
 }
 
 export const SPEECH_MODEL_ROLES = ["tiny-q5_1", "kitten-model", "kitten-voices", "kitten-config"] as const
-export type SpeechModelRole = typeof SPEECH_MODEL_ROLES[number]
+type SpeechModelRole = typeof SPEECH_MODEL_ROLES[number]
 export type SpeechAssetRole = "engine" | SpeechModelRole
 /** A release file, cached at `<cacheRoot>/<sha256>/<name>`. */
 export interface SpeechAsset { readonly name: string; readonly url: string; readonly sha256: string; readonly bytes: number }

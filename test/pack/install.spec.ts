@@ -18,6 +18,7 @@ import { detectTarget, isPlatform } from "../../src/domain/backends.js"
 import { HOST_RANGE, TESTED_HOSTS } from "../../src/host/versions.js"
 import { SCRIPT_TOOLS } from "../../src/host/scripting.js"
 import { TOOLS_RPC_ID } from "../../src/host/tools-rpc.js"
+import { wav } from "../fixtures.js"
 
 setDefaultTimeout(300_000)
 const repo = fileURLToPath(new URL("../../", import.meta.url))
@@ -30,10 +31,9 @@ const platformPackage = isPlatform(target) ? PLATFORMS[target].package : undefin
 const workspaces = existsSync(join(repo, "npm")) ? readdirSync(join(repo, "npm")).filter(dir => existsSync(join(repo, "npm", dir, "package.json"))) : []
 const platformDir = platformPackage && workspaces.length > 0 ? join(repo, "npm", platformPackage.split("/")[1]!) : undefined
 // A speech engine is built where ONNX Runtime ships a static library (native/onnx-provenance.json): every target but
-// x86_64-apple-darwin, so darwin-x64 has text cleanup but no transcription or synthesis.
-const TRIPLES = { "darwin-arm64": "aarch64-apple-darwin", "darwin-x64": "x86_64-apple-darwin", "linux-x64-gnu": "x86_64-unknown-linux-gnu", "linux-arm64-gnu": "aarch64-unknown-linux-gnu" } as const
+// x86_64-apple-darwin, so darwin-x64 has no speech tools.
 const onnx = JSON.parse(readFileSync(join(repo, "native/onnx-provenance.json"), "utf8")) as { distributions: Record<string, unknown> }
-const speechEngine = isPlatform(target) && Boolean(onnx.distributions[TRIPLES[target]])
+const speechEngine = isPlatform(target) && Boolean(onnx.distributions[PLATFORMS[target].triple])
 
 // Never under the real home: OpenCode searches upward for .opencode/ folders. Every server also gets its own port.
 const realHome = realpathSync(homedir())
@@ -169,7 +169,7 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
     expect(view.host).toEqual({ version, range: HOST_RANGE, tested: true })
     // `locked`, defined only in config, missed the block and denies only the time tools, so weather would run there unasked.
     expect(view).toMatchObject({ state: "ready", unguardedAgents: ["locked"] })
-    expect(view.nextStep).toStartWith("Put the block shown under Agents without default rules first in the own permissions of locked ")
+    expect(view.nextStep).toBe("Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.")
     expect(view.platform).toMatchObject({ target, ...platformPackage ? { package: platformPackage } : {} })
     expect(Object.keys(view.modules).sort()).toEqual([...MODULES].sort())
     expect(view.permissions.askByDefault).toEqual([...DEFAULT_ASK])
@@ -239,7 +239,6 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
       const result = await call("build", "time_now", { timezones: ["UTC"] })
       if (!platformDir) return void expect(result).toMatchObject({ type: "failed", code: "PLATFORM_PACKAGE_MISSING" })
       expect(result.value).toMatchObject({ format: "rfc3339", times: [{ timezone: "UTC", utc_offset: "+00:00" }] })
-      expect((await call("build", "speech_cleanup", { text: "um so hello  world" })).value).toMatchObject({ text: expect.stringContaining("hello world"), provider: "rules" })
       const session = (await host.api("GET", `/api/session/${sessions.build}`)).data as { data: { tokens: { input: number; output: number } } }
       expect(session.data.tokens).toMatchObject({ input: 0, output: 0 })
     })
@@ -320,6 +319,8 @@ async function serve(version: string, binary: string) {
   for (const dir of [join(home, ".config"), join(home, ".local/share"), join(home, ".cache"), join(home, ".local/state"), directory, tmp]) mkdirSync(dir, { recursive: true })
   // `locked`, an agent defined only in config, hides the time tools: the tools RPC tests use it.
   writeFileSync(join(directory, "opencode.json"), JSON.stringify({ plugins: [installed], agents: { locked: { mode: "primary", permissions: [rule("utilities_time_*", "deny")] } } }))
+  // A valid WAV in the project: a transcription is checked before it asks to download the speech files.
+  writeFileSync(join(directory, "clip.wav"), wav())
   const password = randomBytes(18).toString("base64url"), port = await freePort()
   const env = {
     HOME: home, OPENCODE_TEST_HOME: home, TMPDIR: tmp,

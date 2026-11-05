@@ -2,6 +2,38 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.5] - 2026-11-05
+
+### Added
+
+- Status names a skill of yours that takes the place of one of the plugin's skills because it has the same id, such as a `utilities-time` folder in `.opencode/skills`. OpenCode loads only one skill per id, so the plugin's own was never used. The new Skills row, the status RPC's `shadowedSkills` and the next step say which file to rename or move.
+- `utilities_time_now` returns `machine_timezone`, the IANA time zone of the machine OpenCode runs on, so "what time is it here?" and a timer for "9 tomorrow" need no question first. On a remote server it is the server's zone, not necessarily the user's.
+
+### Fixed
+
+- The errors table in `docs/configuration.md` lists every code the plugin raises; 23 were missing, such as `TIMER_QUOTA`, `SOURCE_CHANGED` and `OPERATION_FAILED`. A test keeps it complete.
+- `utilities_speech_transcribe` checks that the file is a WAV it can read before it asks to download the speech files. Before, a file such as an `.m4a` asked for the 105 MB download first and then failed with `WAV_INVALID`. The download is now asked on its own, after any file read prompt.
+- `utilities_time_format`, `utilities_time_add` and `utilities_time_between` say that a date-time without `Z` or an offset is read as UTC. Before, nothing said so, and "3 pm my time as a Unix timestamp" came out hours off. Add the offset (`utilities_time_convert` gives it).
+
+### Removed
+
+- `utilities_speech_cleanup`, its tools RPC method `speech_cleanup` and its `jelly` entry. Its fixed English rules did worse than the model rewriting the text itself, which is what to do instead: ask the model to tidy a transcript or dictation. On macOS x64, which has no speech engine, Utilities now has no speech tools and no speech skill.
+- The move of timers that 0.0.1 kept per folder. Timer reads and status no longer rename or copy timer stores, so they never write. 0.0.2 and later already moved those timers on first use in each folder; a 0.0.1 store that was never opened since stays on disk, unread, under `projects/` in the state folder.
+
+### Changed
+
+- The next step for agents without the default rules is one fixed sentence, the same in every plugin of this family: "Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools." It is the same in `/utilities-status`, the status RPC's `nextStep`, the `/utilities` dialog and the `utilities_status` tool, which used to say "N agents lack the default ask rules …". The Agents without default rules row still lists the agents.
+- `TIMER_EXISTS` tells the model to ask the user before it overwrites the timer with `replace: true`.
+- The status RPC's module and platform `availability` no longer lists `HOST_UNTESTED`, which no module ever reported. A host outside the range is still refused with `HOST_UNTESTED` at setup.
+- `utilities_speech_transcribe` returns only `text`, `language`, `duration_secs` and `segments` (`start`, `end`, `text`). The engine metadata it used to pass through (`schema_version`, `model`, `provider`, `backend_kind`, `timestamps_reliable`, the cleanup fields, `request_id` and each segment's `timestamp_source`) is gone; it made the tool's schema large and the cleanup fields never applied.
+- `utilities_speech_synthesize` takes `voice` as one of the eight voices (Bella, Jasper, Luna, Bruno, Rosie, Hugo, Kiki, Leo; default Luna). An unknown voice now fails with `INPUT_INVALID`, naming them, before any prompt; it used to ask first and then fail in the engine.
+- Holiday and business-day `country` is a two-letter code pattern instead of a 100-value list in the schema. An unsupported code still fails with `INPUT_INVALID`, and the message lists the supported codes.
+- Tool descriptions teach what the models got wrong: weather tools say to stop when the user declines the network prompt, and never to fetch weather another way; a place name several places share goes to `utilities_weather_geocode` first; for the UK, business days need `region`, because Easter Monday and the August bank holiday are regional; `utilities_speech_transcribe` says which prompt comes when; `utilities_speech_synthesize` says a file without `path` is deleted after 7 days. Speech paths are described as relative to the directory OpenCode runs in, which is how they resolve.
+- Next steps for options name "the Utilities plugin options in opencode.json" instead of "the utilities.tools plugin options".
+- The three skills are rewritten around the decisions models got wrong. Their descriptions name real requests ("how many working days in March", "will it rain this weekend", "transcribe clip.wav"). They teach: pass `region` for UK working days; stop when the user declines a weather prompt; geocode a shared place name first; make the transcription call and let its prompt ask for the download; tidy dictation without a tool. They link to the scripting guide on GitHub instead of a file the package does not ship.
+- `utilities_time_format` no longer takes `output_format: "unix-timestamp"`, which gave the same result as `epoch`. Use `epoch`.
+- Scripts: a tools RPC refusal by a deny rule now names the denied action and says to remove or narrow that rule (or add a later allow rule to the session). Before, it gave the same next step as an unanswered ask. The code is still `PERMISSION_DENIED`.
+
 ## [0.0.4] - 2026-11-04
 
 ### Added
