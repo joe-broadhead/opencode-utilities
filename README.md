@@ -26,7 +26,7 @@ opencode plugin update @joe-broadhead/opencode-utilities
 opencode reload
 ```
 
-An entry pinned to a version, such as `@joe-broadhead/opencode-utilities@0.0.1` in `plugins`, does not update: remove the `@<version>` from it first. Timers saved by 0.0.1 move into their project's store the first time a timer tool or status runs in their folder; see [docs/configuration.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/configuration.md).
+An entry pinned to a version, such as `@joe-broadhead/opencode-utilities@<version>` in `plugins`, does not update: remove the `@<version>` from it first.
 
 ## Sign in
 

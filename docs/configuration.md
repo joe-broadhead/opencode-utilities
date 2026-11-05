@@ -40,7 +40,7 @@ Unknown keys are rejected. A relative path is rejected.
 | `speech/<scope>/<id>.wav` | This project's default synthesis files. Removed at startup when older than 7 days. |
 | `jobs/job-*` | Per-call scratch. Removed at startup when older than 10 minutes. |
 
-Timers are per project: a timer set at the project root is the same timer in every subfolder. OpenCode's project is the git repository; a folder outside any repository belongs to OpenCode's shared `global` project. Version 0.0.1 kept a store per folder instead, keyed by the project and the folder. The first timer call in a folder moves that folder's old stores, and its parents', into the project store, under both stores' locks. A store moves whole when the project has no timers yet; otherwise each timer is copied, an identical one is skipped, and a different timer with a name already taken is kept as `<name> (2)`, with its created time set to the move. An old store of a folder you never open again stays on disk until OpenCode runs there.
+Timers are per project: a timer set at the project root is the same timer in every subfolder. OpenCode's project is the git repository; a folder outside any repository belongs to OpenCode's shared `global` project.
 
 The caches are not under `stateRoot`. They are under `$XDG_CACHE_HOME/opencode-utilities` (`~/.cache/opencode-utilities` when unset):
 
