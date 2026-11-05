@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- The Code Mode `utilities` namespace text lists the call of each registered tool with its input keys, such as `time_business_days({mode: "between", from, to, country?, region?} | …)`, plus the UK `region` and declined-weather rules. A model can call a tool without first searching the catalog, which returned about 20 KB of signatures each time. A module that is off or unsupported is left out of the list.
 - `utilities_speech_transcribe` and `utilities_speech_synthesize` now start with "Call this even when speech files are missing; the download prompt is how the user agrees." Before, an agent sometimes asked the user in text and made no call, so the user never saw the download prompt that asks for their agreement.
 
 ## [0.0.5] - 2026-11-05
