@@ -43,7 +43,7 @@ export const INPUTS: { readonly [K in ToolName]: object } = {
 }
 
 export const SAMPLES: { readonly [K in Exclude<ToolName, "status">]: { readonly output: unknown; readonly text: string } } = {
-  time_now: { output: { generated_at_utc: "2026-10-30T12:00:00Z", format: "rfc3339", times: [snapshot] }, text: "It is 21:00 in Asia/Tokyo." },
+  time_now: { output: { generated_at_utc: "2026-10-30T12:00:00Z", format: "rfc3339", times: [snapshot], machine_timezone: "Europe/London" }, text: "It is 21:00 in Asia/Tokyo." },
   time_zones: { output: { region: "Asia", count: 1, timezones: ["Asia/Tokyo"] }, text: "1 zone." },
   time_zone_info: { output: { timezone: "Asia/Tokyo", current: snapshot, next_transition: null }, text: "Asia/Tokyo is UTC+09:00." },
   time_convert: { output: { input_datetime: "2026-10-30T12:00:00", from_timezone: "UTC", to_timezone: "Asia/Tokyo", source: snapshot, target: snapshot }, text: "21:00 in Asia/Tokyo." },

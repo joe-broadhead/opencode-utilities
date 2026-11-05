@@ -8,7 +8,7 @@ import { privateDirectory, sqliteFiles } from "../../process/files.js"
 import { withLock } from "../../process/lock.js"
 import { BackendFailure } from "../../process/run.js"
 import { timeFailure } from "./failures.js"
-import { LIMITS, parse, fail, fence } from "../../domain/common.js"
+import { LIMITS, parse, fail, fence, zone } from "../../domain/common.js"
 import type { AdapterResult } from "../../domain/contract.js"
 import type { ModuleContext } from "../context.js"
 
@@ -23,6 +23,7 @@ export async function invoke<K extends TimeOperation>(op: K, input: TimeInput[K]
     const output = op.startsWith("timer_") ? await timers(op, input, ctx)
       : op === "holidays" ? await holidays(input as TimeInput["holidays"], ctx)
       : op === "business_days" ? await businessDays(input as TimeInput["business_days"], ctx)
+      : op === "current_time" ? parse(timeOutputs.current_time, { ...await ctx.run(timeArgv(op, input, paths(ctx))) as object, machine_timezone: machineZone() })
       : parse(timeOutputs[op], await ctx.run(timeArgv(op, input, paths(ctx))))
     return { output, text: JSON.stringify(output) }
   } catch (error) {
@@ -30,6 +31,8 @@ export async function invoke<K extends TimeOperation>(op: K, input: TimeInput[K]
     throw error instanceof BackendFailure ? timeFailure(error.report, op, input) ?? error : error
   }
 }
+/** The plugin process's own zone: its children run with TZ=UTC, so only this process knows it. */
+const machineZone = () => { const name = Intl.DateTimeFormat().resolvedOptions().timeZone; return zone.safeParse(name).success ? name : null }
 const paths = (ctx: ModuleContext) => ({ config: join(ctx.stage, "empty.toml"), store: ctx.store })
 
 /** Holidays, each marked nationwide or with its regions. With `region`, only the holidays that apply there. */
