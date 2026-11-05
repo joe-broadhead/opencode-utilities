@@ -4,7 +4,7 @@ import { lstat } from "node:fs/promises"
 import { randomUUID } from "node:crypto"
 import { stageSource, saveOutput, type OutputTarget } from "../../artifacts/audio.js"
 import { parse, fail, fence, text } from "../../domain/common.js"
-import { speechOutputs, ttsMeta } from "./contracts.js"
+import { speechOutputs, sttBridge, ttsMeta } from "./contracts.js"
 import type { AdapterResult, FailureCode, SpeechAssetRole, SynthesisInput, SynthesisOutput, TranscriptionInput } from "../../domain/contract.js"
 import type { Identity } from "../../process/files.js"
 import type { ModuleContext } from "../context.js"
@@ -51,7 +51,8 @@ export async function invoke<K extends EngineOperation>(op: K, input: EngineInpu
     return fail(code ?? "SPEECH_FAILED", code ? undefined : { message: `The speech engine failed (${result.error.code}).` })
   }
   if (op === "transcribe") {
-    const output = parse(speechOutputs.transcribe, result.result)
+    const bridge = parse(sttBridge, result.result)
+    const output = parse(speechOutputs.transcribe, { text: bridge.text, language: bridge.language, duration_secs: bridge.duration_secs, segments: bridge.segments.map(({ start, end, text }) => ({ start, end, text })) })
     return { output, text: `Transcript (${output.language ?? "unknown language"}, ${output.duration_secs.toFixed(1)} s):\n${output.text || "(no speech recognized)"}` }
   }
   const value = parse(z.strictObject({ meta: ttsMeta, outputPath: text(4096) }), result.result), target = job.output ?? fail("OUTPUT_PATH_MISMATCH")

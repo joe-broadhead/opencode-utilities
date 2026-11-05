@@ -397,7 +397,7 @@ describe("status", () => {
   test("a disabled module says how to turn it on, and its files are not inspected", async () => {
     const f = await setup({ runtime: { modules: { weather: false, time: true, speech: false } } }), digest = vi.spyOn(verifier, "digest")
     const status = await f.runtime.status()
-    expect(status.modules.weather).toEqual({ availability: "DISABLED", next: "Set modules.weather to true in the utilities.tools plugin options." })
+    expect(status.modules.weather).toEqual({ availability: "DISABLED", next: "Set modules.weather to true in the Utilities plugin options in opencode.json." })
     expect(status.modules.speech.availability).toBe("DISABLED"); expect(status.speech.assets).toEqual([])
     expect(digest.mock.calls.map(([path]) => path).filter(path => path.startsWith(f.cache))).toEqual([])
   })

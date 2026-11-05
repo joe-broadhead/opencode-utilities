@@ -49,7 +49,7 @@ await tools.utilities.speech_synthesize({ text: "hello", path: "out.wav" })
 ```
 
 - **Time.** Ten tools for the current time, zones, conversion, calendar facts, date maths, formatting, public holidays (offline, 2000–2030) and business days. With `country`, business days skip that country's nationwide public holidays as well as weekends. Holiday lists also show regional holidays, such as Scotland's in the UK, marked with `nationwide` and `regions`; with `country: "GB"`, pass `region` (England, Wales, Scotland or Northern Ireland) to count that nation's holidays as well.
-- **Timers.** `timer_set`, `timer_get`, `timer_list`, `timer_check` and `timer_delete`. Timers belong to the current project, the same in every folder of it, and never fire on their own: the model calls `utilities_timer_check`, or you look at `/utilities`. The deadline needs a zone offset. An existing name is an error unless you pass `replace: true`. For an alert that fires by itself, use OpenCode's `schedule_*` tools instead.
+- **Timers.** `timer_set`, `timer_get`, `timer_list`, `timer_check` and `timer_delete`. Timers belong to the current project, the same in every folder of it, and never fire on their own: the model calls `utilities_timer_check`, or you look at `/utilities`. The deadline needs a zone offset. An existing name is an error unless you pass `replace: true`. For an alert that fires by itself, use OpenCode's `schedule_*` tools instead, which need `"experimental": { "schedules": true }` in `opencode.json`.
 - **Weather.** Six tools: geocode, current, daily, hourly, a demand signal and a summary. Every result carries `Weather data by Open-Meteo.com (CC BY 4.0)`. Show it when you present the data. Responses are cached under `~/.cache/opencode-utilities/weather`: a forecast for 30 minutes, a place search for 30 days.
 - **Speech.** `speech_transcribe` reads a PCM16 WAV, mono or stereo, 8–48 kHz, up to 20 MiB and ten minutes. `speech_synthesize` writes a WAV file and returns its path; without `path` it goes under the plugin's state directory and is removed after 7 days.
 
@@ -182,7 +182,7 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 | `DOWNLOAD_FAILED` | Check the network or proxy, then retry, or pre-seed `speech.assetsDir`. |
 | `DISABLED` | Set `modules.<name>` to `true`. |
 | `WEATHER_KEY_REJECTED` | Run `/connect` and choose Open-Meteo, then enter a valid key, or run `opencode auth logout open-meteo` for the free tier. |
-| Weather `429` | The free-tier rate limit was reached. Wait, or add a commercial key. |
+| `BACKEND_FAILED` (rate limit) | Open-Meteo's free-tier rate limit was reached. Wait, or add a commercial key. |
 | `UNSAFE_PATH` | A file or folder inside the plugin's state, cache or install directory is a symbolic link. Replace it with the real file or folder. Links above those directories, such as macOS `/tmp` or Fedora Atomic `/home`, are fine. |
 | `TIME_NONEXISTENT`, `TIME_AMBIGUOUS` | The local time falls in a daylight-saving change. `TIME_AMBIGUOUS` gives both UTC offsets: add the one you mean to the `datetime`. |
 | `HOLIDAY_COVERAGE` | Holiday data covers 2000–2030. Use dates in that range, or leave out `country`. |

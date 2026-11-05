@@ -31,7 +31,7 @@ export const zone = z.string().max(80).regex(/^(?:UTC|[A-Za-z_+-]+(?:\/[A-Za-z0-
 
 /** What happened and the user's next step, per code. Messages never contain private input values. */
 export const FAILURES: { readonly [C in FailureCode]: readonly [message: string, hint?: string] } = {
-  DISABLED: ["This module is turned off in the plugin options.", "Set modules.<name> to true in the utilities.tools plugin options."],
+  DISABLED: ["This module is turned off in the plugin options.", "Set modules.<name> to true in the Utilities plugin options in opencode.json."],
   CLOSED: ["The Utilities plugin is shutting down.", "Retry after OpenCode has reloaded the plugin."],
   HOST_UNTESTED: [`Utilities supports OpenCode ${HOST_RANGE}.`, `Use ${TESTED_TEXT}, or set the plugin option allowUntestedHost: true to run anyway.`],
   UNSUPPORTED_PLATFORM: ["This module has no build for this platform.", "Call utilities_status to see which modules work here."],
@@ -40,7 +40,7 @@ export const FAILURES: { readonly [C in FailureCode]: readonly [message: string,
   INTEGRITY_MISMATCH: ["A program or model file does not match its pinned SHA-256 hash.", "Reinstall the plugin, then restart OpenCode."],
   CONTRACT_MISMATCH: ["The plugin's files, or a program's output, do not match what this plugin version expects.", "Reinstall the plugin. If it persists, report it with the utilities_status output."],
   SPEECH_ASSETS_MISSING: ["The speech engine or model files are not installed.", "Approve the utilities_speech_download request, run /utilities-speech-install, or pre-seed the files in speech.assetsDir."],
-  OPTIONS_INVALID: ["The plugin options are invalid.", "Fix the named option in the utilities.tools plugin options."],
+  OPTIONS_INVALID: ["The plugin options are invalid.", "Fix the named option in the Utilities plugin options in opencode.json."],
   STATUS_UNAVAILABLE: ["Utilities status could not be read.", "Run /utilities-status in a session to see the error, or check the OpenCode server log."],
   SKILLS_INVALID: ["A Utilities skill file is missing or malformed, so that skill was skipped.", "Reinstall the plugin."],
   INPUT_INVALID: ["The tool input is invalid.", "Correct the named fields and call the tool again."],

@@ -33,7 +33,7 @@ export function createWeatherKey(integration: Pick<Integration, "connection">) {
     },
     async status(): Promise<StatusView["weather"]> {
       const connection = await integration.connection.active(WEATHER_INTEGRATION)
-      if (!connection) return { tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION, next: `The free tier is for non-commercial use only and is rate-limited. For commercial use, add an API key: ${CONNECT}.` }
+      if (!connection) return { tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION, next: `The free tier is for non-commercial use only and is rate-limited. For commercial use, add an API key: run /connect and choose Open-Meteo.` }
       if (connection.status) return { tier: "commercial", key: "rejected", attribution: WEATHER_ATTRIBUTION, next: REJECTED }
       return { tier: "commercial", key: "connected", attribution: WEATHER_ATTRIBUTION }
     },

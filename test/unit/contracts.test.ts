@@ -97,6 +97,21 @@ test("the documented error tables list exactly the codes the plugin raises, in b
   // The tools RPC's own codes: those its Utilities block gives a next step, and no MCP-only one.
   expect(await codes("scripting.md")).toEqual(Object.keys(NEXT_STEPS).sort())
 })
+test("a holiday country is a two-letter pattern, not a 100-value enum, and an unknown one names the supported list (UTIL-R22)", () => {
+  const schema = JSON.stringify(z.toJSONSchema(timeInputs.holidays, { io: "input" }))
+  expect(schema).not.toContain('"ZW"'); expect(schema).toContain("^[A-Z]{2}$")
+  expect(timeInputs.holidays.safeParse({ mode: "list", year: 2026, country: "GB" }).success).toBe(true)
+  const unknown = timeInputs.holidays.safeParse({ mode: "list", year: 2026, country: "XX" })
+  expect(unknown.success).toBe(false); expect(unknown.error!.issues[0]!.message).toMatch(/^has no holiday data\. Supported: AE, AM, .*, GB, .*, ZW$/)
+  expect(timeInputs.business_days.safeParse({ mode: "next", date: "2026-01-01", country: "gb" }).error!.issues[0]!.message).toBe("must be an ISO 3166-1 alpha-2 code in capitals, such as GB")
+})
+test("every weather tool says to stop when the user declines, and to geocode a shared name first (it1 grading)", () => {
+  for (const tool of TOOL_DEFINITIONS.filter(t => t.module === "weather")) {
+    expect(tool.description, tool.name).toContain("if the user declines, say no weather was fetched and stop, without getting weather from another site or calling Open-Meteo directly")
+    const location = (z.toJSONSchema(tool.input, { io: "input" }) as { properties: Record<string, { description?: string }> }).properties.location
+    if (location) expect(location.description, tool.name).toContain("call utilities_weather_geocode first")
+  }
+})
 test("timezone explicitness, invalid dates, historical and holiday bounds", () => {
   expect(timeInputs.current_time.parse({})).toEqual({ timezones: ["UTC"], format: "rfc3339" })
   for (const date of ["2026-02-30", "1899-01-01", "2101-01-01"]) expect(timeInputs.calendar_query.safeParse({ date }).success).toBe(false)

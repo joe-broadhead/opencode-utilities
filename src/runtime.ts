@@ -176,7 +176,7 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
   }
 
   async function moduleStatus(module: Module, speech: Promise<Entry[]>): Promise<RuntimeStatus["modules"][Module]> {
-    if (!options.modules[module]) return { availability: "DISABLED", next: `Set modules.${module} to true in the utilities.tools plugin options.` }
+    if (!options.modules[module]) return { availability: "DISABLED", next: `Set modules.${module} to true in the Utilities plugin options in opencode.json.` }
     if (closed) return { availability: "CLOSED" }
     try {
       if (module !== "speech") await backends.executable(module as PlatformModule)
