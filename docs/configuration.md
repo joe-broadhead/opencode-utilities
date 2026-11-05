@@ -163,7 +163,7 @@ A saved "Always allow" is project-wide. It applies to every agent in that projec
 
 OpenCode creates agents that are defined only in user config, and agents added by later plugins, after this plugin's transform. They do not receive the ask rules. Status names such an agent only when its own rules would run a Utilities side effect (weather, a timer change, synthesis or the download) without asking: the last rule that matches is an allow. An agent whose rules ask or deny for all of them, such as one ending in `{ "action": "*", "resource": "*", "effect": "ask" }`, needs no fix and is not listed.
 
-Fix: put the block above **first** in that agent's own `permissions`, followed by any `utilities_*` rules you already have in the top-level `permissions`.
+Status's next step is: Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools. That is, the block above goes **first** in that agent's own `permissions`, followed by any `utilities_*` rules you already have in the top-level `permissions`.
 
 ```jsonc
 {
@@ -249,7 +249,7 @@ The status RPC starts with the fields every one of these plugins shares:
 | `unguardedAgents` | The agents without the default rules whose own rules would run a Utilities side effect without asking. Always present; `[]` when none. |
 | `nextStep` | Exactly the `Next step` row; `Nothing to do.` when nothing is needed. Missing speech files that download on first use, and the free weather tier, never set it. |
 
-Then Utilities' own: the platform package, per-module availability, the weather tier and key, speech file states (`missing`, `cached` or `pre-seeded`), voices, whether files are pre-seeded, the cache and output directories, the due timer count and the timer store, and the ask-by-default actions. An item's own `next` is its own next step. The `utilities_status` tool has the same fields, with `unguardedAgents` as a count, and a `nextStep` that points to `/utilities-status` for those agents.
+Then Utilities' own: the platform package, per-module availability, the weather tier and key, speech file states (`missing`, `cached` or `pre-seeded`), voices, whether files are pre-seeded, the cache and output directories, the due timer count and the timer store, and the ask-by-default actions. An item's own `next` is its own next step. The `utilities_status` tool has the same fields, with `unguardedAgents` as a count. For those agents, `nextStep` is: Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.
 
 ## Bounds
 

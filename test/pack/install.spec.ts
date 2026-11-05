@@ -170,7 +170,7 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
     expect(view.host).toEqual({ version, range: HOST_RANGE, tested: true })
     // `locked`, defined only in config, missed the block and denies only the time tools, so weather would run there unasked.
     expect(view).toMatchObject({ state: "ready", unguardedAgents: ["locked"] })
-    expect(view.nextStep).toStartWith("Put the block shown under Agents without default rules first in the own permissions of locked ")
+    expect(view.nextStep).toBe("Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.")
     expect(view.platform).toMatchObject({ target, ...platformPackage ? { package: platformPackage } : {} })
     expect(Object.keys(view.modules).sort()).toEqual([...MODULES].sort())
     expect(view.permissions.askByDefault).toEqual([...DEFAULT_ASK])

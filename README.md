@@ -191,7 +191,7 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 | `TIMER_NOT_FOUND` | Call `utilities_timer_list`. Timers are per project. |
 | `TIMER_STATE_UNKNOWN` | Read the timer with `utilities_timer_get` before trying again. |
 | `WAV_INVALID`, `WAV_UNSUPPORTED`, `SOURCE_REJECTED` | Convert the audio to a PCM16 WAV file of at most 20 MiB, not a symbolic link. |
-| Agents without default rules | Put the block shown by `/utilities-status` first in those agents' own permissions. See [Permissions](#permissions). |
+| Agents without default rules | Put the default rules shown by `/utilities-status` first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools. See [Permissions](#permissions). |
 
 The full list of codes is in [docs/configuration.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/configuration.md#errors). A script's errors from the tools RPC add a few codes of their own, listed in [Scripting](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md#errors). The plugin does not log tool input, paths, transcripts or timer text.
 

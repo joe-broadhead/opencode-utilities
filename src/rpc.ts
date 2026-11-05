@@ -66,7 +66,6 @@ const AVAILABILITY_TEXT: { readonly [A in Availability]: string } = {
 }
 const MODULE_TEXT: { readonly [M in Module]: string } = { time: "Time and timers", weather: "Weather", speech: "Speech" }
 const megabytes = (bytes: number) => `${Math.round(bytes / 1e6)} MB`
-const plural = (count: number, noun: string) => `${count} ${noun}${count === 1 ? "" : "s"}`
 
 export const STATUS_TITLE = "Utilities status"
 export const NOTHING_TO_DO = "Nothing to do."
@@ -80,9 +79,8 @@ const line = (label: string, text: string, ok: boolean): StatusLine => ({ label,
 export const rulesToPaste = (view: Pick<StatusView, "permissions">) =>
   ["[", ...view.permissions.askByDefault.map((action, i, all) => `  ${JSON.stringify({ action, resource: "*", effect: "ask" })}${i < all.length - 1 ? "," : ""}`), "]"].join("\n")
 
-/** The fix for agents without the default rules, in one sentence. The block is shown with them. */
-export const agentFix = (agents: readonly string[]) =>
-  `Put the block shown under Agents without default rules first in the own permissions of ${agents.join(", ")} (agents.<name>.permissions in opencode.json, or the agent's front matter), followed by your top-level rules for utilities_* actions.`
+/** The fix for agents without the default rules: one fixed sentence, the same in every plugin of this family. The agents row lists them, with the block. */
+export const AGENT_FIX = `Put the default rules shown by /${COMMANDS.status} first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.`
 
 /**
  * The single next step: the first item that needs the user, from blocking problems down. Optional items never drive
@@ -94,7 +92,7 @@ export function nextStep(view: Omit<StatusFacts, "version" | "permissions">) {
   const optional = view.modules.speech.availability === "UNSUPPORTED_PLATFORM" || view.modules.speech.availability === "SPEECH_ASSETS_MISSING" && !view.speech.preseeded
   const speech = optional ? undefined : view.modules.speech.next
   return view.host.next ?? view.platform.next ?? view.modules.time.next ?? view.modules.weather.next
-    ?? (view.weather.key === "rejected" ? view.weather.next : undefined) ?? (view.unguardedAgents.length ? agentFix(view.unguardedAgents) : undefined)
+    ?? (view.weather.key === "rejected" ? view.weather.next : undefined) ?? (view.unguardedAgents.length ? AGENT_FIX : undefined)
     ?? view.timers.next ?? speech ?? NOTHING_TO_DO
 }
 
@@ -144,11 +142,9 @@ const render = (lines: readonly StatusLine[]) => [STATUS_TITLE, ...lines.map(l =
 /** `/utilities-status`: every row, the block for agents without default rules, and the next step. */
 export const formatStatus = (view: StatusView) => render(statusLines(view, { paste: true }))
 
-/** The status tool's output: the same view, but the unguarded agents as a count, and their next step points to /utilities-status. */
+/** The status tool's output: the same view, with the unguarded agents as a count. Their next step already points to /utilities-status. */
 export function compactStatus(view: StatusView): StatusSummary {
-  const count = view.unguardedAgents.length
-  const pointer = `${plural(count, "agent")} lack the default ask rules. Run /${COMMANDS.status} for the agents and the block to paste.`
-  return { ...view, unguardedAgents: count, nextStep: count && view.nextStep === agentFix(view.unguardedAgents) ? pointer : view.nextStep }
+  return { ...view, unguardedAgents: view.unguardedAgents.length }
 }
 export function formatSummary(summary: StatusSummary) {
   const view: StatusView = { ...summary, unguardedAgents: [] }
