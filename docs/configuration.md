@@ -272,34 +272,50 @@ Then Utilities' own: the platform package, per-module availability, the weather 
 
 ## Errors
 
-A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next step: What to do.` and `metadata.code` plus `metadata.hint`. Host permission errors propagate unchanged and have no plugin code.
+A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next step: What to do.` and `metadata.code` plus `metadata.hint`. Host permission errors propagate unchanged and have no plugin code. Every code the plugin raises is in this table, and a unit test checks that both lists match.
 
 | Code | Next step |
 | --- | --- |
-| `OPTIONS_INVALID` | Fix the named option. |
+| `OPTIONS_INVALID` | Fix the named option in the Utilities plugin options in `opencode.json`. |
 | `STATUS_UNAVAILABLE` | Run `/utilities-status` in a session to see the error, or check the OpenCode server log. |
 | `SKILLS_INVALID` | A skill file is missing or malformed; setup skips it with this warning. Reinstall the plugin. |
 | `HOST_UNTESTED` | OpenCode is outside `>=2.2.3 <2.3.0`. Use 2.2.3, 2.2.4 or 2.2.5, or set `allowUntestedHost`. |
 | `DISABLED` | Set `modules.<name>` to `true`. |
+| `CLOSED` | The plugin is shutting down. Retry after OpenCode has reloaded it. |
 | `PLATFORM_PACKAGE_MISSING` | Reinstall so the platform package is present, or run `npm run native:build` in a checkout. |
 | `UNSUPPORTED_PLATFORM` | No build for this platform. Time and weather are unaffected when only speech lacks an engine. |
 | `BINARY_MISSING`, `INTEGRITY_MISMATCH` | Reinstall. For speech, delete the cache and run `/utilities-speech-install`. |
+| `CONTRACT_MISMATCH` | The plugin's files, or a program's output, do not match this version. Reinstall; if it persists, report it with the `utilities_status` output. |
 | `SPEECH_ASSETS_MISSING` | Approve the download, run `/utilities-speech-install`, or pre-seed. |
 | `DOWNLOAD_FAILED` | Check the network and retry, or pre-seed. |
 | `INPUT_INVALID` | Correct the named field. The message names the rule, such as the 2000–2030 holiday range, never the value. |
+| `INPUT_LIMIT`, `OUTPUT_LIMIT` | The input is over 32 KiB, or the result over 64 KiB. Send less, or narrow the request (fewer days, hours or results). |
+| `QUEUE_FULL` | Wait, then retry. Each module has its own queue. |
+| `CANCELLED` | The call was cancelled. Call the tool again if you still need the result. |
+| `DEADLINE_EXCEEDED` | The call ran past its time limit (see [Bounds](#bounds)). Retry, or narrow the request. |
+| `SPAWN_FAILED` | The program behind the tool could not start. Call `utilities_status`; reinstall if a module is unavailable. |
+| `BACKEND_FAILED` | A program reported another error. For weather the message says which: no such place, the rate limit, or a failed request. |
+| `BACKEND_JSON_INVALID`, `STDOUT_LIMIT`, `STDERR_LIMIT` | The program's output was unreadable or too large. Narrow the request and retry; if it persists, reinstall. |
 | `TIME_NONEXISTENT` | The local time is skipped by a daylight-saving change in `from_timezone`. Use a time outside the change, or add the UTC offset the user means. |
 | `TIME_AMBIGUOUS` | The local time happens twice at a daylight-saving change. The message gives both UTC offsets and instants. Add the offset the user means, or ask which one. |
 | `TIME_OFFSET_MISMATCH` | The `datetime` has an offset that `from_timezone` does not use at that moment. Remove it, or use the zone's own. |
 | `HOLIDAY_COVERAGE` | The call needs holiday data outside 2000–2030, for example the next business day after 2030-12-31. Use dates in range, or leave out `country` to count weekends only. |
 | `TIME_OUT_OF_RANGE` | The result is outside what the time engine supports. Use a smaller amount or a nearer date. |
-| `BACKEND_FAILED` | A program reported another error. For weather the message says which: no such place, the rate limit, or a failed request. |
-| `TIMER_EXISTS` | `utilities_timer_set` with `replace: true`. |
+| `TIMER_EXISTS` | Ask the user whether to overwrite it; then `utilities_timer_set` with `replace: true`, or another name. |
 | `TIMER_NOT_FOUND` | `utilities_timer_list`. |
+| `TIMER_QUOTA`, `TIMER_BYTE_QUOTA` | The project has 1,000 timers, or its store is full. Delete timers, or use shorter descriptions and tags. |
 | `TIMER_STATE_UNKNOWN` | Read the timer before retrying. The change may or may not have been saved. |
+| `STATE_FILE_UNSAFE` | A timer store file is a link or not a regular file. Remove it from the project's timer directory. |
 | `WEATHER_KEY_REJECTED` | Reconnect, or log out for the free tier. |
 | `SOURCE_REJECTED` | A regular `.wav` file, not a symbolic link, at most 20 MiB. |
+| `SOURCE_CHANGED` | The audio file changed while the call waited for approval. Call the tool again. |
 | `WAV_INVALID`, `WAV_UNSUPPORTED` | Convert to 16-bit PCM WAV. The hint includes an `ffmpeg` example. |
+| `AUDIO_DURATION_LIMIT` | The audio is over ten minutes. Split it into shorter files. |
+| `SPEECH_FAILED` | The speech engine failed; the message names the engine's code. Retry; if it persists, call `utilities_status`. |
+| `BRIDGE_CORRELATION`, `OUTPUT_PATH_MISMATCH` | The speech engine answered another request, or wrote somewhere unexpected. Retry; if it persists, delete the speech cache and run `/utilities-speech-install`. |
 | `OUTPUT_EXISTS` | Choose another path, or delete the file. The output is created exclusively. |
-| `QUEUE_FULL` | Wait, then retry. Each module has its own queue. |
 | `UNSAFE_PATH` | A file or folder inside the plugin's own directories is a symbolic link, or not the expected type. Replace the link with the real file or folder, or reinstall. Links above those directories are fine. See [Symbolic links](#symbolic-links). |
 | `STATE_NOT_PRIVATE` | Run `chmod 700` on the `stateRoot` directory. |
+| `FILE_REJECTED`, `FILE_CHANGED` | A file the plugin reads (its manifests or programs) is not a regular file, too large, or changed while being read. Retry; if it persists, reinstall. |
+| `UNSAFE_CLEANUP`, `CLEANUP_FAILED` | The plugin refused to delete a path outside its own folders, or could not remove its temporary files. Retry; leftovers go at the next start. Report `UNSAFE_CLEANUP` with the `utilities_status` output. |
+| `OPERATION_FAILED` | The tool failed unexpectedly. Retry; if it persists, call `utilities_status`. |
