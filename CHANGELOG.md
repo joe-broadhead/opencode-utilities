@@ -6,19 +6,18 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
+- Status names a skill of yours that takes the place of one of the plugin's skills because it has the same id, such as a `utilities-time` folder in `.opencode/skills`. OpenCode loads only one skill per id, so the plugin's own was never used. The new Skills row, the status RPC's `shadowedSkills` and the next step say which file to rename or move.
 - `utilities_time_now` returns `machine_timezone`, the IANA time zone of the machine OpenCode runs on, so "what time is it here?" and a timer for "9 tomorrow" need no question first. On a remote server it is the server's zone, not necessarily the user's.
 
 ### Fixed
 
 - The errors table in `docs/configuration.md` lists every code the plugin raises; 23 were missing, such as `TIMER_QUOTA`, `SOURCE_CHANGED` and `OPERATION_FAILED`. A test keeps it complete.
-
 - `utilities_speech_transcribe` checks that the file is a WAV it can read before it asks to download the speech files. Before, a file such as an `.m4a` asked for the 105 MB download first and then failed with `WAV_INVALID`. The download is now asked on its own, after any file read prompt.
 - `utilities_time_format`, `utilities_time_add` and `utilities_time_between` say that a date-time without `Z` or an offset is read as UTC. Before, nothing said so, and "3 pm my time as a Unix timestamp" came out hours off. Add the offset (`utilities_time_convert` gives it).
 
 ### Removed
 
 - `utilities_speech_cleanup`, its tools RPC method `speech_cleanup` and its `jelly` entry. Its fixed English rules did worse than the model rewriting the text itself, which is what to do instead: ask the model to tidy a transcript or dictation. On macOS x64, which has no speech engine, Utilities now has no speech tools and no speech skill.
-
 - The move of timers that 0.0.1 kept per folder. Timer reads and status no longer rename or copy timer stores, so they never write. 0.0.2 and later already moved those timers on first use in each folder; a 0.0.1 store that was never opened since stays on disk, unread, under `projects/` in the state folder.
 
 ### Changed
@@ -33,7 +32,6 @@ All notable changes to this project are documented here. The format follows [Kee
 - Next steps for options name "the Utilities plugin options in opencode.json" instead of "the utilities.tools plugin options".
 - The three skills are rewritten around the decisions models got wrong. Their descriptions name real requests ("how many working days in March", "will it rain this weekend", "transcribe clip.wav"). They teach: pass `region` for UK working days; stop when the user declines a weather prompt; geocode a shared place name first; make the transcription call and let its prompt ask for the download; tidy dictation without a tool. They link to the scripting guide on GitHub instead of a file the package does not ship.
 - `utilities_time_format` no longer takes `output_format: "unix-timestamp"`, which gave the same result as `epoch`. Use `epoch`.
-
 - Scripts: a tools RPC refusal by a deny rule now names the denied action and says to remove or narrow that rule (or add a later allow rule to the session). Before, it gave the same next step as an unanswered ask. The code is still `PERMISSION_DENIED`.
 
 ## [0.0.4] - 2026-11-04

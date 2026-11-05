@@ -38,6 +38,7 @@ const FACTS: StatusFacts = {
   weather: { tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION },
   speech: { assets: [], voices: [], preseeded: false, cacheDirectory: "/cache", outputDirectory: "/out" },
   timers: { directory: "/timers" },
+  shadowedSkills: [],
   permissions: { askByDefault: [...DEFAULT_ASK] },
 }
 const VIEW: StatusView = completeStatus(FACTS)
@@ -255,7 +256,7 @@ describe("skills", () => {
 describe("status rendering", () => {
   const unguarded = status({ unguardedAgents: ["reviewer", "mdagent"] })
   const labels = (text: string) => text.split("\n").slice(1).filter(l => /^[A-Z][\w ]*: /.test(l)).map(l => l.slice(0, l.indexOf(":")))
-  const S9 = ["Connection", "Account", "Access", "Platform", "Weather", "Time and timers", "Speech", "Speech files", "Timers", "Asks first", "Tools", "Agents without default rules", "OpenCode", "Next step"]
+  const S9 = ["Connection", "Account", "Access", "Platform", "Weather", "Time and timers", "Speech", "Speech files", "Timers", "Asks first", "Skills", "Tools", "Agents without default rules", "OpenCode", "Next step"]
 
   test("the command shows the S9 rows in order, the block one rule per line, and exactly one next step", () => {
     const text = formatStatus(unguarded)
@@ -371,13 +372,29 @@ describe("weather key and status", () => {
     expect(flagged.reports).toEqual([{ integrationID: "open-meteo", connection: connection({ status: "needs_auth", message: "x" }), status: undefined }])
     expect(await createWeatherKey(integration(undefined)).key()).toBeUndefined()
   })
+  test("status names a skill with one of the plugin's ids that takes the place of its own, with the fix (TRIAGE 8)", async () => {
+    const runtime = await fakeRuntimes().create({ location: { project: "p", directory: "/d", projectDirectory: "/d" }, authorize: async () => {}, modules: { weather: true, time: true, speech: true }, stateRoot: "/state", cacheRoot: "/cache" })
+    const own = [{ name: "utilities-time", path: "/pkg/skills/utilities-time/SKILL.md" }, { name: "utilities-weather", path: "/pkg/skills/utilities-weather/SKILL.md" }]
+    const view = await buildStatus({
+      version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) },
+      agents: async () => [], ownSkills: own,
+      skills: async () => [{ id: "utilities-time", path: "/elsewhere/skills/utilities-time/SKILL.md" }, { id: "utilities-weather", path: own[1]!.path }, { id: "other", path: "/x/SKILL.md" }],
+    })
+    expect(view.shadowedSkills).toEqual([{ name: "utilities-time", path: "/elsewhere/skills/utilities-time/SKILL.md" }])
+    expect(view.nextStep).toBe("Rename or move the skill at /elsewhere/skills/utilities-time/SKILL.md, which uses the id of the plugin's utilities-time skill, so OpenCode loads it instead of the plugin's own.")
+    expect(formatStatus(view)).toContain("\nSkills: utilities-time is replaced by /elsewhere/skills/utilities-time/SKILL.md\n")
+    // A skill list that fails only hides shadowed skills.
+    const failed = await buildStatus({ version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) }, agents: async () => [], ownSkills: own, skills: async () => { throw new Error("x") } })
+    expect(failed).toMatchObject({ shadowedSkills: [], nextStep: "Nothing to do." })
+  })
   test("the status joins runtime and host items and drops undefined fields", async () => {
     const runtime = await fakeRuntimes().create({ location: { project: "p", directory: "/d", projectDirectory: "/d" }, authorize: async () => {}, modules: { weather: true, time: true, speech: true }, stateRoot: "/state", cacheRoot: "/cache" })
     const view = await buildStatus({
       version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) },
       agents: async () => [{ id: "build", permissions: [{ action: "*", resource: "*", effect: "allow" }, ...DEFAULT_RULES] }, { id: "reviewer", permissions: [{ action: "*", resource: "*", effect: "allow" }] }],
+      ownSkills: [], skills: async () => [],
     })
-    expect(Object.keys(view)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "permissions"])
+    expect(Object.keys(view)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "skills", "permissions"].map(k => k === "skills" ? "shadowedSkills" : k))
     expect(view).toMatchObject({ state: "ready", unguardedAgents: ["reviewer"], nextStep: AGENT_FIX, permissions: { askByDefault: [...DEFAULT_ASK] } })
     expect(JSON.stringify(view)).toBe(JSON.stringify(JSON.parse(JSON.stringify(view))))
     expect("next" in view.host).toBe(false)
@@ -394,7 +411,7 @@ describe("setup", () => {
     agent: { transform: async () => registration, list: async () => ({ data: [] }) },
     tool: { transform: async () => { if (fail) throw new Error("registration failed"); return registration }, reload: async () => {} },
     rpc: { register: async (contract: { id: string }) => ({ dispose: async () => void disposed.push(contract.id) }) }, command: { transform: async () => registration },
-    skill: { transform: async () => registration, reload: async () => {} }, session: { synthetic: async () => {} },
+    skill: { transform: async () => registration, reload: async () => {}, list: async () => ({ data: [] }) }, session: { synthetic: async () => {} },
   }) as never
   test("the runtime's location carries the project ID, the location directory and the project directory", async () => {
     const runtimes = fakeRuntimes()
