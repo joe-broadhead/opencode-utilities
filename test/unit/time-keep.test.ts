@@ -68,6 +68,16 @@ test("date-times without seconds work everywhere the schemas accept them", async
   await expect(call("time_convert", { datetime: "2026-10-30T12:00:00.5", from_timezone: "UTC", to_timezone: "UTC" })).rejects.toMatchObject({ code: "INPUT_INVALID", message: "The tool input is invalid. datetime: may have fractional seconds only with an offset, such as 2026-10-29T15:30:00.5+01:00." })
 })
 
+test("time_now names this machine's time zone, whatever zones it reports (UTIL-R4)", async () => {
+  const before = process.env.TZ
+  try {
+    process.env.TZ = "Asia/Tokyo"
+    await expect(call("time_now", {})).resolves.toMatchObject({ output: { machine_timezone: "Asia/Tokyo", times: [{ timezone: "UTC" }] } })
+    process.env.TZ = "America/Sao_Paulo"
+    await expect(call("time_now", { timezones: ["Europe/London"] })).resolves.toMatchObject({ output: { machine_timezone: "America/Sao_Paulo" } })
+  } finally { if (before === undefined) delete process.env.TZ; else process.env.TZ = before }
+})
+
 test("a date-time without Z or an offset is read as UTC, and epoch is the one Unix timestamp format (UTIL-R2)", async () => {
   const naive = await call("time_format", { input: "2026-11-04T12:00:00", output_format: "epoch" })
   const utc = await call("time_format", { input: "2026-11-04T12:00:00Z", output_format: "epoch" })

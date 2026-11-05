@@ -11,7 +11,7 @@ const OPEN_METEO = "Data from Open-Meteo.com (CC BY 4.0); asks for permission by
 const DOWNLOAD = "The first speech call downloads the speech models (about 105 MB) after asking."
 const DESCRIPTIONS: { readonly [K in ToolName]: string } = {
   status: "Show what Utilities can do here: which modules work and why not, the weather tier and key, the speech model download, due timers, and which actions ask for permission. Use it when a Utilities tool is missing or fails.",
-  time_now: "Current date and time in one or more IANA time zones, with UTC offset, daylight-saving flag, weekday and ISO week. Use it for questions like \"what time is it in Tokyo?\".",
+  time_now: "Current date and time in one or more IANA time zones (default UTC), with UTC offset, daylight-saving flag, weekday and ISO week, plus machine_timezone, this machine's own zone. Use it for \"what time is it in Tokyo?\", or for \"here\" and \"my time\" by passing machine_timezone.",
   time_zones: "List IANA time zone names, optionally only one region such as Europe. Use it to find the exact zone name before converting.",
   time_zone_info: "Details of one time zone: current offset and abbreviation, whether daylight saving is in effect, and the next offset change.",
   time_convert: "Convert a local date and time from one time zone to another, handling daylight saving. It never guesses: a local time skipped by a daylight-saving change fails with TIME_NONEXISTENT, and one that happens twice fails with TIME_AMBIGUOUS, which gives both UTC offsets. Add the offset the user means to the datetime to choose one.",

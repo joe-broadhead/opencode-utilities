@@ -112,7 +112,10 @@ export const timerList = z.strictObject({ tag: s.optional(), count: n.min(0).max
 export const timerCheck = z.strictObject({ generated_at_utc: s, count: n.min(0).max(1000), timers: z.array(timerRecord).max(1000) }).refine(v => v.count === v.timers.length)
 const timerPage = { total: n.min(0).max(1000), count: n.min(0).max(100), nextOffset: n.min(0).max(999).nullable(), timers: z.array(timerRecord).max(100) }
 export const timeOutputs = {
-  current_time: z.strictObject({ generated_at_utc: s, format: s, times: z.array(snapshot).min(1).max(16) }),
+  current_time: z.strictObject({
+    generated_at_utc: s, format: s, times: z.array(snapshot).min(1).max(16),
+    machine_timezone: zone.nullable().describe("This machine's IANA time zone (where OpenCode runs), or null when unknown. Use it for \"here\" or \"my time\" unless the user names a zone or may be elsewhere."),
+  }),
   list_timezones: z.strictObject({ region: s.optional(), count: n.min(0).max(1000), timezones: z.array(s).max(1000) }).refine(v => v.count === v.timezones.length),
   timezone_info: z.strictObject({ timezone: s, current: snapshot, next_transition: z.strictObject({ transition_utc: s, transition_local: s, offset_before: s, offset_before_seconds: n, offset_after: s, offset_after_seconds: n, abbreviation_before: s.nullable(), abbreviation_after: s.nullable() }).nullable() }),
   convert_timezone: z.strictObject({ input_datetime: s, from_timezone: s, to_timezone: s, source: snapshot, target: snapshot }),

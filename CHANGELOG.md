@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- `utilities_time_now` returns `machine_timezone`, the IANA time zone of the machine OpenCode runs on, so "what time is it here?" and a timer for "9 tomorrow" need no question first. On a remote server it is the server's zone, not necessarily the user's.
+
 ### Fixed
 
 - `utilities_speech_transcribe` checks that the file is a WAV it can read before it asks to download the speech files. Before, a file such as an `.m4a` asked for the 105 MB download first and then failed with `WAV_INVALID`. The download is now asked on its own, after any file read prompt.
