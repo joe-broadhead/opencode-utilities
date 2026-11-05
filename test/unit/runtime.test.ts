@@ -382,6 +382,15 @@ describe("weather", () => {
     const error = await g.runtime.invoke("weather_current", { location: "Nowhere" }, invocation()).catch(e => e)
     expect(error).toMatchObject({ code: "BACKEND_FAILED", message: "Open-Meteo found no place with that name." }); expect(error.message + error.hint).not.toContain("Nowhere")
   })
+  test("the rate limit and any other request failure get their own text, per tier, without the location (UTIL-R25)", async () => {
+    const body = `record({}); process.stderr.write(JSON.stringify(argv.includes('Busy') ? { causes: ['API returned status 429 Too Many Requests for Busy'], error: 'weather request failed' } : { causes: ['connection reset while fetching Elsewhere'], error: 'weather request failed after 3 attempt(s)' })); process.exitCode = 1`
+    const free = await setup({ body }), paid = await setup({ body, runtime: { weatherKey: async () => "key" } })
+    await expect(free.runtime.invoke("weather_daily", { location: "Busy" }, invocation())).rejects.toMatchObject({ code: "BACKEND_FAILED", message: "Open-Meteo's rate limit was reached.", hint: expect.stringContaining("run /connect and choose Open-Meteo") })
+    await expect(paid.runtime.invoke("weather_daily", { location: "Busy" }, invocation())).rejects.toMatchObject({ code: "BACKEND_FAILED", hint: "Wait a moment and retry." })
+    const other = await free.runtime.invoke("weather_current", { location: "Elsewhere" }, invocation()).catch(e => e)
+    expect(other).toMatchObject({ code: "BACKEND_FAILED", message: "The Open-Meteo request failed.", hint: "Check the network and retry." })
+    expect(other.message + other.hint).not.toContain("Elsewhere")
+  })
 })
 
 describe("status", () => {
