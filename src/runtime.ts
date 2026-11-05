@@ -3,7 +3,7 @@ import { lstat, readdir, writeFile } from "node:fs/promises"
 import { dirname, extname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type * as z from "zod"
-import { identifySource, type OutputTarget } from "./artifacts/audio.js"
+import { identifySource, readSource, type OutputTarget } from "./artifacts/audio.js"
 import { Backends, detectTarget, packageJson, verifier } from "./domain/backends.js"
 import { LIMITS, bounded, deadline, fail, fence, parse, UtilitiesError, abortCode } from "./domain/common.js"
 import { AVAILABILITY, SPEECH_MODEL_ROLES, TOOLS, type AdapterResult, type Availability, type Invocation, type Module, type ModuleTool, type PermissionRequest, type PlatformModule, type Runtime, type RuntimeOptions, type RuntimeStatus, type SpeechAssetRole, type SpeechInstallOutput, type SynthesisInput, type TranscriptionInput } from "./domain/contract.js"
@@ -33,6 +33,8 @@ const files = (count: number) => `${count} file${count === 1 ? "" : "s"}`
 /** A call that passed availability checks, with the permission requests it needs. Nothing has been created yet. */
 interface Plan {
   readonly requests: PermissionRequest[]
+  /** The speech download request, asked on its own after `requests` and, for a transcription, after the source is checked. */
+  readonly download?: PermissionRequest
   readonly executable?: { readonly path: string; readonly sha256: string }
   readonly env?: Readonly<Record<string, string>>
   readonly commercial?: boolean
@@ -98,8 +100,7 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
       output = file ? { path: file.absolute, owned: false } : { path: join(paths.output, `${randomUUID()}.wav`), owned: true }
       requests = synthesisRequests(i.voice ?? DEFAULT_VOICE, i.text.length, file)
     }
-    if (missing.length) requests.push(assets.request(missing))
-    return { requests, missing, speech: { roles, ...source ? { source } : {}, ...output ? { output } : {} } }
+    return { requests, missing, ...missing.length ? { download: assets.request(missing) } : {}, speech: { roles, ...source ? { source } : {}, ...output ? { output } : {} } }
   }
 
   /** The admitted, approved part of a call. The module deadline starts here. */
@@ -174,7 +175,14 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
     // Permission errors propagate unchanged: no catch wraps this await.
     if (step.requests.length) await options.authorize(step.requests, { ...invocation, signal })
     fence(signal)
-    if (step.missing?.length) { await assets.download(step.missing, signal); changed() }
+    if (step.download) {
+      // A source that is not a usable WAV fails here, after its read was approved, so it never costs a 105 MB prompt.
+      const source = step.speech?.source
+      if (source) await readSource(source.path, source.identity ?? fail("SOURCE_REJECTED"), signal)
+      await options.authorize([step.download], { ...invocation, signal })
+      fence(signal)
+      await assets.download(step.missing!, signal); changed()
+    }
     return perform(tool, input, step, signal)
   }
 

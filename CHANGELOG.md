@@ -4,6 +4,10 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Fixed
+
+- `utilities_speech_transcribe` checks that the file is a WAV it can read before it asks to download the speech files. Before, a file such as an `.m4a` asked for the 105 MB download first and then failed with `WAV_INVALID`. The download is now asked on its own, after any file read prompt.
+
 ### Changed
 
 - Scripts: a tools RPC refusal by a deny rule now names the denied action and says to remove or narrow that rule (or add a later allow rule to the session). Before, it gave the same next step as an unanswered ask. The code is still `PERMISSION_DENIED`.
