@@ -1,6 +1,6 @@
 {
   "name": "@joe-broadhead/opencode-utilities",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Unofficial OpenCode plugin: weather, time, polled timers and local speech tools",
   "keywords": ["opencode", "opencode-plugin", "utilities"],
   "homepage": "https://github.com/joe-broadhead/opencode-utilities#readme",
@@ -22,16 +22,16 @@
     "test:host": "bun test test/host",
     "test:tui": "bun test test/tui",
     "test:pack": "bun test test/pack",
-    "lint": "node scripts/check-forbidden.mjs",
+    "lint": "node scripts/check-forbidden.mjs && node scripts/check-copies.mjs",
     "native:build": "bash scripts/native-build.sh",
     "native:ensure": "node scripts/native-ensure.mjs",
     "check": "npm run native:ensure && npm run typecheck && npm test && npm run build && npm run test:host && npm run test:tui && npm run lint && npm run test:pack"
   },
   "optionalDependencies": {
-    "@joe-broadhead/opencode-utilities-bin-darwin-arm64": "0.0.6",
-    "@joe-broadhead/opencode-utilities-bin-darwin-x64": "0.0.6",
-    "@joe-broadhead/opencode-utilities-bin-linux-x64-gnu": "0.0.6",
-    "@joe-broadhead/opencode-utilities-bin-linux-arm64-gnu": "0.0.6"
+    "@joe-broadhead/opencode-utilities-bin-darwin-arm64": "0.0.7",
+    "@joe-broadhead/opencode-utilities-bin-darwin-x64": "0.0.7",
+    "@joe-broadhead/opencode-utilities-bin-linux-x64-gnu": "0.0.7",
+    "@joe-broadhead/opencode-utilities-bin-linux-arm64-gnu": "0.0.7"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",
