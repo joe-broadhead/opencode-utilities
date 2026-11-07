@@ -43,11 +43,11 @@ Weather locations, timer text, speech text and audio, and file paths are private
 
 ## Scripts
 
-The tools RPC (`utilities.tools.tools`, see [docs/scripting.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md)) runs the tools that change nothing for a script, with no model. It adds no authority:
+The tools RPC (`utilities.tools.tools`, see [docs/scripting.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md)) runs the plugin's tools for a script, with no model. It adds no authority:
 
-- A script names a session that names an agent, and runs as them. A tool that the agent's or the session's rules hide from the model is refused. The tool then makes the same permission requests it makes for the model, checked against the agent's rules, the session's rules and saved approvals.
-- An ask on a script's call is denied, not prompted: no one is there to answer it. So weather and the speech download, which ask by default, need an allow rule. The plugin's permission hook changes only an ask on one of its own script calls in flight, only to a deny, and leaves every other call alone.
-- Timer writes, synthesis and any tool added later that writes are never methods, even with an allow rule.
+- A script names a session that names an agent, and runs as them. A call resolves the tool's action against that agent's rules and then the session's before anything runs, and the tool then makes the same permission requests it makes for the model.
+- Only a resolved `allow` runs. An `ask` is refused, because no one is there to answer it, and a `deny` is refused; both cost no tool call and no prompt. So weather, the timer writes, synthesis and the speech download, which ask by default, each need a prior allow rule. The plugin's permission hook changes only an inner ask on one of its own script calls in flight, only to a deny, and leaves every other call alone.
+- Every tool is a method, with a class; a saved **Always allow** does not authorise an ad-hoc script, because it is not part of those rules. A script's grant is a rule in config, or a Jobs run session.
 - The Open-Meteo key stays with the weather program; a script never receives it. Errors carry the same codes and messages as the tools, with no input values, keys or paths.
 - OpenCode's `execute.before` and `execute.after` tool hooks, from any plugin, do not run for a script's call, so another plugin's policy hook does not see it. A script's calls are not recorded in the session.
 - The RPC is reachable only by callers of the OpenCode server API, who already hold the server's full authority. The session is not a login: it scopes a script to what its agent may do.

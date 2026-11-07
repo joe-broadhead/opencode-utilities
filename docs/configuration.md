@@ -236,7 +236,7 @@ Use the engine name for the platform you run on. A hash mismatch or a missing fi
 | `/utilities-speech-install` | Asserts `utilities_speech_download`, then downloads missing files. |
 | `/utilities` | TUI dialog, palette "Utilities: Status". Reads the `status` RPC method only, when it opens, and on server, agent and Open-Meteo key events, which it hears only while open. Shows the same lines as `/utilities-status`. `r` refreshes, `Esc` closes. The key hint reads `r refresh · esc close`. |
 | RPC `status` | The `utilities.tools` RPC's only method. Returns the same status object. The TUI imports its contract from its own bundle; the package does not export it. |
-| RPC `utilities.tools.tools` | The tools RPC for scripts: `describe`, plus one method per tool that changes nothing, run as a session and its agent. Asks are refused, not prompted. Timer writes and synthesis are not methods. See [scripting.md](scripting.md). |
+| RPC `utilities.tools.tools` | The tools RPC for scripts: `describe`, plus one method per tool, run as a session and its agent. A call resolves the rule before dispatch: an ask is refused, not prompted, and only an allow runs. See [scripting.md](scripting.md). |
 
 The status RPC starts with the fields every one of these plugins shares:
 

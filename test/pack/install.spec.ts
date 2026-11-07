@@ -226,13 +226,17 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
       sessions.allowed = await create({ agent: "build", permissions: [rule("utilities_*", "allow")] })
     })
 
-    test("describes exactly the tools that change nothing; the writes and an unknown tool are no methods, even with an allow rule", async () => {
+    test("describes every tool with its class; a write is refused before it runs unless the session allows it", async () => {
       const { value } = await script(host, "describe", {})
       expect(value.methods.map((method: { name: string }) => method.name)).toEqual([...SCRIPT_TOOLS])
       for (const method of value.methods) expect(method).toMatchObject({ kind: "plugin", action: `utilities_${method.name}` })
       if (platformDir) for (const method of value.methods.filter((m: { name: string }) => /^(?:time|timer|weather)_/.test(m.name))) expect(method).toMatchObject({ available: true })
-      for (const name of ["timer_set", "timer_delete", "speech_synthesize", "unknown_tool"])
-        expect(await call("allowed", name, { name: "review", deadline: "2026-11-02T09:00:00Z", text: "hello" })).toMatchObject({ type: "rpc.method_not_found" })
+      expect(Object.fromEntries(value.methods.map((method: { name: string; class: string }) => [method.name, method.class]))).toMatchObject({
+        time_now: "read", timer_set: "write", timer_delete: "write", speech_synthesize: "export",
+      })
+      for (const name of ["timer_set", "timer_delete", "speech_synthesize"])
+        expect(await call("build", name, { name: "review", deadline: "2026-11-02T09:00:00Z", text: "hello" })).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
+      expect(await call("allowed", "unknown_tool", {})).toMatchObject({ type: "rpc.method_not_found" })
     })
 
     test("runs a read with the real time program as the session's agent, with no model turn", async () => {
@@ -257,7 +261,7 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
         const started = Date.now()
         const result = await call("build", method, method === "weather_current" ? { location: "Amsterdam" } : { path: "clip.wav" })
         expect(result).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
-        expect(result.message).toMatch(/cannot answer an approval prompt/)
+        expect(result.message).toMatch(/cannot answer/)
         expect(Date.now() - started).toBeLessThan(5000)
         // UTIL-6: the refusal names the ask that was refused, the download, not the transcription itself.
         if (method === "speech_transcribe") {

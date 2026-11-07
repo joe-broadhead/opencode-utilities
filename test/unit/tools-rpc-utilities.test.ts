@@ -3,8 +3,8 @@
 import { describe, expect, test, vi } from "vitest"
 import { MODULES, TOOLS, type Availability, type StatusView, type ToolName } from "../../src/domain/contract.js"
 import { UtilitiesError } from "../../src/domain/common.js"
-import { SCRIPT_EFFECTS, SCRIPT_TOOLS, scriptMethods } from "../../src/host/scripting.js"
-import { KNOWN_READS, NEXT_STEPS, pluginError, TOOLS_RPC_ID } from "../../src/host/tools-rpc.js"
+import { SCRIPT_TOOLS, scriptMethods } from "../../src/host/scripting.js"
+import { NEXT_STEPS, pluginError, TOOLS_RPC_ID } from "../../src/host/tools-rpc.js"
 import { failure } from "../host/runtime.js"
 import { INPUTS, SAMPLES } from "../host/samples.js"
 
@@ -19,23 +19,20 @@ function methods(modules = modulesWith({})) {
 }
 
 describe("Utilities' tools RPC", () => {
-  test("is utilities.tools.tools, with no MCP reads", () => {
+  test("is utilities.tools.tools, and every tool is a method with its class", () => {
     expect(TOOLS_RPC_ID).toBe("utilities.tools.tools")
-    expect(KNOWN_READS).toEqual([])
-  })
-
-  test("its methods are exactly the 21 tools that change nothing; timer writes and speech synthesis never are", () => {
-    expect([...SCRIPT_TOOLS]).toEqual([
-      "status", "time_now", "time_zones", "time_zone_info", "time_convert", "time_calendar", "time_add", "time_between", "time_format", "time_holidays", "time_business_days",
-      "timer_get", "timer_list", "timer_check",
-      "weather_geocode", "weather_current", "weather_daily", "weather_hourly", "weather_demand_signal", "weather_summary",
-      "speech_transcribe",
+    expect([...SCRIPT_TOOLS]).toEqual(Object.keys(TOOLS))
+    const list = methods().methods
+    expect(list.map(method => [method.name, method.class])).toEqual([
+      ["status", "read"],
+      ...["time_now", "time_zones", "time_zone_info", "time_convert", "time_calendar", "time_add", "time_between", "time_format", "time_holidays", "time_business_days"].map(name => [name, "read"]),
+      ["timer_set", "write"],
+      ...["timer_get", "timer_list", "timer_check"].map(name => [name, "read"]),
+      ["timer_delete", "write"],
+      ...["weather_geocode", "weather_current", "weather_daily", "weather_hourly", "weather_demand_signal", "weather_summary"].map(name => [name, "read"]),
+      ["speech_transcribe", "read"],
+      ["speech_synthesize", "export"],
     ])
-    const excluded = (Object.keys(TOOLS) as ToolName[]).filter(name => !SCRIPT_TOOLS.includes(name))
-    expect(excluded).toEqual(["timer_set", "timer_delete", "speech_synthesize"])
-    // By effect, so a tool added later that writes is never a method.
-    for (const name of excluded) expect(SCRIPT_EFFECTS.has(TOOLS[name].effect)).toBe(false)
-    expect([...SCRIPT_EFFECTS].sort()).toEqual(["compute", "network", "read-file", "read-state"])
   })
 
   test("each method carries the tool's permission action and its schemas as plain JSON Schema", () => {

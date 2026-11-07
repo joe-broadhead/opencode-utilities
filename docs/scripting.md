@@ -4,24 +4,27 @@ Unofficial plugin. Not affiliated with OpenCode or Open-Meteo.
 
 A script can call Utilities' tools with no model: a cron job, a shell script, or any program that can reach the OpenCode server. It uses the tools RPC, `utilities.tools.tools` (the plugin id `utilities.tools`, plus `.tools`), through `opencode api` or an OpenCode client.
 
-| Methods | The tools |
-| --- | --- |
-| `status` | `utilities_status`: the compact status, with the unguarded agents as a count |
-| `time_now`, `time_zones`, `time_zone_info`, `time_convert`, `time_calendar`, `time_add`, `time_between`, `time_format`, `time_holidays`, `time_business_days` | the ten time tools |
-| `timer_get`, `timer_list`, `timer_check` | the timer reads |
-| `weather_geocode`, `weather_current`, `weather_daily`, `weather_hourly`, `weather_demand_signal`, `weather_summary` | the six weather tools |
-| `speech_transcribe` | transcription |
-| `describe` | none: lists the methods, their permission actions, whether each can run here now, and each tool's input and output as JSON Schema |
+| Methods | The tools | Class |
+| --- | --- | --- |
+| `status` | `utilities_status`: the compact status, with the unguarded agents as a count | read |
+| `time_now`, `time_zones`, `time_zone_info`, `time_convert`, `time_calendar`, `time_add`, `time_between`, `time_format`, `time_holidays`, `time_business_days` | the ten time tools | read |
+| `timer_set` | sets a timer in the project | write |
+| `timer_get`, `timer_list`, `timer_check` | the timer reads | read |
+| `timer_delete` | deletes a timer | write |
+| `weather_geocode`, `weather_current`, `weather_daily`, `weather_hourly`, `weather_demand_signal`, `weather_summary` | the six weather tools | read |
+| `speech_transcribe` | transcription | read |
+| `speech_synthesize` | writes a WAV file | export |
+| `describe` | none: lists the methods, their classes, permission actions, whether each can run here now, and each tool's input and output as JSON Schema | – |
 
-Each method runs the tool's own path, with the same input, the same checks and the same permission requests as the tool the model calls. Only the tools that change nothing are methods: `timer_set`, `timer_delete` and `speech_synthesize` are never methods, even with an allow rule.
+Every tool is a method. Each runs the tool's own path, with the same input, the same checks and the same permission requests as the tool the model calls. The class says the worst thing a method can do; it never decides whether a call runs: the rules do.
 
 ## A script runs as a session
 
 Every call names a session, and the session must name an agent. The script runs as that agent, with exactly the access its model would have:
 
-- A tool that the agent's rules or the session's rules hide from the model is refused. OpenCode hides a tool when the last rule that matches its permission name, such as `utilities_time_now`, on resource `*` is a `deny`.
-- The tool then asks for what it needs, as it does for the model: weather asks for `utilities_weather_<tool>` on the Open-Meteo hosts, transcription asks for `read` (and `external_directory` outside the project), and the first speech call asks for `utilities_speech_download`. OpenCode checks each request against the agent's rules, the session's rules, then saved approvals.
-- No one answers a prompt for a script, so an `ask` is refused with `PERMISSION_DENIED` at once, and no prompt is left waiting. The default rules ask for weather and the speech download, so a script needs an allow rule for those. Time, timer reads and status ask for nothing.
+- The call resolves the tool's action, `utilities_<name>` on `*`, against the agent's rules and then the session's, with the host's order (the last matching rule wins). Only an `allow` runs. An `ask` is refused, because no one is there to answer the prompt, and a `deny` is refused; both cost nothing: no tool call and no prompt left waiting.
+- The tool then asks for what it needs, as it does for the model: weather asks for `utilities_weather_<tool>` on the Open-Meteo hosts, transcription asks for `read` (and `external_directory` outside the project), and the first speech call asks for `utilities_speech_download`, which is also refused unless the session allows it.
+- The default rules allow time, timer reads and status, and ask for weather, `timer_set`, `timer_delete`, `speech_synthesize` and the speech download. So a script that writes a timer, writes a file, or fetches weather needs a prior allow rule for that action.
 
 Create a session for the script once, with the agent it runs as, and keep its id (`data.id` in the result):
 
@@ -53,7 +56,7 @@ opencode api post /api/rpc/utilities.tools.tools/time_now -d '{"input":{
 }}'
 ```
 
-The tool's input is checked against its schema, as for the model. `describe` shows each method's input and output schemas, and whether it can run here now:
+The tool's input is checked against its schema, as for the model. `describe` shows each method's class, input and output schemas, and whether it can run here now. Pass a session to see each method's `permission` (`allow`, `ask` or `deny`), resolved as a call would be:
 
 ```sh
 opencode api post /api/rpc/utilities.tools.tools/describe -d '{"input":{}}'
@@ -65,15 +68,16 @@ A result is `{"output": <the tool's structured output>}`, as plain JSON: the sam
 
 ## Where a call runs
 
-`opencode api` sends no directory, so every call runs in the service's default location: your home directory, whatever directory you run it in. `--param location[directory]=<dir>` does not change that. This matters for timers, which belong to a project: `timer_list` and `timer_check` through `opencode api` read the timers of your home folder's project, not the current directory's. The session's own directory does not change it either.
-
-To run in a project, call the HTTP API yourself with `?location[directory]=<dir>`. The service's address and password are in `$XDG_STATE_HOME/opencode/service.json` (`~/.local/state/opencode/service.json`), and the user name is `opencode`:
+Run the command in the project whose agent you mean, and send the call to that location explicitly:
 
 ```sh
-curl -u "opencode:$PASSWORD" -H 'content-type: application/json' \
-  "$URL/api/rpc/utilities.tools.tools/timer_check?location%5Bdirectory%5D=%2Fpath%2Fto%2Fproject" \
+opencode api post /api/rpc/utilities.tools.tools/timer_check -H "x-opencode-directory:$PWD" \
   -d '{"input":{"sessionID":"ses_…","input":{}}}'
 ```
+
+Without it the call goes to the service's default location, your home directory, and fails `rpc.unavailable` if the plugin is not loaded there. The HTTP equivalents are the `location[directory]` query parameter and the same header. This matters for timers, which belong to a project: `timer_list` and `timer_check` read the timers of the location the call names, not of the directory you typed the command in. `describe` reports the plugin's `location` and a `locationHint`.
+
+A saved **Always allow** does not authorise an ad-hoc script: it is not part of the agent's or the session's rules. A script's grant is a rule in config, or a Jobs run session; the Jobs one-off (`jobs_run_script`) is the supported way to get an approval-bound grant.
 
 `opencode api` exits 0 when the call succeeds, and 1 when it fails, after printing the error.
 
@@ -85,11 +89,11 @@ A refusal or failure is the RPC error `failed`, with a message `CODE: what happe
 | --- | --- |
 | `SESSION_UNKNOWN` | OpenCode says the session does not exist. Any other failure to look the session up is OpenCode's own error. |
 | `SESSION_AGENT_REQUIRED` | The session names no agent, or an agent that does not exist. |
-| `PERMISSION_DENIED` | The agent's or the session's rules hide the tool, deny one of its requests, or ask for an approval. |
+| `PERMISSION_DENIED` | The agent's or the session's rules ask or deny the tool's action, or deny one of the requests the tool makes. The message says which. |
 | `CANCELLED` | The request was cancelled. |
 | Utilities' own codes | The tool failed as it would for the model, with the same code and next step: `INPUT_INVALID`, `TIMER_NOT_FOUND`, `WEATHER_KEY_REJECTED`, `SPEECH_ASSETS_MISSING`, a module's availability code, and the rest of the table in [configuration.md](configuration.md#errors). |
 
-OpenCode itself answers `rpc.invalid_input` for a body that is not the envelope above, with one issue per problem, such as `"extra" is not allowed`, `"input" is missing`, or `describe takes no input` for `describe` with anything but `{}`. It answers `rpc.method_not_found` for a method that does not exist, such as `timer_set`.
+OpenCode itself answers `rpc.invalid_input` for a body that is not the envelope above, with one issue per problem, such as `"extra" is not allowed`, `"input" is missing`, or `describe takes nothing, or {"sessionID":"<session>"}` for `describe` given anything else. It answers `rpc.method_not_found` for a method that does not exist.
 
 A `PERMISSION_DENIED` refusal names the action that was refused. When that is not the method's own, the message says so, as in `utilities_speech_transcribe needs utilities_speech_download, which was refused …`.
 - **An ask:** the next step names the allow rule to add.
@@ -97,8 +101,7 @@ A `PERMISSION_DENIED` refusal names the action that was refused. When that is no
 
 ## What scripts cannot do
 
-- Set or delete a timer, or synthesise speech, even with an allow rule.
-- Answer an approval prompt, or use a tool that asks.
+- Answer an approval prompt: an `ask` is refused. A write needs a prior allow rule.
 - Read the Open-Meteo key: the weather program gets it, the script never does.
 
 A script's calls write nothing to the session, and OpenCode's `execute.before` and `execute.after` tool hooks, from any plugin, do not run for them.

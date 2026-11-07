@@ -44,6 +44,15 @@ export const TOOLS = {
 export type ToolName = keyof typeof TOOLS
 export type EffectiveToolName = `${typeof NAMESPACE}_${ToolName}`
 
+/** What a tool can do, for the tools RPC's describe and a job's approval: the worst thing its call does. */
+export type MethodClass = "read" | "write" | "export"
+export function methodClass(name: ToolName): MethodClass {
+  const effect = TOOLS[name].effect
+  if (effect === "write-state") return "write"
+  if (effect === "write-file") return "export"
+  return "read"
+}
+
 // Permissions
 
 export const SPEECH_DOWNLOAD_ACTION = "utilities_speech_download"

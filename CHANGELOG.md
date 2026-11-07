@@ -2,6 +2,25 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- tools RPC v2: every known tool is scriptable under a prior explicit allow. `utilities_timer_set`, `utilities_timer_delete`
+  and `utilities_speech_synthesize` are methods now (a write, a write and an export), so a script can write with the
+  session's allow; the shared tools RPC module is updated in place and `scripts/check-copies.mjs` pins its v2 hash. Every
+  method carries a class, and `describe` reports it, plus each method's resolved `permission` when given a session.
+- A call resolves the rule before dispatch: only an `allow` runs, an `ask` is refused, and a `deny` is refused, with no
+  tool call and no prompt. A saved "Always allow" no longer authorises an ad-hoc script; its grant is a rule in config,
+  or a Jobs run session.
+- Script asserts now carry the same tool source id as a model call, so an inner `ask`, such as the speech download, is
+  refused and named instead of waiting for a prompt.
+
+### Added
+
+- A Code Mode host case for the writes (the permission audit's G4): a program that calls `timer_set` and
+  `speech_synthesize` asks for each, and with nobody present nothing runs and nothing is written.
+
 ## [0.0.7] - 2026-11-06
 
 ### Changed

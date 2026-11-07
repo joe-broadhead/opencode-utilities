@@ -80,6 +80,13 @@ async function codemode(sessionID: string, body: string) {
   if (!seen) throw new Error(`the program did not finish: ${message}`)
   return JSON.parse(seen[1]!) as Record<string, unknown>
 }
+/** Runs a Code Mode program through the host's own tool path unattended, and returns the message the run ended with. */
+async function codemodeMessage(sessionID: string, body: string): Promise<string> {
+  const code = `const seen = {}\n${body}\nthrow new Error("SEEN " + JSON.stringify(seen))`
+  return host.sdk.experimental.schedule.create({ sessionID, name: "utilities-g4", when: { in: "6 hours" }, if: { code }, prompt: "never wakes" } as never)
+    .then(() => "", (error: Error) => error.message)
+}
+
 /** Calls each tool once; `seen[name]` is the output's key count, or the error the program caught. */
 const program = (names: readonly ToolName[]) => names.map(name => `try { seen[${JSON.stringify(name)}] = Object.keys(await tools.utilities.${name}(${JSON.stringify(INPUTS[name])})).length } catch (error) { seen[${JSON.stringify(name)}] = String(error.message) }`).join("\n")
 const succeeded = (seen: Record<string, unknown>) => Object.fromEntries(Object.entries(seen).map(([name, value]) => [name, typeof value === "number" && value > 0 ? "ok" : value]))
@@ -160,6 +167,18 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
       const asked = await call(dirs.main, sessionID, tool, ["once"])
       expect(asked.requests.map(r => [r.action, r.resources, r.save])).toEqual([[`utilities_${tool}`, ["timer:review"], ["timer:*"]]])
     }
+  })
+
+  test("Code Mode asks for a timer write and a synthesised file, and with nobody present nothing runs (G4)", async () => {
+    const sessionID = await boot(dirs.main)
+    const before = runtime(dirs.main).calls.length
+    for (const tool of ["timer_set", "speech_synthesize"] as const) {
+      const message = await codemodeMessage(sessionID, program([tool]))
+      expect(message).toContain(`utilities_${tool}`)
+      expect(message).toMatch(/needs approval|Permission|nobody is present/i)
+    }
+    // The asks stopped the calls inside Code Mode: the runtime ran neither tool, so no timer and no WAV were written.
+    expect(runtime(dirs.main).calls.slice(before)).toEqual([])
   })
 
   test("the speech download asks before its first use, then the tool list reloads", async () => {
@@ -265,17 +284,25 @@ describe(`the tools RPC ${TOOLS_RPC_ID} on @opencode/sdk, host version ${HOST_VE
     sessions.resource = await create({ agent: "build", permissions: [rule("utilities_weather_*", "allow"), rule("utilities_weather_daily", "deny", "api.open-meteo.com")] })
   })
 
-  test("describes exactly the tools that change nothing; the writes and unknown tools are no methods, even with an allow rule", async () => {
+  test("describes every tool with its class; a write is refused before it runs unless the session allows it", async () => {
     const { value } = await script(directory, "describe", {})
     expect(value.id).toBe(TOOLS_RPC_ID)
     expect(value.methods.map((method: { name: string }) => method.name)).toEqual([...SCRIPT_TOOLS])
-    expect(SCRIPT_TOOLS).toHaveLength(21)
+    expect(SCRIPT_TOOLS).toHaveLength(24)
     for (const method of value.methods) expect(method).toMatchObject({ kind: "plugin", action: `utilities_${method.name}`, available: true, input: expect.any(Object), output: expect.any(Object) })
-    for (const name of ["timer_set", "timer_delete", "speech_synthesize", "unknown_tool"]) {
-      expect(SCRIPT_TOOLS).not.toContain(name as ToolName)
-      expect(await call("allowed", name, INPUTS[name as ToolName] ?? {})).toMatchObject({ type: "rpc.method_not_found" })
+    expect(Object.fromEntries(value.methods.map((method: { name: string; class: string }) => [method.name, method.class]))).toMatchObject({
+      time_now: "read",
+      timer_set: "write",
+      timer_delete: "write",
+      weather_current: "read",
+      speech_transcribe: "read",
+      speech_synthesize: "export",
+    })
+    for (const name of ["timer_set", "timer_delete", "speech_synthesize"] as const) {
+      expect(await call("build", name, INPUTS[name])).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
     }
     expect(runtime(directory).calls.filter(c => !SCRIPT_TOOLS.includes(c.tool))).toEqual([])
+    expect(await call("build", "unknown_tool", {})).toMatchObject({ type: "rpc.method_not_found" })
   })
 
   test("describe follows module availability: a method is available exactly when the model's tool is registered", async () => {
@@ -326,7 +353,7 @@ describe(`the tools RPC ${TOOLS_RPC_ID} on @opencode/sdk, host version ${HOST_VE
       const started = Date.now()
       const refused = await call("build", method)
       expect(refused).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
-      expect(refused.message).toMatch(/cannot answer an approval prompt/)
+      expect(refused.message).toMatch(/cannot answer/)
       expect(Date.now() - started).toBeLessThan(5000)
     }
     expect(await host.sdk.permission.list({ sessionID: sessions.build! })).toEqual([])

@@ -64,14 +64,15 @@ await tools.utilities.speech_synthesize({ text: "hello", path: "out.wav" })
 
 ### Scripts
 
-A script or a cron job can call the tools that change nothing (time, timer reads, weather, transcription and status) with no model, through `opencode api`. It runs as a session and its agent, under that agent's permission rules and the session's own. Weather and the speech download ask by default, and a script cannot answer a prompt, so they need an allow rule. Timer writes and synthesis are never scriptable.
+A script or a cron job can call the tools with no model, through `opencode api`. It runs as a session and its agent, under that agent's permission rules and the session's own. Every tool is a method; a write needs a prior explicit `allow` in the session's or the agent's rules, because an `ask` is refused when no one can answer it.
 
 ```sh
 opencode api post /api/rpc/utilities.tools.tools/time_now \
+  -H "x-opencode-directory:$PWD" \
   -d '{"input":{"sessionID":"ses_…","input":{"timezones":["Asia/Tokyo"]}}}'
 ```
 
-`opencode api` runs in the service's default location, your home directory, not the directory you run it in. So a script's timer reads see the timers of your home folder's project. To read a project's timers, call the HTTP API with `?location[directory]=<project folder>`. See [Scripting](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md).
+The header names the location whose plugin and session you mean; without it the call goes to your home directory's project, so a script's timer reads would see the wrong project's timers. See [Scripting](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md).
 
 ### Speech files
 
