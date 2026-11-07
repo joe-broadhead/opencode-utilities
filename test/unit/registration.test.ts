@@ -311,15 +311,15 @@ describe("status rendering", () => {
     expect(status({ modules: modulesWith({ speech: "SPEECH_ASSETS_MISSING" }) }).state).toBe("ready")
   })
 
-  test("tested hosts are 2.2.3, 2.2.4 and 2.2.5; another 2.2 release runs untested; outside the range needs allowUntestedHost (X1, INSTALL-4)", () => {
-    for (const version of ["2.2.3", "2.2.4", "2.2.5"]) expect(checkHost(version, false)).toEqual({ version, range: ">=2.2.3 <2.3.0", tested: true })
+  test("tested hosts are 2.2.3, 2.2.4, 2.2.5 and 2.2.6; another 2.2 release runs untested; outside the range needs allowUntestedHost (X1, INSTALL-4)", () => {
+    for (const version of ["2.2.3", "2.2.4", "2.2.5", "2.2.6"]) expect(checkHost(version, false)).toEqual({ version, range: ">=2.2.3 <2.3.0", tested: true })
     // S13: an untested release in the range sets up normally; only host.tested and the OpenCode row change.
-    const later = status({ host: checkHost("2.2.6", false) })
-    expect(later).toMatchObject({ state: "ready", host: { version: "2.2.6", tested: false }, nextStep: "Nothing to do." })
+    const later = status({ host: checkHost("2.2.99", false) })
+    expect(later).toMatchObject({ state: "ready", host: { version: "2.2.99", tested: false }, nextStep: "Nothing to do." })
     const allowed = status({ host: checkHost("2.3.0", true) })
     expect(allowed).toMatchObject({ state: "ready", host: { tested: false }, nextStep: expect.stringContaining("allowUntestedHost is set") })
-    expect(formatStatus(later)).toContain("OpenCode: 2.2.6 (untested; supported range >=2.2.3 <2.3.0)")
-    expect(() => checkHost("2.3.0", false)).toThrow("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0, found 2.3.0. Next step: Use OpenCode 2.2.3, 2.2.4 or 2.2.5, or set the plugin option allowUntestedHost: true to run anyway.")
+    expect(formatStatus(later)).toContain("OpenCode: 2.2.99 (untested; supported range >=2.2.3 <2.3.0)")
+    expect(() => checkHost("2.3.0", false)).toThrow("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0, found 2.3.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5 or 2.2.6, or set the plugin option allowUntestedHost: true to run anyway.")
     expect(formatStatus(status({ host: checkHost("2.3.0", true) }))).toContain("OpenCode: 2.3.0 (host untested: outside >=2.2.3 <2.3.0; allowUntestedHost is set)")
   })
 

@@ -2,14 +2,18 @@
 // @opencode/*: it points HOME, OPENCODE_TEST_HOME, the XDG variables and TMPDIR at a temporary root, and
 // changes into that root, so the host never reads or writes the user's real OpenCode state. Under Bun,
 // os.homedir() ignores a HOME changed after startup, which is why OPENCODE_TEST_HOME is set too.
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import { join, sep } from "node:path"
+import { fileURLToPath } from "node:url"
 import type { Plugin } from "@opencode/plugin"
 import type { OpenCode } from "@opencode/sdk"
 
-/** The version of the embedded host, the exact @opencode/sdk devDependency. The pack test runs every tested release. */
-export const HOST_VERSION = "2.2.3"
+/** The repository root, from this file, so a changed HOME or working directory does not move it. */
+const REPO = fileURLToPath(new URL("../..", import.meta.url))
+
+/** The version of the embedded host, read from the installed @opencode/sdk so it follows the lockfile or HOST_SDK_DIR. The pack test runs every tested release. */
+export const HOST_VERSION = (JSON.parse(readFileSync(join(REPO, "node_modules/@opencode/sdk/package.json"), "utf8")) as { version: string }).version
 // Never under the real home: OpenCode searches upward for .opencode/ folders, which would bring in the user's own
 // agents and skills. /private/tmp on macOS; the system temp folder elsewhere.
 const realHome = realpathSync(homedir())

@@ -3,8 +3,8 @@
 /** The supported OpenCode line. package.json `opencode.host` states the same range. */
 export const HOST_RANGE = ">=2.2.3 <2.3.0"
 /** The releases every host, pack and stock test runs on. The one list: the tests and CI read it too. */
-export const TESTED_HOSTS = ["2.2.3", "2.2.4", "2.2.5"] as const
-export const TESTED_TEXT = "OpenCode 2.2.3, 2.2.4 or 2.2.5"
+export const TESTED_HOSTS = ["2.2.3", "2.2.4", "2.2.5", "2.2.6"] as const
+export const TESTED_TEXT = "OpenCode 2.2.3, 2.2.4, 2.2.5 or 2.2.6"
 
 type Version = readonly [number, number, number]
 const parse = (value: string): Version | undefined => {

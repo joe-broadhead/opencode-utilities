@@ -391,7 +391,7 @@ describe("host compatibility and unload", () => {
     try {
       const location = { directory: project("untested", {}) }
       await untested.sdk.agent.list({ location })
-      expect(untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0, found 2.3.0. Next step: Use OpenCode 2.2.3, 2.2.4 or 2.2.5, or set the plugin option allowUntestedHost: true"))).toBe(true)
+      expect(untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0, found 2.3.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5 or 2.2.6, or set the plugin option allowUntestedHost: true"))).toBe(true)
       expect(refused.created).toHaveLength(0)
       expect(allowed.created).toHaveLength(1)
       const status = await untested.sdk.rpc(Utilities).status({}, { location })

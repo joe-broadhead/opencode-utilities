@@ -6,7 +6,7 @@ Unofficial; not affiliated with Open-Meteo. Weather data is from Open-Meteo.com 
 
 ## Requirements
 
-- OpenCode `>=2.2.3 <2.3.0`, tested on 2.2.3, 2.2.4 and 2.2.5. Another 2.2 release runs, and status calls it untested. Outside that range the plugin does not start, unless you set `allowUntestedHost`.
+- OpenCode `>=2.2.3 <2.3.0`, tested on 2.2.3, 2.2.4, 2.2.5 and 2.2.6. Another 2.2 release runs, and status calls it untested. Outside that range the plugin does not start, unless you set `allowUntestedHost`.
 - macOS 14 or later (arm64 or x64), or Linux (x64 or arm64) with glibc 2.39 or later, such as Ubuntu 24.04, Debian 13 or Fedora 40. macOS x64 has no speech engine, so it has no speech tools. Windows and musl are not supported.
 
 ## Install
@@ -174,7 +174,7 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 
 | State or code | What to do |
 | --- | --- |
-| `HOST_UNTESTED` | OpenCode is outside `>=2.2.3 <2.3.0`. Use 2.2.3, 2.2.4 or 2.2.5, or set `allowUntestedHost: true` and accept the warning. |
+| `HOST_UNTESTED` | OpenCode is outside `>=2.2.3 <2.3.0`. Use 2.2.3, 2.2.4, 2.2.5 or 2.2.6, or set `allowUntestedHost: true` and accept the warning. |
 | `OPTIONS_INVALID` | The message names the option. Fix it in the plugin entry and restart. |
 | `PLATFORM_PACKAGE_MISSING` | Reinstall the plugin so npm installs `@joe-broadhead/opencode-utilities-bin-<platform>` at the same version, then restart OpenCode. |
 | `UNSUPPORTED_PLATFORM` | There is no build for this OS or CPU. See [Requirements](#requirements). |
