@@ -29,10 +29,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=2",
     "build": "node scripts/build.mjs",
-    "test:host": "bun test test/host",
+    "test:host": "node scripts/host-tests.mjs",
     "test:tui": "bun test test/tui",
     "test:pack": "bun test test/pack",
-    "lint": "node scripts/check-forbidden.mjs && node scripts/check-copies.mjs",
+    "lint": "node scripts/check-forbidden.mjs && node scripts/check-copies.mjs && node scripts/check-icons.mjs && node scripts/check-workflows.mjs",
     "native:build": "bash scripts/native-build.sh",
     "native:ensure": "node scripts/native-ensure.mjs",
     "check": "npm run native:ensure && npm run typecheck && npm test && npm run build && npm run test:host && npm run test:tui && npm run lint && npm run test:pack"

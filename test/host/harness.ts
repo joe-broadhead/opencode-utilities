@@ -12,8 +12,14 @@ import type { OpenCode } from "@opencode/sdk"
 /** The repository root, from this file, so a changed HOME or working directory does not move it. */
 const REPO = fileURLToPath(new URL("../..", import.meta.url))
 
-/** The version of the embedded host, read from the installed @opencode/sdk so it follows the lockfile or HOST_SDK_DIR. The pack test runs every tested release. */
-export const HOST_VERSION = (JSON.parse(readFileSync(join(REPO, "node_modules/@opencode/sdk/package.json"), "utf8")) as { version: string }).version
+/**
+ * The version of the embedded host. `HOST_SDK_DIR` names another `@opencode/sdk` installed outside the lockfile, which
+ * is how `npm run test:host` runs the suite once per tested release; unset, it is the locked SDK.
+ */
+const SDK = process.env.HOST_SDK_DIR
+  ? join(process.env.HOST_SDK_DIR, "node_modules", "@opencode", "sdk")
+  : join(REPO, "node_modules/@opencode/sdk")
+export const HOST_VERSION = (JSON.parse(readFileSync(join(SDK, "package.json"), "utf8")) as { version: string }).version
 // Never under the real home: OpenCode searches upward for .opencode/ folders, which would bring in the user's own
 // agents and skills. /private/tmp on macOS; the system temp folder elsewhere.
 const realHome = realpathSync(homedir())

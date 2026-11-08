@@ -181,6 +181,16 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     expect(runtime(dirs.main).calls.slice(before)).toEqual([])
   })
 
+  test("Code Mode has no tool the plugin did not register, so an unknown name cannot run", async () => {
+    const sessionID = await boot(dirs.main)
+    // The host refuses the program before it runs: the name is not a tool this plugin registered.
+    const before = runtime(dirs.main).calls.length
+    const message = await codemodeMessage(sessionID, 'await tools.utilities.unknown_tool({})')
+    expect(message).toContain("Unknown Code Mode tool: utilities.unknown_tool")
+    expect(runtime(dirs.main).calls.slice(before)).toEqual([])
+    expect(runtime(dirs.main).calls.filter(c => !NAMES.includes(c.tool))).toEqual([])
+  })
+
   test("the speech download asks before its first use, then the tool list reloads", async () => {
     const sessionID = await boot(dirs.main)
     const speech = await call(dirs.main, sessionID, "speech_synthesize", ["once", "once"])
