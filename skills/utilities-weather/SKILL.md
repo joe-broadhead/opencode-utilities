@@ -5,7 +5,9 @@ description: Current weather and forecasts for a place from Open-Meteo through U
 
 # Weather
 
-Weather comes from Open-Meteo over the network, so each `utilities_weather_*` call asks the user for permission unless they have allowed it.
+Weather comes from Open-Meteo over the network. By default the call runs. A user rule can still deny it.
+
+Call shapes (`?` is optional): `weather_geocode({query, country?, count?})`, `weather_current({location, country?})`, `weather_daily({location, country?, days?})`, `weather_hourly({location, country?, hours?})`, `weather_demand_signal({location, country?, days?})`, `weather_summary({location, country?, days?})`.
 
 ## When the user declines
 
@@ -14,7 +16,7 @@ If the permission is declined, say that no weather was fetched, and stop. Don't 
 ## Pick the place
 
 - A clear name, such as "Lisbon", or coordinates such as `"38.72,-9.14"`, goes straight into `location`. Add `country` (for example `PT`) when it helps.
-- **For a name several places share,** such as "Springfield" or "Portland", call `utilities_weather_geocode` first. Show the matches and let the user choose (or say which one you chose and why), then pass its coordinates as `"lat,lon"`. Each call asks, so don't guess and retry.
+- **For a name several places share,** such as "Springfield" or "Portland", call `utilities_weather_geocode` first. Show the matches and let the user choose (or say which one you chose and why), then pass its coordinates as `"lat,lon"`. Don't guess and retry.
 
 ## Choose the tool
 

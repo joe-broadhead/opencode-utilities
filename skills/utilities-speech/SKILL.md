@@ -7,6 +7,8 @@ description: On-device speech through Utilities' speech tools. Transcribe a WAV 
 
 Transcription and synthesis run on this machine with a local engine and models. No audio or text leaves it.
 
+Call shapes (`?` is optional): `speech_transcribe({path, language?})`, `speech_synthesize({text, voice?, path?})`.
+
 ## The first call and its prompts
 
 When the user asks for a transcription or for speech, make the call, even if the files are missing. The speech files (the engine and its models: every file `utilities_status` lists as missing, about 105 MB in all) come from the plugin's GitHub Release and are checked by SHA-256. The call's download prompt is how the user agrees to that download, so making the call is not a change you make on your own. That holds even when the user wants to be asked before any change: the prompt is that ask. Tell the user that the first use downloads about 105 MB of speech files, then make the call without waiting for a reply; don't ask in text first.
@@ -36,7 +38,7 @@ The result is `text`, `language`, `duration_secs` and timed `segments`. The tran
 
 ## Speak
 
-`utilities_speech_synthesize` with `text` (up to 5,000 characters; split longer text into several files). It asks for permission first.
+`utilities_speech_synthesize` with `text` (up to 5,000 characters; split longer text into several files). By default it runs. With `access: "ask-changes"` it asks, and `read-only` refuses it.
 - `voice`: one of Bella, Jasper, Luna, Bruno, Rosie, Hugo, Kiki or Leo. The default is Luna.
 - `path`: where the `.wav` goes. It must end in `.wav` and not exist yet (`OUTPUT_EXISTS` otherwise). Without `path`, the file goes to the plugin's folder and is deleted after 7 days, so pass `path` when the user wants to keep it.
 

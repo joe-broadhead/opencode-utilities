@@ -72,7 +72,7 @@ describe("tools", () => {
     expect(toolRegistrable("speech_synthesize", modulesWith({ speech: "DISABLED" }))).toBe(false)
   })
 
-  test("the namespace text lists the call of every registered tool, on one line, so Code Mode needs no search (it3 grading)", () => {
+  test("the namespace text names the skills and stays short, on one line", () => {
     const describe = (availability: Parameters<typeof modulesWith>[0]) => {
       const { namespaces, editor } = toolEditor()
       toolTransform({ ...sources(), modules: () => modulesWith(availability) })(editor)
@@ -81,32 +81,24 @@ describe("tools", () => {
     const all = describe({})
     expect(all).not.toContain("\n")
     expect(all).toContain("tools.utilities.<name>(input)")
-    for (const call of [
-      "time_now({timezones?, format?})",
-      "time_convert({datetime, from_timezone, to_timezone})",
-      `time_holidays({mode: "check", date, country, region?} | {mode: "list", year, country, region?})`,
-      `time_business_days({mode: "between", from, to, country?, region?} | {mode: "next" | "prev", date, country?, region?})`,
-      "timer_check({offset?, limit?})",
-      "weather_geocode({query, country?, count?})",
-      "weather_daily({location, country?, days?})",
-      "speech_transcribe({path, language?})",
-      "speech_synthesize({text, voice?, path?})",
-      "status({})",
-    ]) expect(all).toContain(call)
-    for (const name of Object.keys(TOOLS)) expect(all, name).toMatch(new RegExp(`\\b${name}\\(\\{`))
+    expect(all).toContain("utilities-time")
+    expect(all).toContain("utilities-weather")
+    expect(all).toContain("utilities-speech")
+    expect(all.length).toBeLessThan(800)
     expect(all).toContain("pass region (England, Wales, Scotland or Northern Ireland)")
     expect(all).toContain("If the user declines a weather call, say no weather was fetched and stop.")
     const noSpeech = describe({ speech: "UNSUPPORTED_PLATFORM", weather: "DISABLED" })
     expect(noSpeech).not.toMatch(/speech_|weather_|weather call/)
-    expect(noSpeech).toContain("time_now({timezones?, format?})")
+    expect(noSpeech).toContain("utilities-time")
+    expect(noSpeech).not.toContain("utilities-weather")
   })
 
-  test("tools use the effective name as their permission and pin the three entry points", () => {
+  test("tools use the effective name as their permission and pin none", () => {
     const { added, editor } = toolEditor()
     toolTransform(sources())(editor)
     expect(added.map(t => t.name)).toEqual(Object.keys(TOOLS))
     for (const tool of added) expect(tool.options).toMatchObject({ namespace: "utilities", permission: `utilities_${tool.name}` })
-    expect(added.filter(t => t.options.pinned).map(t => t.name)).toEqual(["time_now", "time_convert", "weather_current"])
+    expect(added.filter(t => t.options.pinned)).toEqual([])
   })
 
   test("a call passes the invocation to the runtime and returns its output and text", async () => {

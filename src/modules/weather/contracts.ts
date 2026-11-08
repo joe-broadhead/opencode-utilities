@@ -3,7 +3,7 @@ import { text, finite, integer } from "../../domain/common.js"
 import { WEATHER_ATTRIBUTION, type GeocodeOutput, type WeatherOutput } from "../../domain/contract.js"
 
 const country = z.string().regex(/^[A-Z]{2}$/).optional().describe("ISO 3166-1 alpha-2 country code that narrows the place search, for example GB.")
-const location = text(256).trim().min(1).describe("Place name, for example \"Cape Town\", or coordinates as \"latitude,longitude\", for example \"-33.92,18.42\". For a name several places share, such as \"Springfield\", call utilities_weather_geocode first and let the user choose: each call asks, so don't try several guesses.")
+const location = text(256).trim().min(1).describe("Place name, for example \"Cape Town\", or coordinates as \"latitude,longitude\", for example \"-33.92,18.42\". For a name several places share, such as \"Springfield\", call utilities_weather_geocode first and let the user choose. Don't guess and retry.")
 const days = integer.min(1).max(16).default(7).describe("Number of days to forecast, 1-16. Default 7.")
 export const weatherInputs = {
   geocode: z.strictObject({

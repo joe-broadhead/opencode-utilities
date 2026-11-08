@@ -27,7 +27,7 @@ test("the tool table is the contract's 24 tools, each with a description, bounde
   expect(TOOL_DEFINITIONS.map(t => t.name)).toEqual(Object.keys(TOOLS))
   expect(TOOL_DEFINITIONS).toHaveLength(24)
   expect(TOOL_DEFINITIONS.filter(t => t.name.startsWith("timer_")).map(t => t.name)).toEqual(["timer_set", "timer_get", "timer_list", "timer_check", "timer_delete"])
-  expect(TOOL_DEFINITIONS.filter(t => t.pinned).map(t => t.name)).toEqual(["time_now", "time_convert", "weather_current"])
+  expect(TOOL_DEFINITIONS.filter(t => t.pinned)).toEqual([])
   for (const tool of TOOL_DEFINITIONS) {
     expect(tool.module).toBe((TOOLS[tool.name] as { module?: string }).module)
     expect(tool.description.length, tool.name).toBeGreaterThan(60)

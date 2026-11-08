@@ -6,9 +6,9 @@ import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { Model, Plugin, Provider } from "@opencode/plugin"
 import { z } from "zod"
 import { DEFAULT_ASK, TOOLS, type ToolName } from "../../src/domain/contract.js"
-import type { Plugin } from "@opencode/plugin"
 import { createPlugin } from "../../src/host/plugin.js"
 import { DEFAULT_RULES, defaultRules } from "../../src/host/permissions.js"
 import { SCRIPT_TOOLS } from "../../src/host/scripting.js"
@@ -116,7 +116,7 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
       const schema = z.toJSONSchema(tool.input as z.ZodType, { io: "input" }) as { properties?: Record<string, { description?: string }>; oneOf?: { properties: Record<string, { description?: string }> }[]; anyOf?: { properties: Record<string, { description?: string }> }[] }
       for (const shape of [schema, ...(schema.oneOf ?? schema.anyOf ?? [])]) for (const [field, property] of Object.entries(shape.properties ?? {})) expect(`${tool.id}.${field}: ${property.description ?? ""}`).toMatch(/: \S/)
     }
-    expect(registered.filter(t => t.options?.pinned).map(t => t.id).sort()).toEqual(["utilities_time_convert", "utilities_time_now", "utilities_weather_current"])
+    expect(registered.filter(t => t.options?.pinned)).toEqual([])
     const skills = await host.sdk.skill.list({ location: { directory: dirs.main } })
     expect(skills.data.map((s: { id: string }) => s.id).filter((id: string) => id.startsWith("utilities")).sort()).toEqual(["utilities-speech", "utilities-time", "utilities-weather"])
     const commands = await host.sdk.command.list({ location: { directory: dirs.main } })
@@ -411,6 +411,87 @@ describe(`the tools RPC ${TOOLS_RPC_ID} on @opencode/sdk, host version ${HOST_VE
       expect(await script(directory, "time_now", envelope)).toMatchObject({ type: "rpc.invalid_input" })
   })
 })
+
+describe("the Code Mode catalogue", () => {
+  test("the utilities section is at most 1,000 tokens", async () => {
+    const directory = project("catalogue", {})
+    const previous = process.cwd()
+    process.chdir(directory)
+    const mock = startCatalogueMock()
+    const filler = Plugin.define({
+      id: "utilities.catalogue.filler",
+      async setup(ctx) {
+        const providerID = Provider.ID.make("mock")
+        await ctx.provider.transform(editor => {
+          editor.add({
+            info: { ...Provider.Info.empty(providerID), name: "Mock", activation: "enabled", package: ["@opencode", "ai", "providers", "openai-compatible"].join("/"), settings: { baseURL: mock.baseURL, apiKey: "mock" } } as never,
+            models: [{ ...Model.Info.default(providerID, Model.ID.make("m1")), name: "Mock 1" }],
+          })
+        })
+        await ctx.model.transform(editor => editor.default.set("mock", "m1"))
+        await ctx.tool.transform(editor => {
+          editor.namespace({ name: "filler", description: "Spends the catalogue budget." })
+          editor.add({
+            name: "pad",
+            description: "pad",
+            input: z.object({ note: z.string().describe("x".repeat(9000)) }),
+            options: { namespace: "filler", permission: "filler_pad", pinned: true },
+            execute: async () => ({ content: "ok" }),
+          } as never)
+        })
+      },
+    })
+    let catalogueHost: Awaited<ReturnType<typeof startHost>> | undefined
+    try {
+      catalogueHost = await startHost([createPlugin({ createRuntime: runtimes.create, packageRoot }), filler])
+      const session = await catalogueHost.sdk.session.create({ agent: "build", location: { directory } })
+      await catalogueHost.sdk.session.prompt({ sessionID: session.id, text: "Reply with ok." })
+      const deadline = Date.now() + 30_000
+      while (!mock.text().includes("- utilities (") && Date.now() < deadline) await Bun.sleep(50)
+      const lines = mock.text().split("\n")
+      const start = lines.findIndex(line => line.startsWith("- utilities ("))
+      const taken = start < 0 ? [] : [lines[start]!]
+      for (let i = start + 1; i < lines.length && lines[i]!.startsWith("  "); i++) taken.push(lines[i]!)
+      const text = taken.join("\n")
+      expect(text.startsWith("- utilities (")).toBe(true)
+      expect(Math.round(text.length / 4)).toBeLessThanOrEqual(1000)
+      expect(text).toContain("utilities-time")
+    } finally {
+      process.chdir(previous)
+      mock.stop()
+      await catalogueHost?.sdk.close()
+    }
+  })
+})
+
+function startCatalogueMock() {
+  let captured = ""
+  const chunk = (delta: Record<string, unknown>, finish: string | null = null) =>
+    `data: ${JSON.stringify({ id: "mock", object: "chat.completion.chunk", created: 0, model: "m1", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`
+  const server = Bun.serve({
+    port: 0,
+    hostname: "127.0.0.1",
+    idleTimeout: 0,
+    async fetch(request) {
+      const url = new URL(request.url)
+      if (url.pathname.endsWith("/models")) return Response.json({ object: "list", data: [{ id: "m1", object: "model", owned_by: "mock" }] })
+      if (!url.pathname.endsWith("/chat/completions")) return new Response("not found", { status: 404 })
+      const body = await request.json() as { messages?: { role: string; content?: unknown }[] }
+      captured = (body.messages ?? []).filter(message => message.role === "system").map(message => typeof message.content === "string" ? message.content : "").join("\n\n")
+      return new Response(new ReadableStream({
+        start(controller) {
+          const send = (line: string) => controller.enqueue(new TextEncoder().encode(line))
+          send(chunk({ role: "assistant", content: "" }))
+          send(chunk({ content: "ok" }))
+          send(chunk({}, "stop"))
+          send("data: [DONE]\n\n")
+          controller.close()
+        },
+      }), { headers: { "content-type": "text/event-stream" } })
+    },
+  })
+  return { baseURL: `http://127.0.0.1:${server.port}/v1`, stop: () => server.stop(true), text: () => captured }
+}
 
 describe("host compatibility and unload", () => {
   test("an untested host is refused, and allowUntestedHost runs it with a warning in the status", async () => {

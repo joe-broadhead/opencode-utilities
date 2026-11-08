@@ -1,11 +1,13 @@
 ---
 name: utilities-time
-description: Exact answers for times, time zones, dates, public holidays and working days, and polled project timers, from Utilities' offline tools. Use it for "what time is it in Tokyo", "3pm London in New York", "is Monday a bank holiday", "how many working days in March", "next business day after Friday", "90 days from today", or "remind me at 9 tomorrow", instead of counting yourself, the shell's date, or a web search.
+description: Exact answers for times, time zones, dates, public holidays and working days, and polled project timers, from Utilities' offline tools. Use it for "what time is it in Tokyo", "3pm London in New York", "is Monday a bank holiday", "how many working days in March", "next business day after Friday", "90 days from today", or a project timer to check, instead of counting yourself, the shell's date, or a web search.
 ---
 
 # Time, dates and timers
 
 Use the Utilities time tools below whenever a date or time matters. Mental arithmetic and the shell's `date` get daylight saving, holidays and weekday counts wrong.
+
+Call shapes (`?` is optional): `status({})`, `time_now({timezones?, format?})`, `time_zones({region?})`, `time_zone_info({timezone})`, `time_convert({datetime, from_timezone, to_timezone})`, `time_calendar({date})`, `time_add({date, operation, amount, unit})`, `time_between({from, to})`, `time_format({input, output_format})`, `time_holidays({mode: "check", date, country, region?} | {mode: "list", year, country, region?})`, `time_business_days({mode: "between", from, to, country?, region?} | {mode: "next" | "prev", date, country?, region?})`, `timer_set({name, deadline, description?, tags?, replace?})`, `timer_get({name})`, `timer_list({tag?, offset?, limit?})`, `timer_check({offset?, limit?})`, `timer_delete({name})`.
 
 ## Times and zones
 
@@ -39,7 +41,7 @@ Example: working days in April 2026 for a London team means `{mode: "between", f
 
 Timers belong to the current project and never alert on their own: they are checked, not pushed.
 
-1. `utilities_timer_set` with a `name` and a `deadline` that has `Z` or an offset, such as `2026-11-02T09:00:00+01:00`. For "9 tomorrow", take the date from `utilities_time_now` and the offset of the user's zone (`machine_timezone`, unless they said another) from `utilities_time_convert`. It asks for permission.
+1. `utilities_timer_set` with a `name` and a `deadline` that has `Z` or an offset, such as `2026-11-02T09:00:00+01:00`. For "9 tomorrow", take the date from `utilities_time_now` and the offset of the user's zone (`machine_timezone`, unless they said another) from `utilities_time_convert`. By default it runs. With `access: "ask-changes"` it asks, and `read-only` refuses it. A timer does not wake an agent: check it with `utilities_timer_check`.
 2. `TIMER_EXISTS`: ask the user before you overwrite it with `replace: true`, or choose another name.
 3. `utilities_timer_check` shows what is due or overdue. Call it when the user asks about reminders. `utilities_timer_get`, `utilities_timer_list` (optionally by `tag`) and `utilities_timer_delete` manage them.
 4. If the timer state is unknown (`TIMER_STATE_UNKNOWN`), read the timer before you retry.

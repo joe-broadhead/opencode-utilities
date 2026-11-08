@@ -6,6 +6,9 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- The Code Mode catalogue no longer shows tool signatures. The namespace text names the skills (`utilities-time`, `utilities-weather`, `utilities-speech`), which hold the call shapes. Nothing is pinned.
+- `utilities-time` no longer claims "remind me". A project timer is checked; it does not wake an agent.
+
 - **Every tool is allowed by default**, the family's new policy: the plugin inserts an allow for each tool it registers,
   and for the `utilities_*` namespace, so a tool a later release adds runs at once. The new `access` option restricts
   it: `"ask-changes"` asks for the timer writes, synthesis and the speech download, and `"read-only"` denies them; the

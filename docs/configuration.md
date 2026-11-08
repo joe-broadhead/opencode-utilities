@@ -71,7 +71,7 @@ The refusal text is: `HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0,
 
 ## Tools
 
-Effective name `utilities_<name>`. `options.permission` is that name, so a deny with resource `*` hides the tool. Code Mode is on. Pinned: `utilities_time_now`, `utilities_time_convert`, `utilities_weather_current`.
+Effective name `utilities_<name>`. `options.permission` is that name, so a deny with resource `*` hides the tool. Code Mode is on. None are pinned: the skills hold the call shapes, and `search({ namespace: "utilities", query })` finds a tool.
 
 Only available modules are registered. Transcription and synthesis stay registered while their files are merely missing, so the first call can ask to download them. A disabled module, an unsupported platform, or a failed integrity check does not register that module's tools. Availability changes (a finished download, for example) reload the tool list.
 
