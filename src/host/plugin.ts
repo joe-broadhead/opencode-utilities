@@ -51,9 +51,10 @@ export function createPlugin({ createRuntime, packageRoot }: PluginSources): Plu
           version, host, runtime, weather, agents: async () => (await ctx.agent.list()).data,
           ownSkills: skills.map(skill => ({ name: skill.id, path: skill.info.path })),
           skills: async () => (await ctx.skill.list({ location: { directory: ctx.location.directory } })).data,
+          access: config.access,
         })
         await registerWeatherIntegration(ctx.integration)
-        await ctx.agent.transform(insertDefaultRules)
+        await ctx.agent.transform(insertDefaultRules(config.access))
         const sources = { runtime, weather, status, modules: () => modules }
         await ctx.tool.transform(toolTransform(sources))
         await ctx.rpc.register(Utilities, {

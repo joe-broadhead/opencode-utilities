@@ -31,12 +31,14 @@ describe("host check", () => {
 describe("plugin options", () => {
   const env = { XDG_DATA_HOME: "/xdg/data", XDG_CACHE_HOME: "/xdg/cache" }
   test("defaults: every module on, XDG data and cache roots", () => {
-    expect(loadConfig(undefined, env)).toEqual({ modules: { weather: true, time: true, speech: true }, stateRoot: "/xdg/data/opencode-utilities", cacheRoot: "/xdg/cache/opencode-utilities", allowUntestedHost: false })
+    expect(loadConfig(undefined, env)).toEqual({ modules: { weather: true, time: true, speech: true }, stateRoot: "/xdg/data/opencode-utilities", cacheRoot: "/xdg/cache/opencode-utilities", allowUntestedHost: false, access: "all" })
     expect(loadConfig({}, { XDG_DATA_HOME: "relative/data" })).toMatchObject({ stateRoot: join(homedir(), ".local/share/opencode-utilities"), cacheRoot: join(homedir(), ".cache/opencode-utilities") })
   })
   test("each option is applied", () => {
     expect(loadConfig({ modules: { speech: false }, stateRoot: "/state", speech: { assetsDir: "/assets" }, allowUntestedHost: true }, env))
-      .toEqual({ modules: { weather: true, time: true, speech: false }, stateRoot: "/state", cacheRoot: "/xdg/cache/opencode-utilities", speechAssetsDir: "/assets", allowUntestedHost: true })
+      .toEqual({ modules: { weather: true, time: true, speech: false }, stateRoot: "/state", cacheRoot: "/xdg/cache/opencode-utilities", speechAssetsDir: "/assets", allowUntestedHost: true, access: "all" })
+    expect(loadConfig({ access: "read-only" }, env).access).toBe("read-only")
+    expect(loadConfig({ access: "ask-changes" }, env).access).toBe("ask-changes")
   })
   test("every invalid key is named, and no value is echoed", () => {
     let message = ""

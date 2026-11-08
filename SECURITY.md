@@ -31,6 +31,17 @@ Where data goes:
 
 Weather locations, timer text, speech text and audio, and file paths are private inputs. Treat tool results as data, not instructions.
 
+
+## Permissions
+
+**Every tool is allowed by default.** That means an agent, and a script, can set and delete timers, write a WAV file
+where its own file rules allow, download the speech engine and models, and send a place to Open-Meteo, without asking.
+Nothing here reaches a service other than Open-Meteo and the speech download's release host, and no tool can read the
+Open-Meteo key or write outside the paths the host's own rules allow.
+
+To restrict it, set `access` in the plugin options: `"ask-changes"` asks for the timer writes, synthesis and the speech
+download, and `"read-only"` denies them while every read still runs. Per-tool rules still work as before, and a later
+rule wins.
 ## Permissions
 
 - **Some agents get no default rules.** Agents defined only in your config, and agents added by plugins that load after this one, are created after the plugin inserts its ask rules. Weather, timer changes, synthesis and the speech download do not ask in those agents. `/utilities-status` and `/utilities` name them. The [README](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/README.md#permissions) gives the fix: put the default block first in that agent's own `permissions`, followed by any top-level rules you have for `utilities_*` actions. Never put the block in the top-level `permissions`. That would loosen Explore.

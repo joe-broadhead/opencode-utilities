@@ -83,19 +83,146 @@ The engine is `utilities-speech-<platform>`. The models are `ggml-tiny-q5_1.bin`
 
 ## Permissions
 
-On setup the plugin inserts these rules directly after each agent's base `{ "action": "*", "resource": "*", "effect": "allow" }` rule. Agents without that base rule are left alone. A later deny, such as Plan's, still wins. Your own `permissions` rules and a saved "Always allow" also win.
+**Every tool is allowed by default.** An agent can set and delete timers, write a WAV file, download the speech files, and send a place to Open-Meteo, without asking. Restrict it in any of these three ways:
 
-<!-- generated:rules -->
+1. **The `access` option**, which drives the rules the plugin inserts directly after each agent's base `{ "action": "*", "resource": "*", "effect": "allow" }` rule. Agents without that base rule are left alone, and a later rule still wins.
+
+   | Value | What runs | What asks |
+   | --- | --- | --- |
+   | `"all"` (the default) | every tool, and any tool a later release adds | nothing |
+   | `"ask-changes"` | the reads: every time tool, every timer read, weather and transcription | the timer writes, synthesis and the speech download |
+   | `"read-only"` | the reads | nothing: the changes are **denied** |
+
+   ```json
+   { "plugins": [{ "package": "@joe-broadhead/opencode-utilities", "options": { "access": "read-only" } }] }
+   ```
+
+2. **An agent that is read-only or asks**, with rules of its own, later than the plugin's:
+
+   ```json
+   { "agents": { "reader": { "permissions": [
+     { "action": "utilities_*", "resource": "*", "effect": "ask" },
+     { "action": "utilities_time_now", "resource": "*", "effect": "allow" }
+   ] } } }
+   ```
+
+3. **A rule per tool**, with the exact names in `src/domain/contract.ts`. To make one tool ask, or stop it:
+
+   ```json
+   { "permissions": [
+     { "action": "utilities_timer_set", "resource": "*", "effect": "deny" },
+     { "action": "utilities_weather_current", "resource": "*", "effect": "ask" }
+   ] }
+   ```
+
+   Weather is a read that sends a place to Open-Meteo; to stop that egress, deny `utilities_weather_*`.
+
+The block for each value, generated from `defaultRules(access)` in `src/host/permissions.ts`:
+
+<!-- generated:rules-all -->
+
+`access: "all"`
 
 | Action | Resource | Effect |
 | --- | --- | --- |
-| `utilities_weather_*` | `*` | `ask` |
+| `utilities_*` | `*` | `allow` |
+| `utilities_status` | `*` | `allow` |
+| `utilities_time_now` | `*` | `allow` |
+| `utilities_time_zones` | `*` | `allow` |
+| `utilities_time_zone_info` | `*` | `allow` |
+| `utilities_time_convert` | `*` | `allow` |
+| `utilities_time_calendar` | `*` | `allow` |
+| `utilities_time_add` | `*` | `allow` |
+| `utilities_time_between` | `*` | `allow` |
+| `utilities_time_format` | `*` | `allow` |
+| `utilities_time_holidays` | `*` | `allow` |
+| `utilities_time_business_days` | `*` | `allow` |
+| `utilities_timer_get` | `*` | `allow` |
+| `utilities_timer_list` | `*` | `allow` |
+| `utilities_timer_check` | `*` | `allow` |
+| `utilities_weather_geocode` | `*` | `allow` |
+| `utilities_weather_current` | `*` | `allow` |
+| `utilities_weather_daily` | `*` | `allow` |
+| `utilities_weather_hourly` | `*` | `allow` |
+| `utilities_weather_demand_signal` | `*` | `allow` |
+| `utilities_weather_summary` | `*` | `allow` |
+| `utilities_speech_transcribe` | `*` | `allow` |
+| `utilities_timer_set` | `*` | `allow` |
+| `utilities_timer_delete` | `*` | `allow` |
+| `utilities_speech_synthesize` | `*` | `allow` |
+| `utilities_speech_download` | `*` | `allow` |
+
+<!-- /generated:rules-all -->
+
+<!-- generated:rules-ask-changes -->
+
+`access: "ask-changes"`
+
+| Action | Resource | Effect |
+| --- | --- | --- |
+| `utilities_*` | `*` | `ask` |
+| `utilities_status` | `*` | `allow` |
+| `utilities_time_now` | `*` | `allow` |
+| `utilities_time_zones` | `*` | `allow` |
+| `utilities_time_zone_info` | `*` | `allow` |
+| `utilities_time_convert` | `*` | `allow` |
+| `utilities_time_calendar` | `*` | `allow` |
+| `utilities_time_add` | `*` | `allow` |
+| `utilities_time_between` | `*` | `allow` |
+| `utilities_time_format` | `*` | `allow` |
+| `utilities_time_holidays` | `*` | `allow` |
+| `utilities_time_business_days` | `*` | `allow` |
+| `utilities_timer_get` | `*` | `allow` |
+| `utilities_timer_list` | `*` | `allow` |
+| `utilities_timer_check` | `*` | `allow` |
+| `utilities_weather_geocode` | `*` | `allow` |
+| `utilities_weather_current` | `*` | `allow` |
+| `utilities_weather_daily` | `*` | `allow` |
+| `utilities_weather_hourly` | `*` | `allow` |
+| `utilities_weather_demand_signal` | `*` | `allow` |
+| `utilities_weather_summary` | `*` | `allow` |
+| `utilities_speech_transcribe` | `*` | `allow` |
 | `utilities_timer_set` | `*` | `ask` |
 | `utilities_timer_delete` | `*` | `ask` |
 | `utilities_speech_synthesize` | `*` | `ask` |
 | `utilities_speech_download` | `*` | `ask` |
 
-<!-- /generated:rules -->
+<!-- /generated:rules-ask-changes -->
+
+<!-- generated:rules-read-only -->
+
+`access: "read-only"`
+
+| Action | Resource | Effect |
+| --- | --- | --- |
+| `utilities_*` | `*` | `deny` |
+| `utilities_status` | `*` | `allow` |
+| `utilities_time_now` | `*` | `allow` |
+| `utilities_time_zones` | `*` | `allow` |
+| `utilities_time_zone_info` | `*` | `allow` |
+| `utilities_time_convert` | `*` | `allow` |
+| `utilities_time_calendar` | `*` | `allow` |
+| `utilities_time_add` | `*` | `allow` |
+| `utilities_time_between` | `*` | `allow` |
+| `utilities_time_format` | `*` | `allow` |
+| `utilities_time_holidays` | `*` | `allow` |
+| `utilities_time_business_days` | `*` | `allow` |
+| `utilities_timer_get` | `*` | `allow` |
+| `utilities_timer_list` | `*` | `allow` |
+| `utilities_timer_check` | `*` | `allow` |
+| `utilities_weather_geocode` | `*` | `allow` |
+| `utilities_weather_current` | `*` | `allow` |
+| `utilities_weather_daily` | `*` | `allow` |
+| `utilities_weather_hourly` | `*` | `allow` |
+| `utilities_weather_demand_signal` | `*` | `allow` |
+| `utilities_weather_summary` | `*` | `allow` |
+| `utilities_speech_transcribe` | `*` | `allow` |
+| `utilities_timer_set` | `*` | `deny` |
+| `utilities_timer_delete` | `*` | `deny` |
+| `utilities_speech_synthesize` | `*` | `deny` |
+| `utilities_speech_download` | `*` | `deny` |
+
+<!-- /generated:rules-read-only -->
 
 What each call asserts:
 

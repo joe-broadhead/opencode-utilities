@@ -1,7 +1,7 @@
 import { test, expect } from "vitest"
 import { z } from "zod"
 import { readFile } from "node:fs/promises"
-import { DEFAULT_ASK, SPEECH_DOWNLOAD_ACTION, TOOLS, WEATHER_ATTRIBUTION, type FailureCode, type ToolName } from "../../src/domain/contract.js"
+import { DEFAULT_ASK, NAMESPACE_ACTION, SPEECH_DOWNLOAD_ACTION, TOOLS, WEATHER_ATTRIBUTION, type FailureCode, type ToolName } from "../../src/domain/contract.js"
 import { FAILURES, formatFailure, UtilitiesError } from "../../src/domain/common.js"
 import { StatusSchema } from "../../src/host/status-schema.js"
 import { STATUS_JSON_SCHEMA } from "../../src/rpc.js"
@@ -46,7 +46,7 @@ test("every sample input and output fits its tool's schema", () => {
 })
 
 test("the three skills have valid front matter and name only real tools and actions", async () => {
-  const known = new Set([...Object.keys(TOOLS).map(name => `utilities_${name}`), ...DEFAULT_ASK, SPEECH_DOWNLOAD_ACTION])
+  const known = new Set([...Object.keys(TOOLS).map(name => `utilities_${name}`), ...DEFAULT_ASK, SPEECH_DOWNLOAD_ACTION, NAMESPACE_ACTION, "utilities_weather_*"])
   for (const id of Object.keys(SKILLS)) {
     const text = await readFile(new URL(`../../skills/${id}/SKILL.md`, import.meta.url), "utf8")
     const front = /^---\nname: (.+)\ndescription: (.+)\n---\n/.exec(text)

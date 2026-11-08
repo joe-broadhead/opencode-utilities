@@ -35,8 +35,12 @@ export const STATUS_JSON_SCHEMA = object({
   }, ["assets", "voices", "preseeded", "cacheDirectory", "outputDirectory"]),
   timers: object({ due: count, directory: text(4096), next }, ["directory"]),
   shadowedSkills: list(object({ name: text(64), path: text(4096) }, ["name", "path"]), 8),
-  permissions: object({ askByDefault: list(choice(DEFAULT_ASK), DEFAULT_ASK.length) }, ["askByDefault"]),
-}, ["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "shadowedSkills", "permissions"])
+  permissions: object({
+    askByDefault: list(choice(DEFAULT_ASK), DEFAULT_ASK.length),
+    block: list(object({ action: text(128), resource: text(128), effect: choice(["allow", "ask", "deny"]) }, ["action", "resource", "effect"]), 64),
+  }, ["askByDefault", "block"]),
+  access: choice(["all", "ask-changes", "read-only"]),
+}, ["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "shadowedSkills", "permissions", "access"])
 
 /** The plugin's only RPC method. The TUI view reads the status through it. */
 export const Utilities = Rpc.define({
@@ -49,7 +53,7 @@ export const Utilities = Rpc.define({
 export function isStatus(value: unknown): value is StatusView {
   if (typeof value !== "object" || value === null) return false
   const v = value as Record<string, unknown>
-  return STATUS_JSON_SCHEMA.required.every(key => typeof v[key] === (key === "version" || key === "state" || key === "nextStep" ? "string" : "object"))
+  return STATUS_JSON_SCHEMA.required.every(key => typeof v[key] === (key === "version" || key === "state" || key === "nextStep" || key === "access" ? "string" : "object"))
 }
 
 const AVAILABILITY_TEXT: { readonly [A in Availability]: string } = {
@@ -77,8 +81,11 @@ export interface StatusLine { readonly label: string; readonly text: string; rea
 const line = (label: string, text: string, ok: boolean): StatusLine => ({ label, text, ok })
 
 /** The block for agents without the default rules, one rule per line, to put first in their own permissions. */
-export const rulesToPaste = (view: Pick<StatusView, "permissions">) =>
-  ["[", ...view.permissions.askByDefault.map((action, i, all) => `  ${JSON.stringify({ action, resource: "*", effect: "ask" })}${i < all.length - 1 ? "," : ""}`), "]"].join("\n")
+/** The block an unguarded agent needs, in the shape the user pastes: the server generated it from `defaultRules(access)`. */
+export const rulesToPaste = (view: Pick<StatusView, "permissions">) => {
+  const block = view.permissions.block
+  return ["[", ...block.map((rule, i) => `  ${JSON.stringify(rule)}${i < block.length - 1 ? "," : ""}`), "]"].join("\n")
+}
 
 /** The fix for agents without the default rules: one fixed sentence, the same in every plugin of this family. The agents row lists them, with the block. */
 export const AGENT_FIX = `Put the default rules shown by /${COMMANDS.status} first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.`

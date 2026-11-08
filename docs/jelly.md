@@ -14,16 +14,19 @@ declaration, because that schema accepts no unknown keys.
 ## Tools and permissions
 
 25 tools are declared (21 read-only): the 24 tools and the speech download. Jelly's agents have no base "allow everything"
-rule, so this plugin's own default rules, which it puts after that rule, never reach them. Jelly
+rule, so this plugin's own default rules, which it puts after that rule, never reach them. Every tool is allowed by
+default, the speech download included, so those agents run everything Utilities offers; the person restricts it with
+Jelly's own tool settings, or with this plugin's `access` option where the plugin's rules do apply. Jelly
 writes each declared `ask` or `deny` as that tool's default instead (the person's own choice
 replaces it), and denies a read-only helper every tool not marked `readOnly`. A declared `allow`
 changes nothing in Jelly.
 
-- Ask: `utilities_timer_set`, `utilities_timer_delete`, `utilities_weather_geocode`, `utilities_weather_current`, `utilities_weather_daily`, `utilities_weather_hourly`, `utilities_weather_demand_signal`, `utilities_weather_summary`, `utilities_speech_synthesize`, `utilities_speech_download`.
+- Ask: none: every declared tool is allowed.
 - Off: none.
-- Everything else runs, as the plugin's own rules let it.
 
-Weather is read-only but asks, as the plugin's own rules do: it sends a place to Open-Meteo. `utilities_speech_download` is declared too: it is not a tool, but the speech tools assert it before a download.
+Weather sends a place to Open-Meteo and is read-only by class; `utilities_speech_download` is declared too: it is not a
+tool, but the speech tools assert it before a download. To make the changes ask instead, set `access: "ask-changes"` in
+the plugin options.
 
 The declaration lists the tools of this version. Keep `jelly.tools` in step with the tool table in
 `src/domain/contract.ts`; `test/unit/jelly.test.ts` checks each declared effect against the plugin's own

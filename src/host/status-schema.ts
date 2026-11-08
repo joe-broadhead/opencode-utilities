@@ -26,7 +26,11 @@ export const StatusSchema = z.strictObject({
   }),
   timers: z.strictObject({ due: z.number().int().nonnegative().optional(), directory: z.string().max(4096), next }),
   shadowedSkills: z.array(z.strictObject({ name: z.string().max(64), path: z.string().max(4096) })).max(8),
-  permissions: z.strictObject({ askByDefault: z.array(z.enum(DEFAULT_ASK)).max(DEFAULT_ASK.length) }),
+  permissions: z.strictObject({
+    askByDefault: z.array(z.enum(DEFAULT_ASK)).max(DEFAULT_ASK.length),
+    block: z.array(z.strictObject({ action: z.string().max(128), resource: z.string().max(128), effect: z.enum(["allow", "ask", "deny"]) })).max(64),
+  }),
+  access: z.enum(["all", "ask-changes", "read-only"]),
 }) satisfies z.ZodType<StatusView>
 /** The status tool's output schema: the unguarded agents are a count, and `nextStep` points to /utilities-status for them. */
 export const StatusSummarySchema = StatusSchema.extend({

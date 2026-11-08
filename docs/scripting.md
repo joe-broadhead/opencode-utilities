@@ -39,9 +39,9 @@ its model would have:
 - The tool then asks for what it needs, as it does for the model: weather asks for `utilities_weather_<tool>` on the
   Open-Meteo hosts, transcription asks for `read` (and `external_directory` outside the project), and the first speech
   call asks for `utilities_speech_download`, which is also refused unless the session allows it.
-- The default rules allow time, timer reads and status, and ask for weather, `timer_set`, `timer_delete`,
-  `speech_synthesize` and the speech download. So a script that writes a timer, writes a file, or fetches weather needs
-  a prior allow rule for that action.
+- The default rules allow every tool, so a script runs a read or a change unless the user restricts the plugin: the
+  `access` option's `"ask-changes"` makes an ask of the timer writes, synthesis and the speech download, and `"read-only"`
+  denies them. A script's agent can also narrow it: a rules block of its own, or `access` on the plugin, decides.
 
 Create a session for the script once, with the agent it runs as, and keep its id (`data.id` in the result):
 

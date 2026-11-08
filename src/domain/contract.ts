@@ -57,7 +57,22 @@ export function methodClass(name: ToolName): MethodClass {
 
 export const SPEECH_DOWNLOAD_ACTION = "utilities_speech_download"
 /** Inserted as `{ action, resource: "*", effect: "ask" }` directly after each agent's base `* * allow` rule. */
-export const DEFAULT_ASK = ["utilities_weather_*", "utilities_timer_set", "utilities_timer_delete", "utilities_speech_synthesize", SPEECH_DOWNLOAD_ACTION] as const
+/** How much the generated default rules allow. `all` is the default; the other two are how a user restricts the plugin. */
+export const ACCESS_VALUES = ["all", "ask-changes", "read-only"] as const
+export type Access = typeof ACCESS_VALUES[number]
+
+/** The actions that change something: a timer, a file, or a download. Everything else is a read. */
+export const CHANGING_ACTIONS = [
+  "utilities_timer_set", "utilities_timer_delete", "utilities_speech_synthesize", SPEECH_DOWNLOAD_ACTION,
+] as const
+/** The reads: every time tool, every timer read, every weather tool and transcription. */
+export const READ_ACTIONS = Object.keys(TOOLS)
+  .filter(name => !(CHANGING_ACTIONS as readonly string[]).includes(`utilities_${name}`))
+  .map(name => `utilities_${name}`)
+/** The plugin's namespace: a tool Utilities adds later follows the same effect. */
+export const NAMESPACE_ACTION = `${NAMESPACE}_*`
+/** The actions the default block holds back whenever `access` is not `all`: status and the docs list them. */
+export const DEFAULT_ASK = [...CHANGING_ACTIONS] as const
 type DefaultAskAction = typeof DEFAULT_ASK[number]
 
 type AssertedTool = { [K in ToolName]: typeof TOOLS[K]["effect"] extends "write-state" | "network" | "write-file" ? K : never }[ToolName]
@@ -133,8 +148,10 @@ export interface StatusView {
   /** `range` is package.json `opencode.host`; `tested` is true only for a release in the tested list. */
   readonly host: { readonly version: string | null; readonly range: string; readonly tested: boolean; readonly next?: string }
   readonly state: StatusState
-  /** Agents that did not get the default ask rules and whose own rules would run a Utilities side effect without asking. */
+  /** Agents that did not get the default rules and whose own rules would run a Utilities change without asking. */
   readonly unguardedAgents: readonly string[]
+  /** What the generated default rules allow, from the plugin options. */
+  readonly access: Access
   readonly nextStep: string
   readonly platform: { readonly target: string; readonly package?: PlatformPackage; readonly availability: Availability; readonly next?: string }
   readonly modules: { readonly [M in Module]: { readonly availability: Availability; readonly next?: string } }
@@ -156,7 +173,11 @@ export interface StatusView {
   readonly timers: { readonly due?: number; readonly directory: string; readonly next?: string }
   /** Skills with one of the plugin's ids that OpenCode loads instead of the plugin's own; empty when none. */
   readonly shadowedSkills: readonly { readonly name: string; readonly path: string }[]
-  readonly permissions: { readonly askByDefault: readonly DefaultAskAction[] }
+  readonly permissions: {
+    readonly askByDefault: readonly DefaultAskAction[]
+    /** The block the plugin inserts, generated from `defaultRules(access)`: the one an unguarded agent needs. */
+    readonly block: readonly { readonly action: string; readonly resource: string; readonly effect: "allow" | "ask" | "deny" }[]
+  }
 }
 
 /** The status tool's output: the view with the unguarded agents as a count, and a next step that points to /utilities-status for them. */

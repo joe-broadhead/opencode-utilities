@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- **Every tool is allowed by default**, the family's new policy: the plugin inserts an allow for each tool it registers,
+  and for the `utilities_*` namespace, so a tool a later release adds runs at once. The new `access` option restricts
+  it: `"ask-changes"` asks for the timer writes, synthesis and the speech download, and `"read-only"` denies them; the
+  reads always run. `utilities_status`, the status RPC and the dialog show the value and the block for it, and an
+  agent without the rules is only named when something is actually held back.
+- The tools RPC follows the same default: a script runs every tool unless `access` or its rules say otherwise.
+
 - tools RPC v2: every known tool is scriptable under a prior explicit allow. `utilities_timer_set`, `utilities_timer_delete`
   and `utilities_speech_synthesize` are methods now (a write, a write and an export), so a script can write with the
   session's allow; the shared tools RPC module is updated in place and `scripts/check-copies.mjs` pins its v2 hash. Every

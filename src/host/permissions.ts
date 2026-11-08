@@ -1,22 +1,40 @@
 import type { Plugin } from "@opencode/plugin"
 import { fence } from "../domain/common.js"
-import { DEFAULT_ASK, SPEECH_DOWNLOAD_ACTION, TOOLS, type Authorize, type PermissionRequest, type ToolName } from "../domain/contract.js"
+import { CHANGING_ACTIONS, NAMESPACE_ACTION, READ_ACTIONS, SPEECH_DOWNLOAD_ACTION, TOOLS, type Access, type Authorize, type PermissionRequest, type ToolName } from "../domain/contract.js"
 
 const WEATHER_TOOLS = (Object.keys(TOOLS) as ToolName[]).filter(tool => "module" in TOOLS[tool] && TOOLS[tool].module === "weather")
 
 type Rule = { action: string; resource: string; effect: "allow" | "ask" | "deny" }
 type Assert = Plugin.Context["permission"]["assert"]
 
-/** Inserted directly after each agent's base `* * allow`, so user rules, agent rules and saved approvals still win. */
-export const DEFAULT_RULES: readonly Rule[] = DEFAULT_ASK.map(action => ({ action, resource: "*", effect: "ask" }))
+/**
+ * The block inserted directly after each agent's base `* * allow`, so user rules, agent rules and saved approvals still
+ * win. Broad first, narrow last, because the last matching rule wins: at `all` every action is allowed, and so is one a
+ * later release adds; `ask-changes` asks for anything that is not a read; `read-only` denies it. Reads are always
+ * allowed, which is why the first rule decides what the plugin does not know about yet.
+ */
+export const defaultRules = (access: Access = "all"): readonly Rule[] => {
+  const other: Rule["effect"] = access === "all" ? "allow" : access === "ask-changes" ? "ask" : "deny"
+  return [
+    { action: NAMESPACE_ACTION, resource: "*", effect: other },
+    ...READ_ACTIONS.map(action => ({ action, resource: "*", effect: "allow" as const })),
+    ...CHANGING_ACTIONS.map(action => ({ action, resource: "*", effect: other })),
+  ]
+}
+
+/** The block for the default access, `all`: every tool Utilities registers. */
+export const DEFAULT_RULES: readonly Rule[] = defaultRules("all")
 const isBaseAllow = (rule: Rule) => rule.action === "*" && rule.resource === "*" && rule.effect === "allow"
 
 /** The agent transform. Agents without a base allow, such as those that deny everything, are left alone. */
-export function insertDefaultRules(editor: { list(): readonly { readonly id: string }[]; update(id: string, update: (agent: { permissions: Rule[] }) => void): void }) {
-  for (const agent of editor.list()) editor.update(agent.id, item => {
-    const index = item.permissions.findIndex(isBaseAllow)
-    if (index !== -1) item.permissions.splice(index + 1, 0, ...DEFAULT_RULES.map(rule => ({ ...rule })))
-  })
+export function insertDefaultRules(access: Access = "all") {
+  const block = defaultRules(access)
+  return (editor: { list(): readonly { readonly id: string }[]; update(id: string, update: (agent: { permissions: Rule[] }) => void): void }) => {
+    for (const agent of editor.list()) editor.update(agent.id, item => {
+      const index = item.permissions.findIndex(isBaseAllow)
+      if (index !== -1) item.permissions.splice(index + 1, 0, ...block.map(rule => ({ ...rule })))
+    })
+  }
 }
 
 const sameRule = (a: Rule, b: Rule) => a.action === b.action && a.resource === b.resource && a.effect === b.effect
@@ -28,9 +46,8 @@ const matches = (pattern: string, value: string) =>
 function evaluate(rules: readonly Rule[], action: string, resource: string): Rule["effect"] {
   return rules.findLast(rule => matches(rule.action, action) && matches(rule.resource, resource))?.effect ?? "ask"
 }
-/** One request for each action the block asks, with a resource like the ones the tools assert. */
-const ASKED: readonly (readonly [action: string, resource: string])[] = [
-  ...WEATHER_TOOLS.map(tool => [`utilities_${tool}`, "api.open-meteo.com"] as const),
+/** One request for each changing action, with a resource like the ones the tools assert: what a restriction holds back. */
+const CHANGES: readonly (readonly [action: string, resource: string])[] = [
   ["utilities_timer_set", "timer:name"], ["utilities_timer_delete", "timer:name"],
   ["utilities_speech_synthesize", "kitten-nano-int8/Luna"], [SPEECH_DOWNLOAD_ACTION, "github.com"],
 ]
@@ -41,13 +58,16 @@ const ASKED: readonly (readonly [action: string, resource: string])[] = [
  * later plugins, after this plugin's transform runs. Other plugins insert their own blocks at the same index, so the
  * block counts anywhere after the base allow. An agent whose rules already ask or deny every one is not listed.
  */
-export function unguardedAgents(agents: readonly { readonly id: string; readonly permissions: readonly Rule[] }[]) {
+export function unguardedAgents(agents: readonly { readonly id: string; readonly permissions: readonly Rule[] }[], access: Access = "all") {
+  // At `all` nothing is held back, so there is nothing an agent without the block could do that the block would stop.
+  if (access === "all") return []
+  const block = defaultRules(access)
   return agents.filter(agent => {
     const rules = agent.permissions, base = rules.findIndex(isBaseAllow)
     if (base === -1) return false
-    for (let start = base + 1; start + DEFAULT_RULES.length <= rules.length; start++)
-      if (DEFAULT_RULES.every((rule, offset) => sameRule(rules[start + offset]!, rule))) return false
-    return ASKED.some(([action, resource]) => evaluate(rules, action, resource) === "allow")
+    for (let start = base + 1; start + block.length <= rules.length; start++)
+      if (block.every((rule, offset) => sameRule(rules[start + offset]!, rule))) return false
+    return CHANGES.some(([action, resource]) => evaluate(rules, action, resource) === "allow")
   }).map(agent => agent.id)
 }
 

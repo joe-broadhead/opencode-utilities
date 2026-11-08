@@ -3,10 +3,10 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { DEFAULT_ASK, MODULES, TOOLS, WEATHER_ATTRIBUTION, registrable, toolRegistrable, type Availability, type Invocation, type StatusFacts, type StatusView, type ToolName } from "../../src/domain/contract.js"
+import { ACCESS_VALUES, DEFAULT_ASK, READ_ACTIONS, MODULES, TOOLS, WEATHER_ATTRIBUTION, registrable, toolRegistrable, type Availability, type Invocation, type StatusFacts, type StatusView, type ToolName } from "../../src/domain/contract.js"
 import { commandTransform } from "../../src/host/commands.js"
 import { createPlugin } from "../../src/host/plugin.js"
-import { commandAuthorize, createAuthorize, DEFAULT_RULES, insertDefaultRules, unguardedAgents } from "../../src/host/permissions.js"
+import { commandAuthorize, createAuthorize, DEFAULT_RULES, defaultRules, insertDefaultRules, unguardedAgents } from "../../src/host/permissions.js"
 import { loadSkills, skillTransform } from "../../src/host/skills.js"
 import { buildStatus } from "../../src/host/status.js"
 import { toolTransform } from "../../src/host/tools.js"
@@ -33,13 +33,14 @@ const FACTS: StatusFacts = {
   version: VERSION,
   host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true },
   unguardedAgents: [],
+  access: "all",
   platform: { target: "darwin-arm64", availability: "AVAILABLE" },
   modules: modulesWith({}),
   weather: { tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION },
   speech: { assets: [], voices: [], preseeded: false, cacheDirectory: "/cache", outputDirectory: "/out" },
   timers: { directory: "/timers" },
   shadowedSkills: [],
-  permissions: { askByDefault: [...DEFAULT_ASK] },
+  permissions: { askByDefault: [...DEFAULT_ASK], block: [...DEFAULT_RULES] },
 }
 const VIEW: StatusView = completeStatus(FACTS)
 const status = (facts: Partial<StatusFacts>) => completeStatus({ ...FACTS, ...facts })
@@ -146,7 +147,8 @@ describe("permissions", () => {
     plan: [{ action: "*", resource: "*", effect: "allow" }, { action: "edit", resource: "*", effect: "deny" }] as Rule[],
     title: [{ action: "*", resource: "*", effect: "deny" }] as Rule[],
   })
-  const transform = (state: Record<string, Rule[]>) => insertDefaultRules({ list: () => Object.keys(state).map(id => ({ id })), update: (id, update) => update({ permissions: state[id]! }) })
+  const transform = (state: Record<string, Rule[]>, access: "all" | "ask-changes" | "read-only" = "all") =>
+    insertDefaultRules(access)({ list: () => Object.keys(state).map(id => ({ id })), update: (id, update) => update({ permissions: state[id]! }) })
 
   test("the ask rules go directly after the base allow, once per rebuild; denies and agents without a base allow are untouched", () => {
     for (let rebuild = 0; rebuild < 2; rebuild++) {
@@ -156,28 +158,47 @@ describe("permissions", () => {
       expect(state.plan.slice(-1)).toEqual([{ action: "edit", resource: "*", effect: "deny" }])
       expect(state.title).toEqual(agents().title)
     }
-    expect(DEFAULT_RULES.map(r => r.action)).toEqual([...DEFAULT_ASK])
-    expect(DEFAULT_RULES.every(r => r.effect === "ask" && r.resource === "*")).toBe(true)
+    // Every tool is allowed by default, and so is the namespace, so a tool a later release adds runs at once.
+    expect(DEFAULT_RULES.map(r => r.action)).toEqual(["utilities_*", ...READ_ACTIONS, ...DEFAULT_ASK])
+    expect(DEFAULT_RULES.every(r => r.effect === "allow" && r.resource === "*")).toBe(true)
+    // The other two values: changes ask, or changes are denied, and reads always run.
+    for (const [access, effect] of [["ask-changes", "ask"], ["read-only", "deny"]] as const) {
+      const block = defaultRules(access)
+      expect(block[0]).toEqual({ action: "utilities_*", resource: "*", effect })
+      expect(block.filter(r => READ_ACTIONS.includes(r.action)).every(r => r.effect === "allow")).toBe(true)
+      expect(block.filter(r => (DEFAULT_ASK as readonly string[]).includes(r.action)).every(r => r.effect === effect)).toBe(true)
+    }
   })
 
   test("agents that missed the rules are named with the per-agent fix", () => {
     const state = agents()
-    transform(state)
+    transform(state, "ask-changes")
     const listed = [...Object.entries(state).map(([id, permissions]) => ({ id, permissions })), { id: "reviewer", permissions: agents().build }]
-    expect(unguardedAgents(listed)).toEqual(["reviewer"])
+    // At `all` nothing is held back, so no agent needs the block; at a restricting value the unguarded one is named.
+    expect(unguardedAgents(listed)).toEqual([])
+    expect(unguardedAgents(listed, "ask-changes")).toEqual(["reviewer"])
   })
 
   test("an agent stays guarded when another plugin inserts its block at the same index later", () => {
     const state = agents()
-    transform(state)
+    transform(state, "ask-changes")
     // A plugin that loads later splices its own block directly after the base allow too.
     const other: Rule[] = [{ action: "other_plugin_write", resource: "*", effect: "ask" }, { action: "other_plugin_*", resource: "*", effect: "ask" }]
     state.build!.splice(1, 0, ...other)
     expect(state.build!.slice(1, 3)).toEqual(other)
     // A partial or reordered copy of the block is not the block.
-    const partial = [{ action: "*", resource: "*", effect: "allow" }, ...other, ...DEFAULT_RULES.slice(1)] as Rule[]
-    const listed = [{ id: "build", permissions: state.build! }, { id: "plan", permissions: state.plan! }, { id: "partial", permissions: partial }, { id: "title", permissions: state.title! }]
-    expect(unguardedAgents(listed)).toEqual(["partial"])
+    const block = defaultRules("ask-changes")
+    const partial = [{ action: "*", resource: "*", effect: "allow" }, ...other, ...block.slice(1)] as Rule[]
+    const allowed = [{ action: "*", resource: "*", effect: "allow" }, ...other, { action: "utilities_timer_set", resource: "*", effect: "allow" }] as Rule[]
+    const listed = [
+      { id: "build", permissions: state.build! },
+      { id: "plan", permissions: state.plan! },
+      { id: "partial", permissions: partial },
+      { id: "allowed", permissions: allowed },
+      { id: "title", permissions: state.title! },
+    ]
+    // The partial copy still asks for a change, so it is not listed; an agent whose own rule allows one is.
+    expect(unguardedAgents(listed, "ask-changes")).toEqual(["allowed"])
   })
 
   test("the per-agent fix is the one fixed sentence, and never the top-level permissions", () => {
@@ -185,8 +206,8 @@ describe("permissions", () => {
     // The one sentence every plugin of this family uses, verbatim (review TRIAGE, cross-plugin decision 1).
     expect(next).toBe("Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.")
     expect(next).not.toContain("top-level permissions")
-    expect(JSON.parse(rulesToPaste(VIEW))).toEqual(DEFAULT_RULES)
-    expect(rulesToPaste(VIEW).split("\n")).toHaveLength(DEFAULT_RULES.length + 2) // one rule per line
+    expect(JSON.parse(rulesToPaste(VIEW))).toEqual(defaultRules(VIEW.access))
+    expect(rulesToPaste(VIEW).split("\n")).toHaveLength(defaultRules(VIEW.access).length + 2) // one rule per line
     expect(next).not.toMatch(/top-level permissions block|add .* to the top-level/i)
   })
 
@@ -305,7 +326,8 @@ describe("status rendering", () => {
     expect(Object.keys(VIEW).slice(0, 5)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep"])
     expect(VIEW).toMatchObject({ version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, state: "ready", unguardedAgents: [], nextStep: "Nothing to do." })
     expect(STATUS_JSON_SCHEMA.required.slice(0, 5)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep"])
-    expect(VIEW.permissions).toEqual({ askByDefault: [...DEFAULT_ASK] })
+    expect(VIEW.permissions.askByDefault).toEqual([...DEFAULT_ASK])
+    expect(VIEW.permissions.block).toEqual([...DEFAULT_RULES])
     expect(status({ modules: modulesWith({ weather: "DISABLED", time: "DISABLED", speech: "DISABLED" }) }).state).toBe("disabled")
     expect(status({ modules: modulesWith({ weather: "PLATFORM_PACKAGE_MISSING", time: "PLATFORM_PACKAGE_MISSING", speech: "UNSUPPORTED_PLATFORM" }) }).state).toBe("failed")
     expect(status({ modules: modulesWith({ speech: "SPEECH_ASSETS_MISSING" }) }).state).toBe("ready")
@@ -366,7 +388,7 @@ describe("status rendering", () => {
   test("only agents whose own rules would run a side effect without asking are unguarded (LIVE-1)", () => {
     const base = { action: "*", resource: "*", effect: "allow" } as const
     const agents: { id: string; permissions: { action: string; resource: string; effect: "allow" | "ask" | "deny" }[] }[] = [
-      { id: "guarded", permissions: [base, ...DEFAULT_RULES] },
+      { id: "guarded", permissions: [base, ...defaultRules("ask-changes")] },
       { id: "allow-all", permissions: [base] },
       // The perf-probe agents end with *:*=ask, so every Utilities side effect already asks.
       { id: "asks-all", permissions: [base, { action: "read", resource: "*", effect: "allow" }, { action: "*", resource: "*", effect: "ask" }] },
@@ -375,7 +397,7 @@ describe("status rendering", () => {
       { id: "allows-later", permissions: [base, { action: "*", resource: "*", effect: "ask" }, { action: "utilities_timer_*", resource: "timer:*", effect: "allow" }] },
       { id: "no-base", permissions: [{ action: "*", resource: "*", effect: "deny" }] },
     ]
-    expect(unguardedAgents(agents)).toEqual(["allow-all", "asks-weather-only", "allows-later"])
+    expect(unguardedAgents(agents, "ask-changes")).toEqual(["allow-all", "asks-weather-only", "allows-later"])
   })
 })
 
@@ -420,11 +442,11 @@ describe("weather key and status", () => {
     const runtime = await fakeRuntimes().create({ location: { project: "p", directory: "/d", projectDirectory: "/d" }, authorize: async () => {}, modules: { weather: true, time: true, speech: true }, stateRoot: "/state", cacheRoot: "/cache" })
     const view = await buildStatus({
       version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) },
-      agents: async () => [{ id: "build", permissions: [{ action: "*", resource: "*", effect: "allow" }, ...DEFAULT_RULES] }, { id: "reviewer", permissions: [{ action: "*", resource: "*", effect: "allow" }] }],
-      ownSkills: [], skills: async () => [],
+      agents: async () => [{ id: "build", permissions: [{ action: "*", resource: "*", effect: "allow" }, ...defaultRules("ask-changes")] }, { id: "reviewer", permissions: [{ action: "*", resource: "*", effect: "allow" }] }],
+      ownSkills: [], skills: async () => [], access: "ask-changes",
     })
-    expect(Object.keys(view)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "skills", "permissions"].map(k => k === "skills" ? "shadowedSkills" : k))
-    expect(view).toMatchObject({ state: "ready", unguardedAgents: ["reviewer"], nextStep: AGENT_FIX, permissions: { askByDefault: [...DEFAULT_ASK] } })
+    expect(Object.keys(view)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "skills", "permissions", "access"].map(k => k === "skills" ? "shadowedSkills" : k))
+    expect(view).toMatchObject({ state: "ready", access: "ask-changes", unguardedAgents: ["reviewer"], nextStep: AGENT_FIX, permissions: { askByDefault: [...DEFAULT_ASK] } })
     expect(JSON.stringify(view)).toBe(JSON.stringify(JSON.parse(JSON.stringify(view))))
     expect("next" in view.host).toBe(false)
   })

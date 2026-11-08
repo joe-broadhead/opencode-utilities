@@ -13,7 +13,7 @@ import { createServer } from "node:net"
 import { arch, homedir, platform, tmpdir } from "node:os"
 import { join, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
-import { DEFAULT_ASK, MODULES, PLATFORMS, PLUGIN_ID } from "../../src/domain/contract.js"
+import { DEFAULT_ASK, READ_ACTIONS, MODULES, PLATFORMS, PLUGIN_ID } from "../../src/domain/contract.js"
 import { detectTarget, isPlatform } from "../../src/domain/backends.js"
 import { HOST_RANGE, TESTED_HOSTS } from "../../src/host/versions.js"
 import { SCRIPT_TOOLS } from "../../src/host/scripting.js"
@@ -215,7 +215,12 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
     expect(build).toBeDefined()
     const base = build!.permissions.findIndex(rule => rule.action === "*" && rule.resource === "*" && rule.effect === "allow")
     expect(base).toBeGreaterThanOrEqual(0)
-    expect(build!.permissions.slice(base + 1, base + 1 + DEFAULT_ASK.length)).toEqual([...DEFAULT_ASK].map(action => ({ action, resource: "*", effect: "ask" })))
+    const block = [
+      { action: "utilities_*", resource: "*", effect: "ask" },
+      ...READ_ACTIONS.map(action => ({ action, resource: "*", effect: "allow" })),
+      ...DEFAULT_ASK.map(action => ({ action, resource: "*", effect: "ask" })),
+    ]
+    expect(build!.permissions.slice(base + 1, base + 1 + block.length)).toEqual(block)
   })
 
   // The tools RPC on the same server: a script calls the tools that change nothing, as a session and its agent.
@@ -262,11 +267,12 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
       expect(await call("reopen", "time_zones", {})).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
     })
 
-    test("refuses the weather ask, and the speech download ask, at once with no approval prompt left waiting", async () => {
-      const asks = ["weather_current", ...speechEngine ? ["speech_transcribe"] : []]
+    test("refuses the speech download ask at once with no approval prompt left waiting", async () => {
+      // Weather is a read, so the ask a script can hit at `ask-changes` is the download the first speech call needs.
+      const asks = speechEngine ? ["speech_transcribe"] : []
       for (const method of asks) {
         const started = Date.now()
-        const result = await call("build", method, method === "weather_current" ? { location: "Amsterdam" } : { path: "clip.wav" })
+        const result = await call("build", method, { path: "clip.wav" })
         expect(result).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
         expect(result.message).toMatch(/cannot answer/)
         expect(Date.now() - started).toBeLessThan(5000)
@@ -329,7 +335,8 @@ async function serve(version: string, binary: string) {
   const home = join(root, "home"), directory = join(root, "project"), tmp = join(root, "tmp")
   for (const dir of [join(home, ".config"), join(home, ".local/share"), join(home, ".cache"), join(home, ".local/state"), directory, tmp]) mkdirSync(dir, { recursive: true })
   // `locked`, an agent defined only in config, hides the time tools: the tools RPC tests use it.
-  writeFileSync(join(directory, "opencode.json"), JSON.stringify({ plugins: [installed], agents: { locked: { mode: "primary", permissions: [rule("utilities_time_*", "deny")] } } }))
+  // `access: "ask-changes"` exercises the option end to end on the installed package: its block asks for the changes.
+  writeFileSync(join(directory, "opencode.json"), JSON.stringify({ plugins: [{ package: installed, options: { access: "ask-changes" } }], agents: { locked: { mode: "primary", permissions: [rule("utilities_time_*", "deny")] } } }))
   // A valid WAV in the project: a transcription is checked before it asks to download the speech files.
   writeFileSync(join(directory, "clip.wav"), wav())
   const password = randomBytes(18).toString("base64url"), port = await freePort()

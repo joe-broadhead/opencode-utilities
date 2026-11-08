@@ -2,7 +2,7 @@ import * as z from "zod"
 import { homedir } from "node:os"
 import { isAbsolute, join } from "node:path"
 import { formatFailure } from "./common.js"
-import { MODULES, type Config, type Module } from "./contract.js"
+import { ACCESS_VALUES, MODULES, type Access, type Config, type Module } from "./contract.js"
 
 const absolute = z.string().max(4096).refine(isAbsolute, "must be an absolute path")
 const ConfigSchema = z.strictObject({
@@ -10,6 +10,7 @@ const ConfigSchema = z.strictObject({
   stateRoot: absolute.optional(),
   speech: z.strictObject({ assetsDir: absolute.optional() }).optional(),
   allowUntestedHost: z.boolean().optional(),
+  access: z.enum(ACCESS_VALUES).optional(),
 }) satisfies z.ZodType<Config>
 
 export interface ResolvedConfig {
@@ -18,6 +19,8 @@ export interface ResolvedConfig {
   readonly cacheRoot: string
   readonly speechAssetsDir?: string
   readonly allowUntestedHost: boolean
+  /** What the generated default rules allow: everything, changes ask, or read-only. */
+  readonly access: Access
 }
 
 /** Validates the plugin options. An invalid option fails setup with every offending key named, never its value. */
@@ -38,5 +41,6 @@ export function loadConfig(options: unknown, env: Readonly<Record<string, string
     cacheRoot: join(xdg("XDG_CACHE_HOME", ".cache"), "opencode-utilities"),
     ...(value.speech?.assetsDir ? { speechAssetsDir: value.speech.assetsDir } : {}),
     allowUntestedHost: value.allowUntestedHost ?? false,
+    access: value.access ?? "all",
   }
 }

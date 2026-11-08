@@ -4,9 +4,9 @@
 import { describe, expect, test } from "vitest"
 import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { DEFAULT_RULES } from "../../src/host/permissions.js"
+import { defaultRules } from "../../src/host/permissions.js"
 import { FAILURES } from "../../src/domain/common.js"
-import { DEFAULT_ASK, TOOLS } from "../../src/domain/contract.js"
+import { ACCESS_VALUES, DEFAULT_ASK, TOOLS } from "../../src/domain/contract.js"
 import { NEXT_STEPS, TOOLS_RPC_ID } from "../../src/host/tools-rpc.js"
 import { HOST_RANGE, TESTED_HOSTS, TESTED_TEXT } from "../../src/host/versions.js"
 
@@ -46,8 +46,15 @@ function checkBlock(file: string, name: string, body: string) {
   expect(text, `${file}: the ${name} block is stale; run UPDATE_DOCS=1 npm test`).toBe(expected)
 }
 
-const rulesBody = () =>
-  ["| Action | Resource | Effect |", "| --- | --- | --- |", ...DEFAULT_RULES.map(rule => `| \`${rule.action}\` | \`${rule.resource}\` | \`${rule.effect}\` |`)].join("\n")
+/** The block for one access value: one row per rule, in the order the transform inserts them. */
+const rulesBody = (access: (typeof ACCESS_VALUES)[number]) => () =>
+  [
+    `\`access: "${access}"\``,
+    "",
+    "| Action | Resource | Effect |",
+    "| --- | --- | --- |",
+    ...defaultRules(access).map(rule => `| \`${rule.action}\` | \`${rule.resource}\` | \`${rule.effect}\` |`),
+  ].join("\n")
 
 /** Every code the plugin can report: its own failures, and the refusals the tools RPC adds. */
 const CODES = [...new Set([...Object.keys(FAILURES), ...Object.keys(NEXT_STEPS)])].sort()
@@ -62,9 +69,17 @@ const codesBody = () =>
   ["| Code | What happened | Next step |", "| --- | --- | --- |", ...CODES.map(code => { const [what, next] = storyOf(code); return `| \`${code}\` | ${what} | ${next} |` })].join("\n")
 
 describe("the README's generated blocks", () => {
-  test("the default-rules block is the block the plugin inserts after each agent's base allow", () => {
-    expect(DEFAULT_RULES).toEqual(DEFAULT_ASK.map(action => ({ action, resource: "*", effect: "ask" })))
-    checkBlock("README.md", "rules", rulesBody())
+  test("each access value's block is the block the plugin inserts after each agent's base allow", () => {
+    for (const access of ACCESS_VALUES) checkBlock("README.md", `rules-${access}`, rulesBody(access)())
+    // Every tool runs at `all`, and the namespace rule covers a tool a later release adds.
+    expect(defaultRules("all").every(rule => rule.effect === "allow")).toBe(true)
+    expect(defaultRules("all")[0]).toEqual({ action: "utilities_*", resource: "*", effect: "allow" })
+    for (const access of ["ask-changes", "read-only"] as const) {
+      const block = defaultRules(access), effect = access === "ask-changes" ? "ask" : "deny"
+      expect(block[0]).toEqual({ action: "utilities_*", resource: "*", effect })
+      // The namespace first, then the four changes; every read is allowed.
+      expect(block.filter(rule => rule.effect !== "allow").map(rule => rule.action)).toEqual(["utilities_*", ...DEFAULT_ASK])
+    }
   })
 
   test("the code table is the code table: every code, in both directions", () => {

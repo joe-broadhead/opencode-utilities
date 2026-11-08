@@ -4,6 +4,7 @@ import { ensureSolidTransformPlugin } from "@opentui/solid/bun-plugin"
 import { afterEach, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
 import type { Plugin } from "@opencode/plugin/tui"
+import { DEFAULT_ASK } from "../../src/domain/contract.js"
 import type { StatusView } from "../../src/domain/contract.js"
 import { VERSION } from "../fixtures.js"
 
@@ -29,7 +30,8 @@ const view = (version: string, overrides: Partial<StatusView> = {}): StatusView 
   speech: { assets: [{ role: "engine", name: "utilities-speech", bytes: 46_000_000, state: "missing" }], voices: [], preseeded: false, cacheDirectory: "/cache", outputDirectory: "/out", next: "Run /utilities-speech-install, or set the speech.assetsDir option." },
   timers: { due: 2, directory: "/state/timers" },
   shadowedSkills: [],
-  permissions: { askByDefault: ["utilities_weather_*", "utilities_timer_set", "utilities_timer_delete", "utilities_speech_synthesize", "utilities_speech_download"] },
+  permissions: { askByDefault: ["utilities_timer_set", "utilities_timer_delete", "utilities_speech_synthesize", "utilities_speech_download"], block: [{ action: "utilities_*", resource: "*", effect: "ask" }, ...DEFAULT_ASK.map(action => ({ action, resource: "*", effect: "ask" as const }))] },
+  access: "ask-changes",
   ...overrides,
 })
 
@@ -116,11 +118,12 @@ test("renders the status lines and the next steps from the status RPC", async ()
     "Weather: ready",
     "Speech: speech files not downloaded yet",
     "Timers: 2 due",
-    "Asks first: utilities_weather_*",
+    // Wrapped at the dialog's width, so the row is asserted by its start.
+    "Asks first: utilities_timer_set, utilities_timer_delete, utilities_speech_synthesize,",
     "Skills: the plugin's own",
     "Tools: 24 available, 0 unknown",
     "Agents without default rules: reviewer",
-    "  {\"action\":\"utilities_weather_*\",\"resource\":\"*\",\"effect\":\"ask\"},",
+    "  {\"action\":\"utilities_*\",\"resource\":\"*\",\"effect\":\"ask\"},",
     "  {\"action\":\"utilities_speech_download\",\"resource\":\"*\",\"effect\":\"ask\"}",
     `OpenCode: 2.2.3 (tested). Utilities ${VERSION}`,
     "Next step: Add the rules to reviewer's own permissions.",

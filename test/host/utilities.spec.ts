@@ -10,7 +10,7 @@ import { z } from "zod"
 import { DEFAULT_ASK, TOOLS, type ToolName } from "../../src/domain/contract.js"
 import type { Plugin } from "@opencode/plugin"
 import { createPlugin } from "../../src/host/plugin.js"
-import { DEFAULT_RULES } from "../../src/host/permissions.js"
+import { DEFAULT_RULES, defaultRules } from "../../src/host/permissions.js"
 import { SCRIPT_TOOLS } from "../../src/host/scripting.js"
 import { TOOLS_RPC_ID } from "../../src/host/tools-rpc.js"
 import { formatStatus, Utilities } from "../../src/rpc.js"
@@ -92,7 +92,11 @@ const program = (names: readonly ToolName[]) => names.map(name => `try { seen[${
 const succeeded = (seen: Record<string, unknown>) => Object.fromEntries(Object.entries(seen).map(([name, value]) => [name, typeof value === "number" && value > 0 ? "ok" : value]))
 
 beforeAll(async () => {
-  host = await startHost([createPlugin({ createRuntime: runtimes.create, packageRoot }), observer])
+  const plugin = createPlugin({ createRuntime: runtimes.create, packageRoot })
+  host = await startHost([
+    { id: plugin.id, setup: (ctx: Plugin.Context) => plugin.setup({ ...ctx, options: { access: "ask-changes" } }) },
+    observer,
+  ])
 })
 afterAll(async () => {
   if (!closed) await host?.sdk.close()
@@ -122,8 +126,8 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
   test("inserts the ask rules right after each agent's base allow; config-only agents are named with the fix", async () => {
     const { data: agents } = await host.sdk.agent.list({ location: { directory: dirs.main } })
     const rules = (id: string) => (agents as { id: string; permissions: Rule[] }[]).find(a => a.id === id)!.permissions.map(r => `${r.effect} ${r.action} ${r.resource}`)
-    const block = DEFAULT_RULES.map(r => `${r.effect} ${r.action} ${r.resource}`)
-    for (const id of ["build", "plan", "general", "explore"]) expect(rules(id).slice(0, 6)).toEqual(["allow * *", ...block])
+    const block = defaultRules("ask-changes").map(r => `${r.effect} ${r.action} ${r.resource}`)
+    for (const id of ["build", "plan", "general", "explore"]) expect(rules(id).slice(0, block.length + 1)).toEqual(["allow * *", ...block])
     expect(rules("plan").filter(r => r.startsWith("deny")).length).toBeGreaterThan(0)
     expect(rules("plan").findIndex(r => r.startsWith("deny"))).toBeGreaterThan(5) // Plan's own denies still come later and win
     expect(rules("explore").at(-1)?.startsWith("deny") || rules("explore").includes("deny * *")).toBe(true)
@@ -133,7 +137,7 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     expect(status.unguardedAgents).toContain("reviewer")
     expect(status.unguardedAgents).not.toContain("build")
     expect(status.nextStep).toBe("Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.")
-    expect(formatStatus(status)).toContain(DEFAULT_RULES.map(rule => JSON.stringify(rule)).join(",\n  "))
+    expect(formatStatus(status)).toContain(status.permissions.block.map((rule: { action: string; resource: string; effect: string }) => JSON.stringify(rule)).join(",\n  "))
   })
 
   test("status names a user's skill that takes the place of the plugin's own, read through the public skill list", async () => {
@@ -153,16 +157,17 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     expect(succeeded(await codemode(sessionID, program(reads)))).toEqual(Object.fromEntries(reads.map(name => [name, "ok"])))
   })
 
-  test("side effects ask under Build; a decline propagates as the host's own error", async () => {
+  test("a change asks under Build, and a decline propagates as the host's own error", async () => {
     const sessionID = await boot(dirs.main)
-    const declined = await call(dirs.main, sessionID, "weather_current", ["reject"])
-    expect(declined.requests.map(r => [r.action, r.resources])).toEqual([["utilities_weather_current", ["api.open-meteo.com"]]])
+    // Weather is a read, so it runs without asking at every access value; a timer write is the change that asks.
+    const weather = await call(dirs.main, sessionID, "weather_current", [])
+    expect(weather.requests).toEqual([])
+    expect(weather.result?.output).toMatchObject({ attribution: "Weather data by Open-Meteo.com (CC BY 4.0)" })
+    const declined = await call(dirs.main, sessionID, "timer_set", ["reject"])
+    expect(declined.requests.map(r => [r.action, r.resources])).toEqual([["utilities_timer_set", ["timer:review"]]])
     expect(declined.requests[0]!.source).toMatchObject({ type: "tool" })
     expect(declined.error).toBeDefined()
     expect(declined.error.metadata?.code).toBeUndefined()
-    const approved = await call(dirs.main, sessionID, "weather_current", ["once"])
-    expect(approved.requests).toHaveLength(1)
-    expect(approved.result?.output).toMatchObject({ attribution: "Weather data by Open-Meteo.com (CC BY 4.0)" })
     for (const tool of ["timer_set", "timer_delete"] as const) {
       const asked = await call(dirs.main, sessionID, tool, ["once"])
       expect(asked.requests.map(r => [r.action, r.resources, r.save])).toEqual([[`utilities_${tool}`, ["timer:review"], ["timer:*"]]])
@@ -336,7 +341,9 @@ describe(`the tools RPC ${TOOLS_RPC_ID} on @opencode/sdk, host version ${HOST_VE
     expect(await call("build", "time_now")).toEqual({ value: SAMPLES.time_now.output })
     // Parsed with the tool's own schema, defaults included, as the host parses the model's call.
     expect(runtime(directory).calls.slice(before)).toEqual([{ tool: "time_now", input: { ...INPUTS.time_now, format: "rfc3339" } }])
-    expect((await call("build", "status", {})).value).toMatchObject({ version, permissions: { askByDefault: [...DEFAULT_ASK] } })
+    // This suite's host runs at ask-changes, so status reports that value, its four asks and its block.
+    expect((await call("build", "status", {})).value).toMatchObject({ version, access: "ask-changes", permissions: { askByDefault: [...DEFAULT_ASK] } })
+    expect((await call("build", "status", {})).value.permissions.block).toEqual([...defaultRules("ask-changes")])
     const session = await host.sdk.session.get({ sessionID: sessions.build! })
     expect(session.tokens).toMatchObject({ input: 0, output: 0 })
   })
@@ -358,8 +365,9 @@ describe(`the tools RPC ${TOOLS_RPC_ID} on @opencode/sdk, host version ${HOST_VE
     expect(await call("reopen", "time_zones")).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
   })
 
-  test("refuses the weather ask and the speech download ask at once, with no prompt left waiting; an allow rule lets them run", async () => {
-    for (const method of ["weather_current", "speech_transcribe"]) {
+  test("refuses the speech download ask at once, with no prompt left waiting; an allow rule lets it run", async () => {
+    // Weather is a read now, so the refusal a script can hit is the download a first transcription or synthesis needs.
+    for (const method of ["speech_transcribe"]) {
       const started = Date.now()
       const refused = await call("build", method)
       expect(refused).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })

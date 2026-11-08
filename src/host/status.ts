@@ -1,7 +1,7 @@
-import { DEFAULT_ASK, type Runtime, type StatusView } from "../domain/contract.js"
+import { DEFAULT_ASK, type Access, type Runtime, type StatusView } from "../domain/contract.js"
 import { completeStatus } from "../rpc.js"
 import type { HostCheck } from "./compat.js"
-import { unguardedAgents } from "./permissions.js"
+import { defaultRules, unguardedAgents } from "./permissions.js"
 import type { WeatherKey } from "./weather.js"
 
 export interface StatusSources {
@@ -15,6 +15,8 @@ export interface StatusSources {
   readonly ownSkills: readonly { readonly name: string; readonly path: string }[]
   /** The skills OpenCode lists for this location. A list that fails only hides shadowed skills. */
   readonly skills: () => Promise<readonly { readonly id: string; readonly path: string }[]>
+  /** What the generated default rules allow, from the plugin options. */
+  readonly access?: Access
 }
 
 /** OpenCode loads one skill per id, so a user's skill with one of the plugin's ids takes the place of the plugin's own. */
@@ -27,14 +29,15 @@ export async function buildStatus(sources: StatusSources): Promise<StatusView> {
   const view = completeStatus({
     version: sources.version,
     host: sources.host,
-    unguardedAgents: unguardedAgents(agents),
+    unguardedAgents: unguardedAgents(agents, sources.access ?? "all"),
     platform: runtime.platform,
     modules: runtime.modules,
     weather,
     speech: runtime.speech,
     timers: runtime.timers,
     shadowedSkills: shadowed(sources.ownSkills, skills),
-    permissions: { askByDefault: [...DEFAULT_ASK] },
+    permissions: { askByDefault: (sources.access ?? "all") === "all" ? [] : [...DEFAULT_ASK], block: [...defaultRules(sources.access ?? "all")] },
+    access: sources.access ?? "all",
   })
   return JSON.parse(JSON.stringify(view)) as StatusView
 }

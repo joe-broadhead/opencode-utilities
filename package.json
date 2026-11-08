@@ -2,10 +2,19 @@
   "name": "@joe-broadhead/opencode-utilities",
   "version": "0.0.7",
   "description": "Unofficial OpenCode plugin: weather, time, polled timers and local speech tools",
-  "keywords": ["opencode", "opencode-plugin", "utilities"],
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "utilities"
+  ],
   "homepage": "https://github.com/joe-broadhead/opencode-utilities#readme",
-  "bugs": { "url": "https://github.com/joe-broadhead/opencode-utilities/issues" },
-  "repository": { "type": "git", "url": "git+https://github.com/joe-broadhead/opencode-utilities.git" },
+  "bugs": {
+    "url": "https://github.com/joe-broadhead/opencode-utilities/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joe-broadhead/opencode-utilities.git"
+  },
   "license": "MIT",
   "type": "module",
   "exports": {
@@ -15,16 +24,47 @@
     "./icon-128.png": "./assets/icon-128.png",
     "./icon-256.png": "./assets/icon-256.png"
   },
-  "files": ["dist", "assets/icon.svg", "assets/icon-128.png", "assets/icon-256.png", "skills", "manifest", "README.md", "LICENSE", "NOTICE", "CHANGELOG.md"],
+  "files": [
+    "dist",
+    "assets/icon.svg",
+    "assets/icon-128.png",
+    "assets/icon-256.png",
+    "skills",
+    "manifest",
+    "README.md",
+    "LICENSE",
+    "NOTICE",
+    "CHANGELOG.md"
+  ],
   "opencode": {
     "host": ">=2.2.3 <2.3.0",
     "icons": [
-      { "src": "assets/icon.svg", "mimeType": "image/svg+xml", "sizes": ["any"] },
-      { "src": "assets/icon-128.png", "mimeType": "image/png", "sizes": ["128x128"] },
-      { "src": "assets/icon-256.png", "mimeType": "image/png", "sizes": ["256x256"] }
+      {
+        "src": "assets/icon.svg",
+        "mimeType": "image/svg+xml",
+        "sizes": [
+          "any"
+        ]
+      },
+      {
+        "src": "assets/icon-128.png",
+        "mimeType": "image/png",
+        "sizes": [
+          "128x128"
+        ]
+      },
+      {
+        "src": "assets/icon-256.png",
+        "mimeType": "image/png",
+        "sizes": [
+          "256x256"
+        ]
+      }
     ]
   },
-  "workspaces": ["npm/*"],
+  "workspaces": [
+    "npm/*"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=2",
@@ -133,7 +173,7 @@
       {
         "name": "utilities.timer_set",
         "permission": "utilities_timer_set",
-        "effect": "ask",
+        "effect": "allow",
         "readOnly": false
       },
       {
@@ -157,43 +197,43 @@
       {
         "name": "utilities.timer_delete",
         "permission": "utilities_timer_delete",
-        "effect": "ask",
+        "effect": "allow",
         "readOnly": false
       },
       {
         "name": "utilities.weather_geocode",
         "permission": "utilities_weather_geocode",
-        "effect": "ask",
+        "effect": "allow",
         "readOnly": true
       },
       {
         "name": "utilities.weather_current",
         "permission": "utilities_weather_current",
-        "effect": "ask",
+        "effect": "allow",
         "readOnly": true
       },
       {
         "name": "utilities.weather_daily",
         "permission": "utilities_weather_daily",
-        "effect": "ask",
+        "effect": "allow",
         "readOnly": true
       },
       {
         "name": "utilities.weather_hourly",
         "permission": "utilities_weather_hourly",
-        "effect": "ask",
+        "effect": "allow",
         "readOnly": true
       },
       {
         "name": "utilities.weather_demand_signal",
         "permission": "utilities_weather_demand_signal",
-        "effect": "ask",
+        "effect": "allow",
         "readOnly": true
       },
       {
         "name": "utilities.weather_summary",
         "permission": "utilities_weather_summary",
-        "effect": "ask",
+        "effect": "allow",
         "readOnly": true
       },
       {
@@ -205,13 +245,13 @@
       {
         "name": "utilities.speech_synthesize",
         "permission": "utilities_speech_synthesize",
-        "effect": "ask",
+        "effect": "allow",
         "readOnly": false
       },
       {
         "name": "utilities.speech_download",
         "permission": "utilities_speech_download",
-        "effect": "ask",
+        "effect": "allow",
         "readOnly": false
       }
     ],
