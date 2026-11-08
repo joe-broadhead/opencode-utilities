@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url"
 import { ACCESS_VALUES, DEFAULT_ASK, READ_ACTIONS, MODULES, TOOLS, WEATHER_ATTRIBUTION, registrable, toolRegistrable, type Availability, type Invocation, type StatusFacts, type StatusView, type ToolName } from "../../src/domain/contract.js"
 import { commandTransform } from "../../src/host/commands.js"
 import { createPlugin } from "../../src/host/plugin.js"
-import { commandAuthorize, createAuthorize, DEFAULT_RULES, defaultRules, insertDefaultRules, unguardedAgents } from "../../src/host/permissions.js"
+import { commandAuthorize, createAuthorize, DEFAULT_RULES, defaultRules, evaluate, insertDefaultRules, unguardedAgents } from "../../src/host/permissions.js"
 import { loadSkills, skillTransform } from "../../src/host/skills.js"
 import { buildStatus } from "../../src/host/status.js"
 import { toolTransform } from "../../src/host/tools.js"
@@ -163,6 +163,8 @@ describe("permissions", () => {
     expect(DEFAULT_RULES.every(r => r.effect === "allow" && r.resource === "*")).toBe(true)
     // The other two values: changes ask, or changes are denied, and reads always run.
     for (const [access, effect] of [["ask-changes", "ask"], ["read-only", "deny"]] as const) {
+      // An unclassified name matches only the namespace rule, so it gets the value's effect.
+      expect({ access, effect: evaluate([{ action: "*", resource: "*", effect: "allow" }, ...defaultRules(access)], "utilities_new_tool", "*") }).toEqual({ access, effect })
       const block = defaultRules(access)
       expect(block[0]).toEqual({ action: "utilities_*", resource: "*", effect })
       expect(block.filter(r => READ_ACTIONS.includes(r.action)).every(r => r.effect === "allow")).toBe(true)
