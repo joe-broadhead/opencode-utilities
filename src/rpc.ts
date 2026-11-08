@@ -58,6 +58,7 @@ const AVAILABILITY_TEXT: { readonly [A in Availability]: string } = {
   CLOSED: "shutting down",
   UNSUPPORTED_PLATFORM: "not supported on this platform",
   PLATFORM_PACKAGE_MISSING: "failed: platform package missing",
+  NATIVE_FILES_MISSING: "failed: platform files not built",
   BINARY_MISSING: "failed: program missing",
   INTEGRITY_MISMATCH: "failed: integrity check",
   CONTRACT_MISMATCH: "failed: unexpected program version",

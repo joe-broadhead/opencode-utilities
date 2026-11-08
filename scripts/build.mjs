@@ -30,6 +30,16 @@ const solid = {
   },
 }
 
+// A bundle is only half the plugin: the native files and the manifest that pins them are the other half, and they are
+// build outputs that a checkout does not carry. A dist/ without them loads and then refuses every tool that needs a
+// program, so the build refuses first, before it touches dist/, with the step that produces them.
+if (!existsSync(join(root, "manifest", "backends.json"))) {
+  console.error(
+    "NATIVE_FILES_MISSING: manifest/backends.json is not there, so a build of this checkout would refuse every tool " +
+      "that needs a program. Next step: Run npm run native:build (or npm run native:ensure), then npm run build.",
+  )
+  process.exit(1)
+}
 rmSync(dist, { recursive: true, force: true })
 const result = await build({
   absWorkingDir: root,

@@ -77,7 +77,7 @@ export type Authorize = (requests: readonly PermissionRequest[], invocation: Inv
 
 export const AVAILABILITY = [
   "AVAILABLE", "DISABLED", "CLOSED", "UNSUPPORTED_PLATFORM", "PLATFORM_PACKAGE_MISSING",
-  "BINARY_MISSING", "INTEGRITY_MISMATCH", "CONTRACT_MISMATCH", "SPEECH_ASSETS_MISSING", "UNSAFE_PATH",
+  "NATIVE_FILES_MISSING", "BINARY_MISSING", "INTEGRITY_MISMATCH", "CONTRACT_MISMATCH", "SPEECH_ASSETS_MISSING", "UNSAFE_PATH",
 ] as const
 export type Availability = typeof AVAILABILITY[number]
 export type FailureCode = Exclude<Availability, "AVAILABLE">

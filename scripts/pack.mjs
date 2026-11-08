@@ -23,6 +23,15 @@ if (platform) {
   packed = rest
 } else throw new Error(`${manifest.name} is neither the main package nor a platform package in PLATFORMS`)
 
+// A tarball without the native manifest installs and then refuses every tool that needs a program. The manifest is a
+// build output, so packing before the native step is the one way to ship that; refuse instead.
+if (manifest.name === "@joe-broadhead/opencode-utilities" && !existsSync(join(dir, "manifest", "backends.json"))) {
+  throw new Error(
+    "NATIVE_FILES_MISSING: manifest/backends.json is not there, so this tarball would refuse every tool that needs a " +
+      "program. Next step: Run npm run native:build, then pack again.",
+  )
+}
+
 const stage = mkdtempSync(join(tmpdir(), "utilities-pack-"))
 try {
   // Only what npm would pack: the files whitelist (npm adds package.json, README and LICENSE itself).

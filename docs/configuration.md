@@ -282,6 +282,7 @@ A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next 
 | `DISABLED` | Set `modules.<name>` to `true`. |
 | `CLOSED` | The plugin is shutting down. Retry after OpenCode has reloaded it. |
 | `PLATFORM_PACKAGE_MISSING` | Reinstall so the platform package is present, or run `npm run native:build` in a checkout. |
+| `NATIVE_FILES_MISSING` | The plugin's own platform files (`manifest/backends.json`) are not there, so no tool that needs a program can run, while `status` still answers. In a checkout, run `npm run native:build` and restart OpenCode; otherwise reinstall the plugin. |
 | `UNSUPPORTED_PLATFORM` | No build for this platform. Time and weather are unaffected when only speech lacks an engine. |
 | `BINARY_MISSING`, `INTEGRITY_MISMATCH` | Reinstall. For speech, delete the cache and run `/utilities-speech-install`. |
 | `CONTRACT_MISMATCH` | The plugin's files, or a program's output, do not match this version. Reinstall; if it persists, report it with the `utilities_status` output. |

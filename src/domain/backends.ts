@@ -17,10 +17,17 @@ export function detectTarget() {
 }
 export const isPlatform = (target: string): target is Platform => Object.hasOwn(PLATFORMS, target)
 
-/** Reads a JSON file that ships in the installed package. */
+/**
+ * Reads a JSON file that ships in the installed package. A file that is not there is NATIVE_FILES_MISSING, not a
+ * contract mismatch: the plugin's own build outputs are the native step's, and a checkout without them cannot run.
+ */
 export async function packageJson(path: string, max = 65536): Promise<unknown> {
   try { await noSymlinks(path); return JSON.parse((await readRegular(path, max)).toString("utf8")) }
-  catch (error) { if (error instanceof UtilitiesError && error.code === "UNSAFE_PATH") throw error; return fail("CONTRACT_MISMATCH") }
+  catch (error) {
+    if (error instanceof UtilitiesError && error.code === "UNSAFE_PATH") throw error
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return fail("NATIVE_FILES_MISSING")
+    return fail("CONTRACT_MISMATCH")
+  }
 }
 
 /**
@@ -72,7 +79,11 @@ export class Backends {
   /** Resolves the platform package root, or fails with UNSUPPORTED_PLATFORM or PLATFORM_PACKAGE_MISSING. */
   async platform(): Promise<{ root: string; entry: NonNullable<BackendManifest["platforms"][Platform]> }> {
     if (!isPlatform(this.target)) fail("UNSUPPORTED_PLATFORM")
-    this.manifest ??= packageJson(join(this.packageRoot, "manifest/backends.json")).then(raw => parse(manifestSchema, raw))
+    // Read once while it works. A failure is not kept: a checkout whose native build finishes after the plugin loaded
+    // answers correctly on the next call instead of holding the first failure for the life of the process.
+    this.manifest ??= packageJson(join(this.packageRoot, "manifest/backends.json"))
+      .then(raw => parse(manifestSchema, raw))
+      .catch(error => { this.manifest = undefined; throw error })
     const binaries = (await this.manifest).platforms[this.target]
     if (!binaries) fail("UNSUPPORTED_PLATFORM")
     const name = PLATFORMS[this.target].package
