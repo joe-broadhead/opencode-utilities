@@ -93,8 +93,15 @@ describe("the tarball", () => {
     expect(manifest).toMatchObject({ name: NAME, version: source.version, type: "module", opencode: { host: HOST_RANGE } })
     for (const field of ["workspaces", "dependencies", "peerDependencies", "peerDependenciesMeta", "bundleDependencies", "bundledDependencies", "overrides", "engines"]) expect(manifest[field]).toBeUndefined()
     expect(manifest.optionalDependencies).toEqual(Object.fromEntries(Object.values(PLATFORMS).map(p => [p.package, source.version])))
-    // Only the server part at "." and "./tui". The TUI imports the RPC contract from its own bundle.
-    expect(manifest.exports).toEqual({ ".": "./dist/index.js", "./tui": "./dist/tui.js" })
+    // The server part at "." and "./tui" (the TUI imports the RPC contract from its own bundle), plus the three icons
+    // the host and Jelly read. Nothing else, and no ./rpc.
+    expect(manifest.exports).toEqual({
+      ".": "./dist/index.js",
+      "./tui": "./dist/tui.js",
+      "./icon.svg": "./assets/icon.svg",
+      "./icon-128.png": "./assets/icon-128.png",
+      "./icon-256.png": "./assets/icon-256.png",
+    })
     expect(manifest.main).toBeUndefined()
     expect(manifest.types).toBeUndefined()
   })
