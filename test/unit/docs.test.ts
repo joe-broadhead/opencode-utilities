@@ -97,6 +97,16 @@ describe("the README's generated blocks", () => {
       for (const match of text.matchAll(/"(?:code|reason)":\s*"([A-Z][A-Z0-9_]{2,})"/g)) raised.add(match[1]!)
     }
     expect([...raised].filter(code => !table.has(code))).toEqual([])
+    // A code written into a message string ("CODE: what happened") is a code too. Comments that show the shape are not.
+    for (const path of SOURCES) {
+      if (path.endsWith("src/host/tools-rpc.ts")) continue
+      for (const line of read(path).split("\n")) {
+        const trimmed = line.trim()
+        if (trimmed.startsWith("*") || trimmed.startsWith("//") || trimmed.startsWith("/*")) continue
+        for (const match of line.matchAll(/[`"']([A-Z][A-Z0-9_]{2,}): /g)) raised.add(match[1]!)
+      }
+    }
+    expect([...raised].filter(code => !table.has(code))).toEqual([])
   })
 })
 
