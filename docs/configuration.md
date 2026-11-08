@@ -235,8 +235,8 @@ Use the engine name for the platform you run on. A hash mismatch or a missing fi
 | `/utilities-status` | Posts the full status into the session: the rows Connection, Account, Access, the modules, Skills, Tools, Agents without default rules (names, then the block, one rule per line), OpenCode, and one Next step (`Nothing to do.` when nothing is needed). |
 | `/utilities-speech-install` | Asserts `utilities_speech_download`, then downloads missing files. |
 | `/utilities` | TUI dialog, palette "Utilities: Status". Reads the `status` RPC method only, when it opens, and on server, agent and Open-Meteo key events, which it hears only while open. Shows the same lines as `/utilities-status`. `r` refreshes, `Esc` closes. The key hint reads `r refresh · esc close`. |
-| RPC `status` | The `utilities.local` RPC's only method. Returns the same status object. The TUI imports its contract from its own bundle; the package does not export it. |
-| RPC `utilities.local.tools` | The tools RPC for scripts: `describe`, plus one method per tool, run as a session and its agent. A call resolves the rule before dispatch: an ask is refused, not prompted, and only an allow runs. See [scripting.md](scripting.md). |
+| RPC `status` | The `utilities.local` RPC's only method. Returns the same status object. The TUI imports its contract from its own bundle; the package does not export it. The id the plugin had before the rename, `utilities.tools`, answers the same method until the next minor release, and status then says it is deprecated. |
+| RPC `utilities.local.tools` | The tools RPC for scripts: `describe`, plus one method per tool, run as a session and its agent. Every tool is allowed by default; `access` and a script's own rules restrict it. A call resolves the rule before dispatch: an ask is refused, not prompted, and only an allow runs. See [scripting.md](scripting.md). The old id `utilities.tools.tools` answers the same methods until the next minor release, and its `describe` carries `"deprecated": "use utilities.local.tools"`. |
 
 The status RPC starts with the fields every one of these plugins shares:
 

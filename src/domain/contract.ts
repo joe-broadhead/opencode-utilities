@@ -2,6 +2,11 @@
 
 export const PLUGIN_ID = "utilities.local"
 export const TUI_ID = "utilities.local.tui"
+/**
+ * The ids before the rename to `utilities.local`. They answer for one release, running the same handlers, so a script
+ * written against them keeps working; `deprecated` and one status line say so.
+ */
+export const DEPRECATED_IDS = { status: "utilities.tools", tools: "utilities.tools.tools", use: PLUGIN_ID } as const
 export const NAMESPACE = "utilities"
 export const COMMANDS = { status: "utilities-status", speechInstall: "utilities-speech-install" } as const
 export const WEATHER_INTEGRATION = "open-meteo"
@@ -152,6 +157,8 @@ export interface StatusView {
   readonly unguardedAgents: readonly string[]
   /** What the generated default rules allow, from the plugin options. */
   readonly access: Access
+  /** Set only after an old id answered in this process: one line naming it and the id to use. */
+  readonly deprecated?: string
   readonly nextStep: string
   readonly platform: { readonly target: string; readonly package?: PlatformPackage; readonly availability: Availability; readonly next?: string }
   readonly modules: { readonly [M in Module]: { readonly availability: Availability; readonly next?: string } }

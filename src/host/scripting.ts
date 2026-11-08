@@ -1,6 +1,6 @@
 import * as z from "zod"
 import { parse } from "../domain/common.js"
-import { NAMESPACE, TOOLS, methodClass, toolRegistrable, type ToolName } from "../domain/contract.js"
+import { DEPRECATED_IDS, NAMESPACE, TOOLS, methodClass, toolRegistrable, type ToolName } from "../domain/contract.js"
 import { TOOL_DEFINITIONS } from "../domain/registry.js"
 import { registerToolsRpc, type JsonSchema, type PluginMethod, type ToolsRpcContext } from "./tools-rpc.js"
 import { runTool, type ToolSources } from "./tools.js"
@@ -10,8 +10,8 @@ import { runTool, type ToolSources } from "./tools.js"
  * model, as a session and the agent it names (src/host/tools-rpc.ts, docs/scripting.md).
  *
  * Each method runs the tool's own path: the same input schema, the same runtime call and the same asserts as the
- * model's tool, with the script's call as the invocation. Weather, the timer writes and the speech write ask by
- * default, so a script is refused them until a prior allow rule exists: an ask cannot be answered here.
+ * model's tool, with the script's call as the invocation. Every tool is allowed by default; the `access` option and a
+ * script's own rules restrict it, and an ask is refused because no one is there to answer it.
  */
 
 /** The tools that are methods, in the registry's order: every tool. */
@@ -38,6 +38,52 @@ export function scriptMethods(sources: ToolSources): PluginMethod[] {
   }))
 }
 
-export function registerScripting(ctx: ToolsRpcContext, sources: ToolSources) {
-  return registerToolsRpc(ctx, { methods: scriptMethods(sources) })
+type Handler = (raw: unknown, context: never) => unknown
+
+/** The contract the shared module builds: an id, and one entry per method with its schemas. */
+interface Contract {
+  readonly id: string
+  readonly methods: Readonly<Record<string, { readonly input: unknown; readonly output: unknown; readonly errors?: unknown }>>
+}
+
+/**
+ * Registers the tools RPC, and the id it had before the rename (`utilities.tools.tools`) alongside it. The shared module
+ * builds one contract, so a context whose `register` takes every contract twice gives the old id the same handlers,
+ * the same resolve and the same refusal, and its `describe` says it is deprecated. The old id answers until the next
+ * minor release.
+ */
+export function registerScripting(ctx: ToolsRpcContext, sources: ToolSources, onAliasCalled?: () => void) {
+  type Registration = { dispose(): Promise<void> }
+  const register = ctx.rpc.register.bind(ctx.rpc) as unknown as (contract: { readonly id: string }, handlers: Record<string, Handler>) => Promise<Registration>
+  const both = async (contract: Contract, handlers: Record<string, Handler>) => {
+    const stopping = await register(contract, handlers)
+    // The alias marks itself on any call, and its describe carries the note.
+    const aliasHandlers: Record<string, Handler> = Object.fromEntries(
+      Object.entries(handlers).map(([name, handler]) => [name, async (raw: unknown, context: never) => {
+        onAliasCalled?.()
+        const value = await handler(raw, context) as Record<string, unknown>
+        return name === "describe" ? { ...value, deprecated: `use ${DEPRECATED_IDS.use}.tools` } : value
+      }]),
+    )
+    // The host validates an output against its declared schema, so the alias's describe declares the extra field.
+    const describe = contract.methods.describe,
+          output = describe.output as { readonly properties?: Record<string, unknown> }
+    const aliasContract: Contract = {
+      ...contract,
+      id: DEPRECATED_IDS.tools,
+      methods: {
+        ...contract.methods,
+        describe: { ...describe, output: { ...output, properties: { ...output.properties, deprecated: { type: "string" } } } },
+      },
+    }
+    const aliasing = await register(aliasContract, aliasHandlers)
+    return {
+      dispose: async () => {
+        await aliasing.dispose().catch(() => undefined)
+        await stopping.dispose().catch(() => undefined)
+      },
+    }
+  }
+  const aliasing = { ...ctx, rpc: { ...ctx.rpc, register: both } } as unknown as ToolsRpcContext
+  return registerToolsRpc(aliasing, { methods: scriptMethods(sources) })
 }

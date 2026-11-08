@@ -12,6 +12,11 @@ All notable changes to this project are documented here. The format follows [Kee
   reads always run. `utilities_status`, the status RPC and the dialog show the value and the block for it, and an
   agent without the rules is only named when something is actually held back.
 - The tools RPC follows the same default: a script runs every tool unless `access` or its rules say otherwise.
+- The plugin id is `utilities.local`: the status RPC is `utilities.local`, the tools RPC `utilities.local.tools` and the
+  TUI `utilities.local.tui`. The ids before the rename, `utilities.tools` and `utilities.tools.tools`, answer the same
+  calls until the next minor release: their methods are unchanged, the tools RPC's `describe` carries
+  `"deprecated": "use utilities.local.tools"`, and `/utilities-status` adds one line naming the old id once one has been
+  called. Move a script to the new id before the next minor release.
 
 - tools RPC v2: every known tool is scriptable under a prior explicit allow. `utilities_timer_set`, `utilities_timer_delete`
   and `utilities_speech_synthesize` are methods now (a write, a write and an export), so a script can write with the

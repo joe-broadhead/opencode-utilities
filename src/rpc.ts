@@ -1,5 +1,5 @@
 import { Rpc } from "@opencode/plugin/rpc"
-import { AVAILABILITY, COMMANDS, DEFAULT_ASK, MODULES, PLATFORMS, PLUGIN_ID, SPEECH_MODEL_ROLES, STATES, TOOLS, WEATHER_ATTRIBUTION, registrable, toolRegistrable, type Availability, type Module, type StatusFacts, type StatusState, type StatusSummary, type StatusView, type ToolName } from "./domain/contract.js"
+import { AVAILABILITY, COMMANDS, DEFAULT_ASK, DEPRECATED_IDS, MODULES, PLATFORMS, PLUGIN_ID, SPEECH_MODEL_ROLES, STATES, TOOLS, WEATHER_ATTRIBUTION, registrable, toolRegistrable, type Availability, type Module, type StatusFacts, type StatusState, type StatusSummary, type StatusView, type ToolName } from "./domain/contract.js"
 import { hostText } from "./host/versions.js"
 
 // The status contract in plain JSON Schema, so the TUI bundle carries no zod. The types are StatusView and
@@ -40,11 +40,19 @@ export const STATUS_JSON_SCHEMA = object({
     block: list(object({ action: text(128), resource: text(128), effect: choice(["allow", "ask", "deny"]) }, ["action", "resource", "effect"]), 64),
   }, ["askByDefault", "block"]),
   access: choice(["all", "ask-changes", "read-only"]),
+  deprecated: text(512),
 }, ["version", "host", "state", "unguardedAgents", "nextStep", "platform", "modules", "weather", "speech", "timers", "shadowedSkills", "permissions", "access"])
 
 /** The plugin's only RPC method. The TUI view reads the status through it. */
 export const Utilities = Rpc.define({
   id: PLUGIN_ID,
+  methods: { status: { input: object({}, []), output: STATUS_JSON_SCHEMA, errors: { unavailable: object({ nextStep: { type: "string" } }, ["nextStep"]) } } },
+  events: {},
+})
+
+/** The status contract under the id before the rename, so a script that calls it keeps working for one release. */
+export const DeprecatedUtilities = Rpc.define({
+  id: DEPRECATED_IDS.status,
   methods: { status: { input: object({}, []), output: STATUS_JSON_SCHEMA, errors: { unavailable: object({ nextStep: { type: "string" } }, ["nextStep"]) } } },
   events: {},
 })
@@ -151,6 +159,8 @@ export function statusLines(view: StatusView, { paste, agents }: { readonly past
     line("Tools", `${registered} available, 0 unknown`, true),
     line(AGENTS_ROW, agents ?? (unguarded.length ? `${unguarded.join(", ")}${paste ? `\n${rulesToPaste(view)}` : ""}` : "none"), agents ? agents === "none" : unguarded.length === 0),
     line("OpenCode", `${hostText(view.host)}. Utilities ${view.version}`, view.host.tested),
+    // Only after an old id answered in this process: one line, so a script still on it is visible and fixable.
+    ...(view.deprecated === undefined ? [] : [line("Deprecated", view.deprecated, false)]),
     line("Next step", view.nextStep, view.nextStep === NOTHING_TO_DO),
   ]
 }

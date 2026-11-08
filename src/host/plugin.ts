@@ -4,10 +4,11 @@ import type { Plugin } from "@opencode/plugin"
 import { formatFailure, UtilitiesError } from "../domain/common.js"
 import { loadConfig } from "../domain/config.js"
 import { MODULES, PLUGIN_ID, TOOLS, registrable, toolRegistrable, type CreateRuntime, type Module, type StatusView, type ToolName } from "../domain/contract.js"
-import { Utilities } from "../rpc.js"
+import { DeprecatedUtilities, Utilities } from "../rpc.js"
 import { StatusSchema } from "./status-schema.js"
 import { commandTransform } from "./commands.js"
 import { checkHost } from "./compat.js"
+import { deprecatedNote, markAliasCalled, resetAliases } from "./deprecated.js"
 import { createAuthorize, insertDefaultRules } from "./permissions.js"
 import { registerScripting } from "./scripting.js"
 import { loadSkills, skillTransform } from "./skills.js"
@@ -52,22 +53,28 @@ export function createPlugin({ createRuntime, packageRoot }: PluginSources): Plu
           ownSkills: skills.map(skill => ({ name: skill.id, path: skill.info.path })),
           skills: async () => (await ctx.skill.list({ location: { directory: ctx.location.directory } })).data,
           access: config.access,
+          deprecated: deprecatedNote(),
         })
         await registerWeatherIntegration(ctx.integration)
         await ctx.agent.transform(insertDefaultRules(config.access))
         const sources = { runtime, weather, status, modules: () => modules }
         await ctx.tool.transform(toolTransform(sources))
-        await ctx.rpc.register(Utilities, {
-          status: async (_input, context) => {
-            try { return StatusSchema.parse(await status()) }
-            catch {
-              const failure = new UtilitiesError("STATUS_UNAVAILABLE")
-              return context.error("unavailable", formatFailure(failure), { nextStep: failure.hint! })
-            }
-          },
-        })
+        resetAliases()
+        const statusHandler = async (_input: unknown, context: { error(code: string, message: string, data: Record<string, unknown>): unknown }) => {
+          try { return StatusSchema.parse(await status()) }
+          catch {
+            const failure = new UtilitiesError("STATUS_UNAVAILABLE")
+            return context.error("unavailable", formatFailure(failure), { nextStep: failure.hint! })
+          }
+        }
+        await ctx.rpc.register(Utilities, { status: statusHandler } as never)
+        // The id before the rename answers for one release: the same handler, and a note once an alias is called.
+        await ctx.rpc.register(DeprecatedUtilities, { status: async (input: unknown, context: never) => {
+          markAliasCalled("status")
+          return statusHandler(input, context)
+        } } as never)
         // Scripts call the tools that change nothing with no model, as a session and its agent (docs/scripting.md).
-        stopScripting = await registerScripting(ctx, sources)
+        stopScripting = await registerScripting(ctx, sources, () => markAliasCalled("tools"))
         await ctx.command.transform(commandTransform({ assert: input => ctx.permission.assert(input), synthetic: input => ctx.session.synthetic(input), runtime, status, signal: shutdown.signal }))
         await ctx.skill.transform(skillTransform(skills, enabled))
         // Availability changes, such as a finished speech download, rebuild the tool and skill lists.

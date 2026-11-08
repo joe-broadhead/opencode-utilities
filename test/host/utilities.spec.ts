@@ -336,6 +336,20 @@ describe(`the tools RPC ${TOOLS_RPC_ID} on @opencode/sdk, host version ${HOST_VE
     }
   })
 
+  test("the ids before the rename answer the same calls, say they are deprecated, and status notes the call", async () => {
+    // The tools RPC under `utilities.tools.tools`: the same methods, and `describe` says to move.
+    const legacy = host.sdk.rpc(Rpc.define({ id: "utilities.tools.tools", methods: { describe: { input: any, output: any, errors: { failed: any } } }, events: {} } as never)) as unknown as { describe: (i: unknown, o: object) => Promise<Record<string, any>> }
+    const described = await legacy.describe({}, { location: { directory } })
+    expect(described.methods.map((method: { name: string }) => method.name)).toEqual((await client().describe({}, { location: { directory } })).methods.map((method: { name: string }) => method.name))
+    expect(described.deprecated).toBe("use utilities.local.tools")
+    // The status RPC under `utilities.tools`, and the one line it leaves behind on the new id.
+    const old = host.sdk.rpc(Rpc.define({ id: "utilities.tools", methods: { status: { input: any, output: any, errors: { failed: any } } }, events: {} } as never)) as unknown as { status: (i: unknown, o: object) => Promise<Record<string, any>> }
+    expect((await old.status({}, { location: { directory } })).version).toBe(version)
+    const status = await host.sdk.rpc(Utilities).status({}, { location: { directory } })
+    expect(status.deprecated).toBe("Deprecated id called: utilities.tools, utilities.tools.tools. Use utilities.local, utilities.local.tools instead; the old id works until the next minor release.")
+    expect(formatStatus(status)).toContain("Deprecated: Deprecated id called:")
+  })
+
   test("runs a read as the session and its agent with no model turn, and returns the tool's output", async () => {
     const before = runtime(directory).calls.length
     expect(await call("build", "time_now")).toEqual({ value: SAMPLES.time_now.output })

@@ -64,7 +64,7 @@ await tools.utilities.speech_synthesize({ text: "hello", path: "out.wav" })
 
 ### Scripts
 
-A script or a cron job can call the tools with no model, through `opencode api`. It runs as a session and its agent, under that agent's permission rules and the session's own. Every tool is a method; a write needs a prior explicit `allow` in the session's or the agent's rules, because an `ask` is refused when no one can answer it.
+A script or a cron job can call the tools with no model, through `opencode api`. It runs as a session and its agent, with the same default: every tool is allowed unless the `access` option or the agent's rules restrict it, and an `ask` is refused when no one can answer it. The id before the rename, `utilities.tools.tools`, still answers for one release, with `"deprecated": "use utilities.local.tools"` in its `describe`.
 
 ```sh
 opencode api post /api/rpc/utilities.local.tools/time_now \

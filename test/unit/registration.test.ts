@@ -480,8 +480,9 @@ describe("setup", () => {
     expect(runtimes.created[1]!.listenerCount()).toBe(1)
     disposed.length = 0
     await (cleanup as () => Promise<void>)()
-    // The tools RPC and its evaluate hook go with the plugin; the status RPC is the host's to dispose.
-    expect(disposed.sort()).toEqual(["hook", "utilities.local.tools"])
+    // The tools RPC (and the old id beside it) and its evaluate hook go with the plugin; the status RPC is the
+    // host's to dispose.
+    expect(disposed.sort()).toEqual(["hook", "utilities.local.tools", "utilities.tools.tools"])
     expect(runtimes.created[1]).toMatchObject({ closed: true })
     expect(runtimes.created[1]!.listenerCount()).toBe(0)
   })

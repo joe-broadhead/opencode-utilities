@@ -8,6 +8,10 @@ server. It uses the tools RPC, `utilities.local.tools`, through `opencode api` o
 The envelope is
 `opencode api post /api/rpc/utilities.local.tools/<method> -H "x-opencode-directory:$PWD" -d '{"input":{"sessionID":"<id>","input":{…}}}'`.
 
+The id before the rename, `utilities.tools.tools`, still answers the same methods, and its `describe` carries
+`"deprecated": "use utilities.local.tools"`: move a script to the new id before the next minor release, when the old one
+goes. The status command says so once an old id has been called.
+
 | Methods | The tools | Class |
 | --- | --- | --- |
 | `status` | `utilities_status`: the compact status, with the unguarded agents as a count | read |
