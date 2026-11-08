@@ -18,8 +18,8 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Added
 
-- A Code Mode host case for the writes (the permission audit's G4): a program that calls `timer_set` and
-  `speech_synthesize` asks for each, and with nobody present nothing runs and nothing is written.
+- A Code Mode host case for the writes: a program that calls `timer_set` and `speech_synthesize` asks for each, and
+  with nobody present nothing runs and nothing is written.
 
 ## [0.0.7] - 2026-11-06
 

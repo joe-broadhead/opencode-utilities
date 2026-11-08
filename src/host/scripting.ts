@@ -6,7 +6,7 @@ import { registerToolsRpc, type JsonSchema, type PluginMethod, type ToolsRpcCont
 import { runTool, type ToolSources } from "./tools.js"
 
 /**
- * The tools RPC `utilities.tools.tools`: every tool as an RPC method of the same name, so a script can call it with no
+ * The tools RPC `utilities.local.tools`: every tool as an RPC method of the same name, so a script can call it with no
  * model, as a session and the agent it names (src/host/tools-rpc.ts, docs/scripting.md).
  *
  * Each method runs the tool's own path: the same input schema, the same runtime call and the same asserts as the

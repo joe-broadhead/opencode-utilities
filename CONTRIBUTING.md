@@ -23,11 +23,13 @@ To try a checkout in OpenCode, point a `plugins` entry's `package` at the reposi
 
 ## Checks
 
-`npm run check` runs, in order: the native ensure step, the typecheck of `src` and `test`, the unit tests, the JS build, the host tests on embedded OpenCode 2.2.3, the TUI test, the forbidden-API scan (`npm run lint`) and the pack test, which runs every tested release. The pack test packs the plugin and this platform's package, installs them into an empty project with scripts off, and loads them in each tested stock OpenCode release. The tested releases are one list, `TESTED_HOSTS` in `src/host/versions.ts` (2.2.3, 2.2.4, 2.2.5 and 2.2.6); the status, the tests and CI all read it.
+`npm run check` runs, in order: the native ensure step, the typecheck of `src` and `test`, the unit tests, the JS build, the host tests on the embedded `@opencode/sdk` for each tested release (`scripts/host-tests.mjs`; `HOST_SDK_DIR` runs one), the TUI test, the forbidden-API scan (`npm run lint`) and the pack test, which runs every tested release. The pack test packs the plugin and this platform's package, installs them into an empty project with scripts off, and loads them in each tested stock OpenCode release. The tested releases are one list, `TESTED_HOSTS` in `src/host/versions.ts` (2.2.3, 2.2.4, 2.2.5 and 2.2.6); the status, the tests and CI all read it.
 
-- Set `OPENCODE_BIN_2_2_3`, `OPENCODE_BIN_2_2_4` and `OPENCODE_BIN_2_2_5` to stock `opencode` binaries to skip installing them. Unset, the pack test installs each release into its own temp folder, as CI and the release do.
+- Set `OPENCODE_BIN_2_2_3`, `OPENCODE_BIN_2_2_4`, `OPENCODE_BIN_2_2_5` and `OPENCODE_BIN_2_2_6` to stock `opencode` binaries to skip installing them. Unset, the pack test installs each release into its own temp folder, as CI and the release do.
 - Host and pack tests put their temp roots under `/private/tmp` on macOS (the system temp folder elsewhere), never under your home, because OpenCode searches upward for `.opencode/` folders. Each stock server gets its own free port.
 - The unit tests in `test/unit/time-keep.test.ts` run this platform's real `time-keep`, which `npm run check` builds first.
+- The README's default-rules and code tables are generated from the source: run `UPDATE_DOCS=1 npm test` after changing `DEFAULT_ASK` or a failure code, and `test/unit/docs.test.ts` fails while they differ.
+- `npm run lint` runs actionlint over `.github/workflows` when it is on `PATH` (set `ACTIONLINT_BIN` for another path) and prints a notice when it is not. CI runs it in its own job.
 - The default checks make no network calls to Open-Meteo or GitHub. Live weather runs only with `UTILITIES_LIVE_WEATHER=1`.
 
 Commit messages use `type(scope): summary`. Keep the README, `docs/configuration.md`, `SECURITY.md` and this file in step with the code. See [AGENTS.md](AGENTS.md) for the design rules.

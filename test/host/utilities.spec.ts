@@ -169,7 +169,7 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     }
   })
 
-  test("Code Mode asks for a timer write and a synthesised file, and with nobody present nothing runs (G4)", async () => {
+  test("Code Mode asks for a timer write and a synthesised file, and with nobody present nothing runs", async () => {
     const sessionID = await boot(dirs.main)
     const before = runtime(dirs.main).calls.length
     for (const tool of ["timer_set", "speech_synthesize"] as const) {

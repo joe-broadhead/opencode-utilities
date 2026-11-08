@@ -67,7 +67,7 @@ await tools.utilities.speech_synthesize({ text: "hello", path: "out.wav" })
 A script or a cron job can call the tools with no model, through `opencode api`. It runs as a session and its agent, under that agent's permission rules and the session's own. Every tool is a method; a write needs a prior explicit `allow` in the session's or the agent's rules, because an `ask` is refused when no one can answer it.
 
 ```sh
-opencode api post /api/rpc/utilities.tools.tools/time_now \
+opencode api post /api/rpc/utilities.local.tools/time_now \
   -H "x-opencode-directory:$PWD" \
   -d '{"input":{"sessionID":"ses_…","input":{"timezones":["Asia/Tokyo"]}}}'
 ```
@@ -85,6 +85,8 @@ The engine is `utilities-speech-<platform>`. The models are `ggml-tiny-q5_1.bin`
 
 On setup the plugin inserts these rules directly after each agent's base `{ "action": "*", "resource": "*", "effect": "allow" }` rule. Agents without that base rule are left alone. A later deny, such as Plan's, still wins. Your own `permissions` rules and a saved "Always allow" also win.
 
+<!-- generated:rules -->
+
 | Action | Resource | Effect |
 | --- | --- | --- |
 | `utilities_weather_*` | `*` | `ask` |
@@ -92,6 +94,8 @@ On setup the plugin inserts these rules directly after each agent's base `{ "act
 | `utilities_timer_delete` | `*` | `ask` |
 | `utilities_speech_synthesize` | `*` | `ask` |
 | `utilities_speech_download` | `*` | `ask` |
+
+<!-- /generated:rules -->
 
 What each call asserts:
 
@@ -172,25 +176,71 @@ Members have nothing to set. To forbid an action everywhere, add a top-level `de
 
 Start with `/utilities` or `/utilities-status`. They end with one next step. Errors read `CODE: what happened. Next step: What to do.` Host permission errors are passed through unchanged.
 
-| State or code | What to do |
+<!-- generated:codes -->
+
+| Code | What happened | Next step |
+| --- | --- | --- |
+| `AUDIO_DURATION_LIMIT` | The audio is longer than ten minutes. | Split it into shorter files. |
+| `BACKEND_FAILED` | The program behind this tool reported an error. | Check the input and retry. |
+| `BACKEND_JSON_INVALID` | The program behind this tool returned unreadable output. | Retry. If it persists, reinstall the plugin. |
+| `BINARY_MISSING` | A program the plugin needs is missing from its platform package. | Reinstall the plugin, then restart OpenCode. |
+| `BRIDGE_CORRELATION` | The speech engine answered a different request. | Retry. If it persists, delete the speech cache and run /utilities-speech-install. |
+| `CANCELLED` | The call was cancelled. | Call the tool again if you still need the result. |
+| `CLEANUP_FAILED` | The plugin could not remove its temporary files. | Retry. Leftover job directories are removed the next time the plugin starts. |
+| `CLOSED` | The Utilities plugin is shutting down. | Retry after OpenCode has reloaded the plugin. |
+| `CONTRACT_MISMATCH` | The plugin's files, or a program's output, do not match what this plugin version expects. | Reinstall the plugin. If it persists, report it with the utilities_status output. |
+| `DEADLINE_EXCEEDED` | The call took longer than its time limit. | Retry, or narrow the request. |
+| `DISABLED` | This module is turned off in the plugin options. | Set modules.<name> to true in the Utilities plugin options in opencode.json. |
+| `DOWNLOAD_FAILED` | Downloading the speech files failed. | Check the network and proxy settings and retry, or pre-seed the files in speech.assetsDir. |
+| `FILE_CHANGED` | A file changed while the plugin was reading it. | Retry. |
+| `FILE_REJECTED` | A file the plugin reads is not a regular file, or is too large. | Reinstall the plugin. |
+| `HOLIDAY_COVERAGE` | Holiday data covers 2000–2030, and this call needs a year outside it. | Use dates from 2000 to 2030, or leave out country to count weekends only. |
+| `HOST_UNTESTED` | Utilities supports OpenCode >=2.2.3 <2.3.0. | Use OpenCode 2.2.3, 2.2.4, 2.2.5 or 2.2.6, or set the plugin option allowUntestedHost: true to run anyway. |
+| `INPUT_INVALID` | The tool input is invalid. | Correct the named fields and call the tool again. |
+| `INPUT_LIMIT` | The tool input is too large. | Send less text and call the tool again. |
+| `INTEGRITY_MISMATCH` | A program or model file does not match its pinned SHA-256 hash. | Reinstall the plugin, then restart OpenCode. |
+| `NATIVE_FILES_MISSING` | The plugin's platform files were not built or not installed, so no tool that needs a program can run. | In a checkout, run npm run native:build and restart OpenCode. Otherwise reinstall the plugin. |
+| `OPERATION_FAILED` | The tool failed unexpectedly. | Retry. If it persists, call utilities_status. |
+| `OPTIONS_INVALID` | The plugin options are invalid. | Fix the named option in the Utilities plugin options in opencode.json. |
+| `OUTPUT_EXISTS` | A file already exists at the output path. | Choose another path, or delete the file first. |
+| `OUTPUT_LIMIT` | The result is too large to return. | Narrow the request, for example fewer days, hours or results. |
+| `OUTPUT_PATH_MISMATCH` | The speech engine wrote its output somewhere unexpected. | Retry. If it persists, delete the speech cache and run /utilities-speech-install. |
+| `PERMISSION_DENIED` | The tools RPC refused the call. | Add an allow rule for the action to the session's agent or to the session, or use a session whose agent allows it. |
+| `PLATFORM_PACKAGE_MISSING` | The platform package with the time and weather programs is not installed. | Reinstall the plugin so npm installs its platform package, then restart OpenCode. |
+| `QUEUE_FULL` | Too many calls to this module are waiting. | Wait for earlier calls to finish, then retry. |
+| `SESSION_AGENT_REQUIRED` | The tools RPC refused the call. | Create a session that names an agent, such as POST /api/session with {"agent":"build"}, and pass its id. |
+| `SESSION_UNKNOWN` | The tools RPC refused the call. | Create a session in the location you mean, such as POST /api/session with {"agent":"build"} sent with the header "x-opencode-directory: <dir>" or the location[directory] query, and pass its id. |
+| `SKILLS_INVALID` | A Utilities skill file is missing or malformed, so that skill was skipped. | Reinstall the plugin. |
+| `SOURCE_CHANGED` | The audio file changed while the call was waiting. | Call the tool again. |
+| `SOURCE_REJECTED` | The audio file cannot be used. It must be an existing regular file of at most 20 MiB, not a symbolic link. | Pass the path of a 16-bit PCM WAV file. |
+| `SPAWN_FAILED` | The plugin could not start the program behind this tool. | Call utilities_status, and reinstall the plugin if a module is unavailable. |
+| `SPEECH_ASSETS_MISSING` | The speech engine or model files are not installed. | Approve the utilities_speech_download request, run /utilities-speech-install, or pre-seed the files in speech.assetsDir. |
+| `SPEECH_FAILED` | The speech engine failed. | Retry. If it persists, call utilities_status. |
+| `STATE_FILE_UNSAFE` | A timer store file is a link or not a regular file. | Remove the unexpected file from this project's timer directory. |
+| `STATE_NOT_PRIVATE` | The plugin's state directory is accessible to other users. | Run chmod 700 on the stateRoot directory. |
+| `STATUS_UNAVAILABLE` | Utilities status could not be read. | Run /utilities-status in a session to see the error, or check the OpenCode server log. |
+| `STDERR_LIMIT` | The program behind this tool wrote too much diagnostic output. | Retry. If it persists, reinstall the plugin. |
+| `STDOUT_LIMIT` | The program behind this tool returned more output than the plugin accepts. | Narrow the request. |
+| `TIMER_BYTE_QUOTA` | This project's timer store is full. | Delete timers, or use shorter descriptions and tags. |
+| `TIMER_EXISTS` | A timer with that name already exists. | Ask the user whether to overwrite it, then call utilities_timer_set with replace: true, or choose another name. |
+| `TIMER_NOT_FOUND` | No timer with that name exists in this project. | Call utilities_timer_list to see this project's timers. |
+| `TIMER_QUOTA` | This project already has 1000 timers. | Delete timers with utilities_timer_delete first. |
+| `TIMER_STATE_UNKNOWN` | The timer change may or may not have been saved. | Call utilities_timer_get or utilities_timer_list before you retry. |
+| `TIME_AMBIGUOUS` | That local time happens twice, at a daylight-saving change. | Add the UTC offset the user means to the datetime, or ask the user which one they mean. |
+| `TIME_NONEXISTENT` | That local time is skipped by a daylight-saving change, so it does not exist in that zone. | Use a time outside the change, or add the UTC offset the user means to the datetime. |
+| `TIME_OFFSET_MISMATCH` | The datetime's UTC offset is not the one from_timezone uses at that moment. | Remove the offset to read the datetime as local time in from_timezone, or use from_timezone's own offset. |
+| `TIME_OUT_OF_RANGE` | The result is outside the range the time engine supports. | Use a smaller amount or a nearer date. |
+| `UNSAFE_CLEANUP` | The plugin refused to delete a path outside its own directories. | Report this with the utilities_status output. |
+| `UNSAFE_PATH` | A file or folder inside the plugin's own directories (stateRoot, the speech cache, speech.assetsDir or the installed package) is a symbolic link, or not the expected type. Links above those directories are fine. | Replace the link with the real file or folder, or reinstall the plugin. |
+| `UNSUPPORTED_PLATFORM` | This module has no build for this platform. | Call utilities_status to see which modules work here. |
+| `WAV_INVALID` | The file is not a valid WAV file. | Convert it to 16-bit PCM WAV, for example with `ffmpeg -i input.m4a -ac 1 -ar 16000 -c:a pcm_s16le output.wav`, then call the tool again. |
+| `WAV_UNSUPPORTED` | Only 16-bit PCM WAV at 8-48 kHz, mono or stereo, is supported. | Convert it to 16-bit PCM WAV, for example with `ffmpeg -i input.m4a -ac 1 -ar 16000 -c:a pcm_s16le output.wav`, then call the tool again. |
+| `WEATHER_KEY_REJECTED` | Open-Meteo rejected the connected API key. | Run /connect and choose Open-Meteo, then enter a valid key, or run opencode auth logout open-meteo to use the free tier. |
+
+<!-- /generated:codes -->
+
+| State | What to do |
 | --- | --- |
-| `HOST_UNTESTED` | OpenCode is outside `>=2.2.3 <2.3.0`. Use 2.2.3, 2.2.4, 2.2.5 or 2.2.6, or set `allowUntestedHost: true` and accept the warning. |
-| `OPTIONS_INVALID` | The message names the option. Fix it in the plugin entry and restart. |
-| `PLATFORM_PACKAGE_MISSING` | Reinstall the plugin so npm installs `@joe-broadhead/opencode-utilities-bin-<platform>` at the same version, then restart OpenCode. |
-| `UNSUPPORTED_PLATFORM` | There is no build for this OS or CPU. See [Requirements](#requirements). |
-| `BINARY_MISSING`, `INTEGRITY_MISMATCH` | A program or model file is missing or does not match its pinned hash. Reinstall; for speech, delete the cache and run `/utilities-speech-install`. |
-| `SPEECH_ASSETS_MISSING` | Approve `utilities_speech_download`, run `/utilities-speech-install`, or pre-seed `speech.assetsDir`. |
-| `DOWNLOAD_FAILED` | Check the network or proxy, then retry, or pre-seed `speech.assetsDir`. |
-| `DISABLED` | Set `modules.<name>` to `true`. |
-| `WEATHER_KEY_REJECTED` | Run `/connect` and choose Open-Meteo, then enter a valid key, or run `opencode auth logout open-meteo` for the free tier. |
-| `BACKEND_FAILED` (rate limit) | Open-Meteo's free-tier rate limit was reached. Wait, or add a commercial key. |
-| `UNSAFE_PATH` | A file or folder inside the plugin's state, cache or install directory is a symbolic link. Replace it with the real file or folder. Links above those directories, such as macOS `/tmp` or Fedora Atomic `/home`, are fine. |
-| `TIME_NONEXISTENT`, `TIME_AMBIGUOUS` | The local time falls in a daylight-saving change. `TIME_AMBIGUOUS` gives both UTC offsets: add the one you mean to the `datetime`. |
-| `HOLIDAY_COVERAGE` | Holiday data covers 2000–2030. Use dates in that range, or leave out `country`. |
-| `TIMER_EXISTS` | Confirm with the user, then call `utilities_timer_set` with `replace: true`, or pick another name. |
-| `TIMER_NOT_FOUND` | Call `utilities_timer_list`. Timers are per project. |
-| `TIMER_STATE_UNKNOWN` | Read the timer with `utilities_timer_get` before trying again. |
-| `WAV_INVALID`, `WAV_UNSUPPORTED`, `SOURCE_REJECTED` | Convert the audio to a PCM16 WAV file of at most 20 MiB, not a symbolic link. |
 | Skills: `<id>` is replaced by `<path>` | A skill of yours with the same id as one of the plugin's, such as `utilities-time`, loads instead of the plugin's. Rename its folder and its `name`, or move it, then restart OpenCode. |
 | Agents without default rules | Put the default rules shown by `/utilities-status` first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools. See [Permissions](#permissions). |
 

@@ -135,7 +135,7 @@ test("its entries import from the empty project with only host-provided modules 
   const probe = JSON.parse(run(process.execPath, [join(repo, "test/pack/probe.ts"), project], repo)) as { served: string[]; server: { id: string; setup: string; path: string }; tui: { id: string; setup: string } }
   expect(probe.served).toEqual(["@opencode/plugin", "@opencode/plugin/promise/tool", "@opencode/plugin/rpc", "@opentui/solid", "solid-js"])
   expect(probe.server).toEqual({ id: PLUGIN_ID, setup: "function", path: join(installed, "dist/index.js") })
-  expect(probe.tui).toEqual({ id: "utilities.tools.tui", setup: "function" })
+  expect(probe.tui).toEqual({ id: "utilities.local.tui", setup: "function" })
 })
 
 test("the platform package installs beside it with the binaries manifest/backends.json pins", () => {

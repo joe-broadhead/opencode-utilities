@@ -37,7 +37,7 @@ import { FAILURES } from "../domain/common.js"
 import { PLUGIN_ID as UTILITIES_ID } from "../domain/contract.js"
 import { isFailure } from "./errors.js"
 
-/** The plugin's id. The RPC id is `<PLUGIN_ID>.tools`: `utilities.tools.tools`. */
+/** The plugin's id. The RPC id is `<PLUGIN_ID>.tools`: `utilities.local.tools`. */
 export const PLUGIN_ID = UTILITIES_ID
 
 /**

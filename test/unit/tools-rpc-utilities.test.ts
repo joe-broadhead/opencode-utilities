@@ -19,8 +19,8 @@ function methods(modules = modulesWith({})) {
 }
 
 describe("Utilities' tools RPC", () => {
-  test("is utilities.tools.tools, and every tool is a method with its class", () => {
-    expect(TOOLS_RPC_ID).toBe("utilities.tools.tools")
+  test("is utilities.local.tools, and every tool is a method with its class", () => {
+    expect(TOOLS_RPC_ID).toBe("utilities.local.tools")
     expect([...SCRIPT_TOOLS]).toEqual(Object.keys(TOOLS))
     const list = methods().methods
     expect(list.map(method => [method.name, method.class])).toEqual([

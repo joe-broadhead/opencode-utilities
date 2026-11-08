@@ -1,7 +1,7 @@
 // Shared contract for runtime, host, RPC, TUI and native packaging: types, constant tables and the registration rule.
 
-export const PLUGIN_ID = "utilities.tools"
-export const TUI_ID = "utilities.tools.tui"
+export const PLUGIN_ID = "utilities.local"
+export const TUI_ID = "utilities.local.tui"
 export const NAMESPACE = "utilities"
 export const COMMANDS = { status: "utilities-status", speechInstall: "utilities-speech-install" } as const
 export const WEATHER_INTEGRATION = "open-meteo"

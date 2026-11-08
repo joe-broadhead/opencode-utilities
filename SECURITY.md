@@ -43,7 +43,7 @@ Weather locations, timer text, speech text and audio, and file paths are private
 
 ## Scripts
 
-The tools RPC (`utilities.tools.tools`, see [docs/scripting.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md)) runs the plugin's tools for a script, with no model. It adds no authority:
+The tools RPC (`utilities.local.tools`, see [docs/scripting.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md)) runs the plugin's tools for a script, with no model. It adds no authority:
 
 - A script names a session that names an agent, and runs as them. A call resolves the tool's action against that agent's rules and then the session's before anything runs, and the tool then makes the same permission requests it makes for the model.
 - Only a resolved `allow` runs. An `ask` is refused, because no one is there to answer it, and a `deny` is refused; both cost no tool call and no prompt. So weather, the timer writes, synthesis and the speech download, which ask by default, each need a prior allow rule. The plugin's permission hook changes only an inner ask on one of its own script calls in flight, only to a deny, and leaves every other call alone.

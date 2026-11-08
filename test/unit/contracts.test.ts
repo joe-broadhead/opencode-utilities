@@ -54,7 +54,7 @@ test("the three skills have valid front matter and name only real tools and acti
     expect(front?.[2]?.length).toBeGreaterThan(30)
     for (const name of text.match(/utilities_[a-z_*]+/g) ?? []) expect(known.has(name), `${id}: ${name}`).toBe(true)
     // No Code Mode paths or plugin ids; the one id a skill may name is the tools RPC that scripts call.
-    expect(text.replaceAll("/api/rpc/utilities.tools.tools/", "").replaceAll("`utilities.tools.tools`", "")).not.toMatch(/\butilities\.\w|catalog|artifact/)
+    expect(text.replaceAll("/api/rpc/utilities.local.tools/", "").replaceAll("`utilities.local.tools`", "")).not.toMatch(/\butilities\.\w|catalog|artifact/)
   }
 })
 

@@ -78,7 +78,7 @@ async function mount(render: () => unknown) {
 async function start() {
   const fake = fakeContext()
   const cleanup = (await tui.setup(fake.context)) as () => void
-  expect(tui.id).toBe("utilities.tools.tui")
+  expect(tui.id).toBe("utilities.local.tui")
   return { ...fake, cleanup }
 }
 async function open() {

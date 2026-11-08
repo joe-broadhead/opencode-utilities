@@ -17,7 +17,7 @@ describe("host check", () => {
   test("a host outside the range is refused with the next step", () => {
     expect(() => checkHost("2.3.0", false)).toThrow("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0, found 2.3.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5 or 2.2.6, or set the plugin option allowUntestedHost: true to run anyway.")
     expect(() => checkHost("unknown", false)).toThrow("found unknown")
-    // The shared failure text is the one the refusal uses, and no module availability is ever HOST_UNTESTED (UTIL-R11).
+    // The shared failure text is the one the refusal uses, and no module availability is ever HOST_UNTESTED.
     expect(new UtilitiesError("HOST_UNTESTED").hint).toBe("Use OpenCode 2.2.3, 2.2.4, 2.2.5 or 2.2.6, or set the plugin option allowUntestedHost: true to run anyway.")
     expect(AVAILABILITY).not.toContain("HOST_UNTESTED")
   })

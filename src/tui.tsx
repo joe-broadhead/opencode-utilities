@@ -13,7 +13,7 @@ const EVENTS = ["server.connected", "agent.updated", "integration.updated", "cre
  * are registered from setup, where the host's keymap context exists, and in global mode so the palette lists the command.
  */
 export default {
-  id: "utilities.tools.tui" satisfies typeof TUI_ID,
+  id: "utilities.local.tui" satisfies typeof TUI_ID,
   setup(context) {
     const [state, setState] = createSignal<State>({ loading: true })
     const [open, setOpen] = createSignal(false)
