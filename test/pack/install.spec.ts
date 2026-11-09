@@ -159,7 +159,10 @@ test("the platform package installs beside it with the binaries manifest/backend
 
 for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
   let host: Awaited<ReturnType<typeof serve>>
-  beforeAll(async () => { host = await serve(version, stockBinary(version)) })
+  beforeAll(async () => {
+    host = await serve(version, stockBinary(version))
+    console.log(`stock OpenCode ${version}: started`)
+  })
   afterAll(async () => { if (host) await stop(host.child) })
 
   test("loads the installed package as an active plugin with its server and TUI parts", () => {
