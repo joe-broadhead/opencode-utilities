@@ -112,9 +112,11 @@ test("every weather tool says to stop when the user declines, and to geocode a s
     if (location) expect(location.description, tool.name).toContain("call utilities_weather_geocode first")
   }
 })
-test("both speech tools start by saying to make the call while files are missing, since its download prompt is the consent (it3 grading)", () => {
+test("both speech tools describe the default download and access restrictions", () => {
   for (const name of ["speech_transcribe", "speech_synthesize"] as const) {
-    expect(TOOL_DEFINITIONS.find(t => t.name === name)!.description, name).toMatch(/^Call this even when speech files are missing; the download prompt is how the user agrees\. Don't ask in text first\. /)
+    const text = TOOL_DEFINITIONS.find(t => t.name === name)!.description
+    expect(text, name).toContain("by default the download runs; access ask-changes asks and read-only denies it")
+    expect(text, name).toContain("Tell the user about the download before calling")
   }
 })
 test("timezone explicitness, invalid dates, historical and holiday bounds", () => {

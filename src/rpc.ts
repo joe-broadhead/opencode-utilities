@@ -109,7 +109,7 @@ export function shadowedFix(skills: StatusView["shadowedSkills"]) {
 
 /**
  * The single next step: the first item that needs the user, from blocking problems down. Optional items never drive
- * it: the free weather tier works without a key, and missing speech files download after a prompt on the first
+ * it: the free weather tier works without a key, and missing speech files can download on the first
  * speech call, so a fresh install reads `Nothing to do.` Their rows keep the hint. Missing pre-seeded files are a
  * misconfiguration, and do drive it.
  */
@@ -143,7 +143,7 @@ export function statusLines(view: StatusView, { paste, agents }: { readonly past
   const registered = (Object.keys(TOOLS) as ToolName[]).filter(tool => toolRegistrable(tool, view.modules)).length
   const { key, tier, attribution } = view.weather
   const connection = key === "connected" ? "connected (Open-Meteo key)" : key === "rejected" ? "sign-in required (Open-Meteo rejected the key)" : "not configured (the Open-Meteo key is optional)"
-  const download = missing.length === 0 ? "" : view.speech.preseeded ? ". Copy them into speech.assetsDir" : ". They download after a prompt on the first transcription or synthesis, or run /utilities-speech-install"
+  const download = missing.length === 0 ? "" : view.speech.preseeded ? ". Copy them into speech.assetsDir" : ". They download on first transcription or synthesis, subject to permissions, or run /utilities-speech-install"
   return [
     line("Connection", connection, key !== "rejected"),
     line("Account", tier === "free" ? "Open-Meteo free tier" : "Open-Meteo commercial key", true),

@@ -346,7 +346,7 @@ describe("status rendering", () => {
       speech: { ...FACTS.speech, assets: [{ role: "engine", name: "utilities-speech-darwin-arm64", bytes: 46_000_000, state: "missing" }], next: "Run /utilities-speech-install to download 1 file (46.0 MB), or pre-seed speech.assetsDir." },
     })
     expect(fresh.nextStep).toBe("Nothing to do.")
-    expect(formatStatus(fresh)).toContain("Speech files: 1 of 1 files missing (46 MB). They download after a prompt on the first transcription or synthesis, or run /utilities-speech-install")
+    expect(formatStatus(fresh)).toContain("Speech files: 1 of 1 files missing (46 MB). They download on first transcription or synthesis, subject to permissions, or run /utilities-speech-install")
     // Missing pre-seeded files are a misconfiguration; macOS x64 has no engine, which needs nothing.
     const seeded = status({ modules: { ...modulesWith({}), speech: { availability: "SPEECH_ASSETS_MISSING", next: "Copy the missing speech files into speech.assetsDir." } }, speech: { ...fresh.speech, preseeded: true } })
     expect(seeded.nextStep).toBe("Copy the missing speech files into speech.assetsDir.")

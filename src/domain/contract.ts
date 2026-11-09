@@ -192,7 +192,7 @@ export interface StatusSummary extends Omit<StatusView, "unguardedAgents"> {
   readonly unguardedAgents: number
 }
 
-/** Whether a module's skill and engine tools are registered. Speech stays registered while only its files are missing: the first call asks to download them. */
+/** Whether a module's skill and engine tools are registered. Speech stays registered while only its files are missing: the first call can download them. */
 export function registrable(module: Module, availability: Availability) {
   return availability === "AVAILABLE" || (module === "speech" && availability === "SPEECH_ASSETS_MISSING")
 }

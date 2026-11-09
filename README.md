@@ -60,7 +60,7 @@ No Utilities tool is pinned in the Code Mode catalogue. The `utilities` namespac
 - `/utilities` (palette: **Utilities: Status**) opens the Utilities status dialog. Its rows are Connection (the optional Open-Meteo key), Account, Access, the platform package and each module, speech files, due timers, the actions that ask, Skills, Tools, Agents without default rules, OpenCode, and one Next step. Press `r` to refresh and `Esc` to close.
 - `/utilities-status` posts the same status into the session, with the block for any agents without default rules.
 - `utilities_status` gives the model the same view, with those agents as a count.
-- `/utilities-speech-install` downloads the speech files after asking.
+- `/utilities-speech-install` downloads the speech files subject to the download permission; the default allows it.
 
 ### Scripts
 
@@ -341,7 +341,7 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 | `SOURCE_CHANGED` | The audio file changed while the call was waiting. | Call the tool again. |
 | `SOURCE_REJECTED` | The audio file cannot be used. It must be an existing regular file of at most 20 MiB, not a symbolic link. | Pass the path of a 16-bit PCM WAV file. |
 | `SPAWN_FAILED` | The plugin could not start the program behind this tool. | Call utilities_status, and reinstall the plugin if a module is unavailable. |
-| `SPEECH_ASSETS_MISSING` | The speech engine or model files are not installed. | Approve the utilities_speech_download request, run /utilities-speech-install, or pre-seed the files in speech.assetsDir. |
+| `SPEECH_ASSETS_MISSING` | The speech engine or model files are not installed. | Allow the utilities_speech_download request, run /utilities-speech-install, or pre-seed the files in speech.assetsDir. |
 | `SPEECH_FAILED` | The speech engine failed. | Retry. If it persists, call utilities_status. |
 | `STATE_FILE_UNSAFE` | A timer store file is a link or not a regular file. | Remove the unexpected file from this project's timer directory. |
 | `STATE_NOT_PRIVATE` | The plugin's state directory is accessible to other users. | Run chmod 700 on the stateRoot directory. |

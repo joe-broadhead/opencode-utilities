@@ -180,7 +180,7 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
     if (closed) return { availability: "CLOSED" }
     try {
       if (module !== "speech") await backends.executable(module as PlatformModule)
-      else if ((await speech).some(e => e.state === "missing")) return { availability: "SPEECH_ASSETS_MISSING", next: assets.preseeded ? "Copy the missing speech files into speech.assetsDir." : "Run /utilities-speech-install, or approve the download on the first speech call." }
+      else if ((await speech).some(e => e.state === "missing")) return { availability: "SPEECH_ASSETS_MISSING", next: assets.preseeded ? "Copy the missing speech files into speech.assetsDir." : "Run /utilities-speech-install, or download on the first speech call, subject to permissions." }
       return { availability: "AVAILABLE" }
     } catch (error) {
       const code = availability(error), hint = new UtilitiesError(code).hint

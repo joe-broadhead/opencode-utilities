@@ -50,7 +50,7 @@ describe("first use", () => {
     expect(f.changed).toHaveBeenCalledTimes(1)
     const status = await f.runtime.status()
     expect(status.speech.assets.map(a => [a.role, a.state])).toEqual([["engine", "cached"], ["tiny-q5_1", "missing"], ["kitten-model", "cached"], ["kitten-voices", "cached"], ["kitten-config", "cached"]])
-    expect(status.modules.speech).toEqual({ availability: "SPEECH_ASSETS_MISSING", next: "Run /utilities-speech-install, or approve the download on the first speech call." })
+    expect(status.modules.speech).toEqual({ availability: "SPEECH_ASSETS_MISSING", next: "Run /utilities-speech-install, or download on the first speech call, subject to permissions." })
     expect(status.speech.next).toBe(`Run /utilities-speech-install to download 1 file (${(f.bytes(["tiny-q5_1"]) / 1e6).toFixed(1)} MB), or pre-seed speech.assetsDir.`)
   })
   test("a refused download propagates the host's error and downloads nothing", async () => {
