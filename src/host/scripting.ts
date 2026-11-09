@@ -1,6 +1,6 @@
 import * as z from "zod"
 import { parse } from "../domain/common.js"
-import { DEPRECATED_IDS, NAMESPACE, TOOLS, methodClass, toolRegistrable, type ToolName } from "../domain/contract.js"
+import { DEPRECATED_IDS, NAMESPACE, methodClass, toolRegistrable, type ToolName } from "../domain/contract.js"
 import { TOOL_DEFINITIONS } from "../domain/registry.js"
 import { registerToolsRpc, type JsonSchema, type PluginMethod, type ToolsRpcContext } from "./tools-rpc.js"
 import { runTool, type ToolSources } from "./tools.js"

@@ -1,8 +1,6 @@
 import type { Plugin } from "@opencode/plugin"
 import { fence } from "../domain/common.js"
-import { CHANGING_ACTIONS, NAMESPACE_ACTION, READ_ACTIONS, SPEECH_DOWNLOAD_ACTION, TOOLS, type Access, type Authorize, type PermissionRequest, type ToolName } from "../domain/contract.js"
-
-const WEATHER_TOOLS = (Object.keys(TOOLS) as ToolName[]).filter(tool => "module" in TOOLS[tool] && TOOLS[tool].module === "weather")
+import { CHANGING_ACTIONS, NAMESPACE_ACTION, READ_ACTIONS, SPEECH_DOWNLOAD_ACTION, type Access, type Authorize, type PermissionRequest } from "../domain/contract.js"
 
 type Rule = { action: string; resource: string; effect: "allow" | "ask" | "deny" }
 type Assert = Plugin.Context["permission"]["assert"]
