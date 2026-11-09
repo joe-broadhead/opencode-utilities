@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest"
+import { loadConfig } from "../../src/domain/config.js"
 import { NAMESPACE, SPEECH_DOWNLOAD_ACTION, TOOLS, WEATHER_INTEGRATION } from "../../src/domain/contract.js"
 import { DEFAULT_RULES } from "../../src/host/permissions.js"
 import { type Declaration, type DeclaredTool, declarationProblems, docProblems, effectFromRules, readPackage } from "../support/jelly-kit.js"
@@ -39,10 +40,11 @@ describe("the jelly declaration", () => {
     ])
   })
 
-  it("declares no RPC methods, views or contributions", () => {
+  it("declares the flat access option and no RPC methods, views or other contributions", () => {
     expect(jelly.rpc).toEqual([])
     expect(jelly.views).toEqual([])
-    expect(jelly.contributes).toEqual({ homeFeeds: [], homeWidgets: [], workKinds: [], settings: [] })
+    expect(jelly.contributes).toEqual({ homeFeeds: [], homeWidgets: [], workKinds: [], settings: [{ key: "access", label: "Access", type: "string", description: expect.any(String) }] })
+    expect(loadConfig({ access: "read-only" }).access).toBe("read-only")
   })
 })
 
