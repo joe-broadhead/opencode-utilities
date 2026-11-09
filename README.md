@@ -64,7 +64,7 @@ No Utilities tool is pinned in the Code Mode catalogue. The `utilities` namespac
 
 ### Scripts
 
-A script or a cron job can call the tools with no model, through `opencode api`. It runs as a session and its agent, with the same default: every tool is allowed unless the `access` option or the agent's rules restrict it, and an `ask` is refused when no one can answer it. The id before the rename, `utilities.tools.tools`, still answers for one release, with `"deprecated": "use utilities.local.tools"` in its `describe`.
+A script or a cron job can call the tools with no model, through `opencode api`. It runs as a session and its agent, with the same default: every tool is allowed unless the `access` option or the agent's rules restrict it, and an `ask` is refused when no one can answer it. The id before the rename, `utilities.tools.tools`, still answers until the next minor release, with `"deprecated": "use utilities.local.tools"` in its `describe`.
 
 ```sh
 opencode api post /api/rpc/utilities.local.tools/time_now \
@@ -298,6 +298,15 @@ A system `opencode.json` (`/Library/Application Support/opencode/opencode.json` 
 ```
 
 Members have nothing to set. To forbid an action everywhere, add a top-level `deny` rule; never a top-level `ask` or `allow`, which would loosen Explore. Weather for work is usually commercial use: each member runs `/connect` and chooses Open-Meteo to add the organisation's key.
+
+## Known limits
+
+- **Weather needs a network connection to Open-Meteo.** The free tier is non-commercial and rate-limited. Work use needs an Open-Meteo key, which `/connect` adds.
+- **Speech files download on first use.** The engine and models, about 105 MB, come from this repository's GitHub Release. macOS x64 has no speech engine, so it has no speech tools.
+- **Holidays are offline and cover 2000–2030 only.** A year outside that range is refused with `HOLIDAY_COVERAGE`.
+- **Timers belong to a project and do not wake an agent.** A timer is checked with `utilities_timer_check`; nothing runs when it is due.
+- **Machine time is the server's time zone.** On a remote server, `machine_timezone` is that server's zone, not necessarily the user's.
+- **Tested on OpenCode 2.2.3, 2.2.4, 2.2.5 and 2.2.6 only.** Other releases inside `>=2.2.3 <2.3.0` start, and status reports them as untested.
 
 ## Troubleshooting
 
