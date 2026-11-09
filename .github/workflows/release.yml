@@ -177,10 +177,17 @@ jobs:
           node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); if (a * 1e6 + b * 1e3 + c < 11005001) { console.log("::error::npm trusted publishing needs npm 11.5.1 or later"); process.exit(1) }' "$(npm --version)"
           for tarball in release/npm/joe-broadhead-opencode-utilities-bin-*-"$VERSION".tgz; do
             name="$(tar -xzOf "$tarball" package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).name')"
-            # npm view prints the version when it exists, and fails with E404 when it is not published yet.
-            if [[ "$(npm view "$name@$VERSION" version 2>/dev/null || true)" == "$VERSION" ]]; then
+            # npm view prints the version when it exists, and fails with E404 when it is not published yet. Any other
+            # failure stops the release, so a network error never reads as "not published".
+            found="$(npm view "$name@$VERSION" version 2> "$RUNNER_TEMP/view.err")" && status=0 || status=$?
+            if [[ $status -eq 0 && "$found" == "$VERSION" ]]; then
               echo "$name@$VERSION is already on npm; skipping it."
               continue
+            fi
+            if [[ $status -ne 0 ]] && ! grep -q E404 "$RUNNER_TEMP/view.err"; then
+              cat "$RUNNER_TEMP/view.err" >&2
+              echo "::error::npm view $name@$VERSION failed, so the workflow cannot tell whether it is already published."
+              exit 1
             fi
             npm publish "$tarball" --provenance --access public
           done
@@ -234,9 +241,15 @@ jobs:
         run: |
           node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); if (a * 1e6 + b * 1e3 + c < 11005001) { console.log("::error::npm trusted publishing needs npm 11.5.1 or later"); process.exit(1) }' "$(npm --version)"
           name=@joe-broadhead/opencode-utilities
-          if [[ "$(npm view "$name@$VERSION" version 2>/dev/null || true)" == "$VERSION" ]]; then
+          found="$(npm view "$name@$VERSION" version 2> "$RUNNER_TEMP/view.err")" && status=0 || status=$?
+          if [[ $status -eq 0 && "$found" == "$VERSION" ]]; then
             echo "$name@$VERSION is already on npm; skipping it."
             exit 0
+          fi
+          if [[ $status -ne 0 ]] && ! grep -q E404 "$RUNNER_TEMP/view.err"; then
+            cat "$RUNNER_TEMP/view.err" >&2
+            echo "::error::npm view $name@$VERSION failed, so the workflow cannot tell whether it is already published."
+            exit 1
           fi
           npm publish "release/npm/joe-broadhead-opencode-utilities-$VERSION.tgz" --provenance --access public
         env:
