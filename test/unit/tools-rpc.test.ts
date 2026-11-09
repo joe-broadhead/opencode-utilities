@@ -10,7 +10,6 @@ import {
   PLUGIN_ID,
   pluginError,
   registerToolsRpc,
-  shapeInput,
   shapeResult,
   TOOLS_RPC_ID,
   upstreamText,
