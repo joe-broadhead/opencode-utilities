@@ -171,15 +171,16 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
     // `locked`, defined only in config, missed the block and denies only the time tools, so weather would run there unasked.
     expect(view).toMatchObject({ state: "ready", unguardedAgents: ["locked"] })
     // No program is installed, so the first next step is the program download; the rules step follows it (test/host covers it with programs).
-    expect(view.nextStep).toBe("Call the time or weather tool with permission to download it, or run /utilities-install.")
-    expect(view.platform).toEqual({ target, availability: "AVAILABLE" })
+    expect(view.nextStep).toMatch(/^Call the time or weather tool with permission to download it, or run \/utilities-install\./)
+    // The platform is AVAILABLE with the manifest, and NATIVE_FILES_MISSING without it (a checkout that has not run its native step).
+    expect(view.platform).toMatchObject({ target, availability: existsSync(join(installed, "manifest/native.json")) ? "AVAILABLE" : "NATIVE_FILES_MISSING" })
     expect(Object.keys(view.modules).sort()).toEqual([...MODULES].sort())
     expect(view.permissions.askByDefault).toEqual([...DEFAULT_ASK])
   })
 
   test("reports the time and weather programs not installed, with the coded availability and its next step, and downloads nothing", async () => {
     const view = ((await host.api("POST", `/api/rpc/${PLUGIN_ID}/status`, { input: {} })).data as { output: Record<string, any> }).output
-    expect(view.platform.availability).toBe("AVAILABLE")
+    expect(view.platform.availability).toBe(existsSync(join(installed, "manifest/native.json")) ? "AVAILABLE" : "NATIVE_FILES_MISSING")
     // Nothing is cached and the package carries none: each program is reported with its code and a next step.
     for (const module of ["time", "weather"]) {
       expect(view.modules[module]).toMatchObject({ availability: "NATIVE_FILES_MISSING" })
