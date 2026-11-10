@@ -344,7 +344,7 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 | `PERMISSION_DENIED` | The tools RPC refused the call. | Add an allow rule for the action to the session's agent or to the session, or use a session whose agent allows it. |
 | `PLATFORM_PACKAGE_MISSING` | The platform package with the time and weather programs is not installed. | Reinstall the plugin so npm installs its platform package, then restart OpenCode. |
 | `QUEUE_FULL` | Too many calls to this module are waiting. | Wait for earlier calls to finish, then retry. |
-| `SESSION_AGENT_REQUIRED` | The tools RPC refused the call. | Create a session that names an agent, such as POST /api/session with {"agent":"build"}, and pass its id. |
+| `SESSION_AGENT_REQUIRED` | The tools RPC refused the call. | Create a session that names an agent this project has, with its project as the location, such as POST /api/session with {"agent":"build","location":{"directory":"/path/to/project"}}, and pass its id. |
 | `SESSION_UNKNOWN` | The tools RPC refused the call. | Create a session in the location you mean, such as POST /api/session with {"agent":"build"} sent with the header "x-opencode-directory: <dir>" or the location[directory] query, and pass its id. |
 | `SKILLS_INVALID` | A Utilities skill file is missing or malformed, so that skill was skipped. | Reinstall the plugin. |
 | `SOURCE_CHANGED` | The audio file changed while the call was waiting. | Call the tool again. |
