@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Fixes go into the newest release. Use the latest version of `@joe-broadhead/opencode-utilities` on OpenCode `>=2.2.3 <2.3.0`.
+Fixes go into the newest release. Use the latest release from GitHub (`github:joe-broadhead/opencode-utilities#v<version>`) on OpenCode `>=2.2.3 <2.3.0`.
 
 ## Reporting a vulnerability
 
