@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Changed
 
+- The native model download tries a connection that fails, or a transfer cut short, again, up to three attempts, instead of failing on the first reset.
 - The Code Mode catalogue no longer pins tool signatures. The namespace text names the skills (`utilities-time`, `utilities-weather`, `utilities-speech`), which hold the call shapes; the host can still show unpinned tools.
 - Speech guidance and status describe the download permission according to the default and restricted access settings.
 - `utilities-time` no longer claims "remind me". A project timer is checked; it does not wake an agent.
