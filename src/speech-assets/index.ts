@@ -10,7 +10,7 @@ import { download } from "./download.js"
 
 const asset = z.strictObject({
   name: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/),
-  // Release assets are fetched over HTTPS only, as native-manifest.mjs writes them.
+  // Release assets are fetched over HTTPS only, as native-files.mjs writes them.
   url: z.string().max(2048).refine(value => { try { return new URL(value).protocol === "https:" } catch { return false } }),
   sha256,
   bytes: z.number().int().positive().max(512 * 1024 * 1024),

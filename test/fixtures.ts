@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs"
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises"
+import { gzipSync } from "node:zlib"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { tmpdir } from "node:os"
@@ -20,7 +21,6 @@ export function wav(seconds = 0.1) {
   b.write("RIFF"); b.writeUInt32LE(b.length - 8, 4); b.write("WAVEfmt ", 8); b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22)
   b.writeUInt32LE(16000, 24); b.writeUInt32LE(32000, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write("data", 36); b.writeUInt32LE(data, 40); return b
 }
-export const PACKAGE = PLATFORMS["darwin-arm64"].package
 export const MODELS = { "tiny-q5_1": "ggml-tiny-q5_1.bin", "kitten-model": "kitten_tts_nano_v0_8.onnx", "kitten-voices": "voices.npz", "kitten-config": "config.json" } as const
 export const ENGINE = "utilities-speech-darwin-arm64"
 
@@ -80,12 +80,12 @@ export interface FixtureOptions {
 export type Fixture = Awaited<ReturnType<typeof fixture>>
 export async function fixture(o: FixtureOptions = {}) {
   const root = await mkdtemp(join(await realpath(tmpdir()), "utilities-synthetic-")), calls = join(root, "calls.jsonl")
-  const code = program(calls, o.body), pkg = join(root, "node_modules", ...PACKAGE.split("/"))
-  await mkdir(join(pkg, "bin"), { recursive: true }); await mkdir(join(root, "manifest")); await mkdir(join(root, "state"), { mode: 0o700 }); await mkdir(join(root, "project"))
+  const code = program(calls, o.body)
+  await mkdir(join(root, "manifest")); await mkdir(join(root, "state"), { mode: 0o700 }); await mkdir(join(root, "project"))
   await writeFile(join(root, "package.json"), JSON.stringify({ name: "@joe-broadhead/opencode-utilities", version: VERSION }))
-  await writeFile(join(pkg, "package.json"), JSON.stringify({ name: PACKAGE, version: VERSION }))
-  for (const name of ["time-keep", "weather-signal"]) await writeFile(join(pkg, "bin", name), code, { mode: 0o755 })
-  await writeFile(join(root, "manifest/backends.json"), JSON.stringify({ platforms: { "darwin-arm64": { time: { path: "bin/time-keep", sha256: sha(code) }, weather: { path: "bin/weather-signal", sha256: sha(code) } } } }))
+  const gz = gzipSync(Buffer.from(code), { level: 9 })
+  const native = (module: string) => ({ name: `${module}-darwin-arm64.gz`, url: `https://github.com/joe-broadhead/opencode-utilities/releases/download/v${VERSION}/${module}-darwin-arm64.gz`, bytes: gz.length, sha256: sha(gz), executable: { name: module, bytes: Buffer.byteLength(code), sha256: sha(code) } })
+  await writeFile(join(root, "manifest/native.json"), JSON.stringify({ schema: 1, plugin: "opencode-utilities", repository: "joe-broadhead/opencode-utilities", tag: `v${VERSION}`, built: { commit: "0".repeat(40), run: 0, workflow: "native" }, modules: { "time-keep": { "darwin-arm64": native("time-keep") }, "weather-signal": { "darwin-arm64": native("weather-signal") } } }))
   const files = new Map<SpeechAssetRole, { name: string; content: Buffer }>([["engine", { name: ENGINE, content: Buffer.from(o.engine ?? code) }]])
   for (const [role, name] of Object.entries(MODELS)) files.set(role as SpeechAssetRole, { name, content: Buffer.from(`synthetic:${role}`) })
   const release = o.release ?? `https://github.com/joe-broadhead/opencode-utilities/releases/download/v${VERSION}`
@@ -93,14 +93,23 @@ export async function fixture(o: FixtureOptions = {}) {
   const speech: SpeechAssetManifest = { engines: { "darwin-arm64": asset("engine") }, models: { "tiny-q5_1": asset("tiny-q5_1"), "kitten-model": asset("kitten-model"), "kitten-voices": asset("kitten-voices"), "kitten-config": asset("kitten-config") } }
   await writeFile(join(root, "manifest/speech-assets.json"), JSON.stringify(speech))
   const cache = join(root, "cache"), seed = join(root, "seed")
+  // The synthetic programs sit where the first-use cache looks for them, so no call downloads anything.
+  for (const module of ["time-keep", "weather-signal"]) {
+    const program = join(cache, "native", `v${VERSION}`, module, "darwin-arm64", module)
+    await mkdir(dirname(program), { recursive: true, mode: 0o700 }); await writeFile(program, code, { mode: 0o755 }); await chmod(program, 0o755)
+  }
   const cached = (role: SpeechAssetRole) => join(cache, sha(files.get(role)!.content), files.get(role)!.name)
+  /** Where the verified program for a module sits in the cache, where the first-use path looks for it. */
+  const binary = (module: "time-keep" | "weather-signal") => join(cache, "native", `v${VERSION}`, module, "darwin-arm64", module)
+  /** The release files for the two programs: the gzip of each, under the names the native manifest pins. */
+  const nativeFiles = ["time-keep", "weather-signal"].map(module => ({ name: `${module}-darwin-arm64.gz`, content: gz }))
   for (const [role, file] of files) {
     if ((o.speech ?? "cached") === "missing") break
     const path = o.speech === "preseed" ? join(seed, file.name) : cached(role)
     await mkdir(dirname(path), { recursive: true, mode: 0o700 }); await writeFile(path, file.content); await chmod(path, role === "engine" ? 0o700 : 0o600)
   }
   return {
-    root, calls, pkg, cache, seed, files, speech, cached,
+    root, calls, cache, seed, files, speech, cached, binary, nativeFiles,
     project: join(root, "project"), state: join(root, "state"),
     options(extra: Partial<Omit<RuntimeOptions, "authorize">> & { authorize?: Authorize } = {}): RuntimeOptions {
       return {
@@ -150,6 +159,10 @@ export async function releaseServer() {
     use(files: ReadonlyMap<SpeechAssetRole, { name: string; content: Buffer }>, modes: Partial<Record<string, Serve>> = {}) {
       byName = new Map([...files.values()].map(f => [f.name, f.content])); behaviour = modes
     },
+    /** Adds release files without replacing the others: the native programs, next to the speech files. */
+    add(files: ReadonlyArray<{ name: string; content: Buffer }>) { for (const file of files) byName.set(file.name, file.content) },
+    /** Sets how the server answers one file, for example `tampered`. */
+    serve(name: string, mode: Serve) { behaviour[name] = mode },
     /** Holds `slow` responses until `release()`. */
     hold() { hold = new Promise(resolve => { release = resolve }) },
     release: () => release(),

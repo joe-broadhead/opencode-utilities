@@ -32,7 +32,7 @@ export function fakeRuntimes(initial: Partial<Record<Module, Availability>> = {}
       return [{ name: "utilities-speech", bytes: 46_000_000 }]
     }
     const status = async (): Promise<RuntimeStatus> => ({
-      platform: { target: "darwin-arm64", package: "@joe-broadhead/opencode-utilities-bin-darwin-arm64", availability: "AVAILABLE" },
+      platform: { target: "darwin-arm64", availability: "AVAILABLE" },
       modules: Object.fromEntries(MODULES.map(m => [m, modules[m] === "SPEECH_ASSETS_MISSING" ? { availability: modules[m], next: "Run /utilities-speech-install, or set the speech.assetsDir option." } : { availability: modules[m] }])) as RuntimeStatus["modules"],
       speech: {
         assets: [{ role: "engine", name: "utilities-speech", bytes: 46_000_000, state: modules.speech === "SPEECH_ASSETS_MISSING" ? "missing" : "cached" }],
@@ -66,6 +66,9 @@ export function fakeRuntimes(initial: Partial<Record<Module, Availability>> = {}
         const injected = runtime.failures.get(tool)
         if (injected) throw injected
         return structuredClone(SAMPLES[tool as Exclude<ToolName, "status">])
+      },
+      async installNatives() {
+        return { output: { downloaded: [], bytes: 0, cacheDirectory: "" }, text: "The time and weather programs are already installed. Time and weather tools are ready." }
       },
       async installSpeech({ authorize } = {}) {
         const downloaded = await download(authorize)

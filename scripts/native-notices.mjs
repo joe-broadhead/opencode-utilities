@@ -1,6 +1,6 @@
 // Writes the license notices that ship beside the native files, from actual license files in the locked Cargo graphs.
 // Deliberately conservative: includes build and development dependencies.
-//   npm/opencode-utilities-bin-<platform>/NOTICE           time-keep and weather-signal, for that platform's target
+//   build/native/<platform>/NOTICE                         time-keep and weather-signal, for that platform's target
 //   build/speech-assets/utilities-speech-NOTICE.txt        (--speech) the speech engine, for every engine target
 // Usage: node scripts/native-notices.mjs <platform> <directory with the time-keep and weather-signal checkouts> [--speech]
 import { execFileSync } from 'node:child_process';
@@ -93,14 +93,14 @@ async function crates(packages) {
 const upstream=async name=>(await readFile(resolve(root,'licenses/upstream',name),'utf8')).trimEnd();
 const section=(title,text)=>`\n${'='.repeat(72)}\n${title}\n\n${text}\n`;
 
-const pkg=`opencode-utilities-bin-${platform}`;
 const names=Object.keys(sources.binaries);
-let notice=`@joe-broadhead/${pkg}\n\nThis package contains programs built from pinned sources:\n`;
+let notice=`@joe-broadhead/opencode-utilities native files for ${platform}\n\nThis release contains programs built from pinned sources:\n`;
 for(const [name,{repo,commit}] of Object.entries(sources.binaries))notice+=`  bin/${name}  ${repo} at ${commit} (MIT)\n`;
 notice+=`\nTheir licenses follow, then the license files of every crate in their locked Cargo graphs for\n${TARGETS[platform]}, including build and development dependencies.\n`;
 for(const name of names)notice+=section(`bin/${name}`,await upstream(`${name}-MIT.txt`));
 notice+=await crates(graph(names.map(name=>resolve(checkouts,name,'Cargo.toml')),[TARGETS[platform]],names));
-await writeFile(resolve(root,'npm',pkg,'NOTICE'),notice);
+await mkdir(resolve(root,'build','native',platform),{recursive:true});
+await writeFile(resolve(root,'build','native',platform,'NOTICE'),notice);
 
 if(flag==='--speech') {
   const engines=Object.keys(onnx.distributions);

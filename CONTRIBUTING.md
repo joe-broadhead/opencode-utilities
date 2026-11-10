@@ -15,11 +15,11 @@ The time and weather programs, the speech engine, the models, their notices and 
 
 `npm run build` uses esbuild to write exactly two self-contained files, `dist/index.js` (server) and `dist/tui.js` (TUI, compiled from Solid JSX first). Neither imports a relative file, so an in-place update cannot load a stale sibling; the pack test checks this.
 
-The root `NOTICE` holds the licence of every package bundled into `dist/` (zod). `npm run build` fails when it no longer matches the bundle; run `node scripts/build.mjs --notice` to rewrite it, then commit it. The native notices ship in the platform packages and with the GitHub Release assets; see `licenses/README.md`.
+The root `NOTICE` holds the licence of every package bundled into `dist/` (zod). `npm run build` fails when it no longer matches the bundle; run `node scripts/build.mjs --notice` to rewrite it, then commit it. The native notices ship with the GitHub Release assets; see `licenses/README.md`.
 
-The platform packages under `npm/` are npm workspaces. Their `package.json` files have no `os`, `cpu` or `libc`, so `npm ci` installs on any machine; `scripts/pack.mjs` adds those fields from `PLATFORMS` in `src/domain/contract.ts` when it packs one, and drops the dev-only `workspaces` field from the main package.
+The time and weather programs are built with `npm run native:build` into `build/native/<platform>/`, which is gitignored. `scripts/native-files.mjs` writes `manifest/native.json` and `manifest/speech-assets.json` from those files.
 
-To try a checkout in OpenCode, point a `plugins` entry's `package` at the repository directory. The workspace links this machine's platform package, so the plugin finds its programs.
+To try a checkout in OpenCode, point a `plugins` entry's `package` at the repository directory. Until a release has them, the time and weather tools cannot download their programs in a checkout: copy `build/native/<platform>/<program>` into the plugin cache (`$XDG_CACHE_HOME/opencode-utilities/native/v<version>/<program>/<platform>/`) to try them.
 
 ## Checks
 

@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { chmod, link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, utimes, writeFile } from "node:fs/promises"
-import { join } from "node:path"
+import { chmod, copyFile, link, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, utimes, writeFile } from "node:fs/promises"
+import { dirname, join } from "node:path"
 import { createRuntime } from "../../src/runtime.js"
 import { verifier } from "../../src/domain/backends.js"
 import { LIMITS } from "../../src/domain/common.js"
-import { WEATHER_ATTRIBUTION, type Authorize, type Runtime, type RuntimeOptions } from "../../src/domain/contract.js"
+import { NATIVE_DOWNLOAD_ACTION, WEATHER_ATTRIBUTION, type Authorize, type Runtime, type RuntimeOptions } from "../../src/domain/contract.js"
 import { invoke as timeInvoke } from "../../src/modules/time/adapter.js"
-import { calendar, fixture, invocation, MODELS, place, PACKAGE, VERSION, type Fixture, type FixtureOptions } from "../fixtures.js"
+import { calendar, fixture, invocation, MODELS, place, releaseServer, VERSION, type Fixture, type FixtureOptions } from "../fixtures.js"
 
 const cleanups: Array<() => Promise<unknown>> = []
 afterEach(async () => {
@@ -94,42 +94,48 @@ describe("deadline", () => {
   })
 })
 
-describe("platform package and integrity", () => {
-  test("a missing platform package is PLATFORM_PACKAGE_MISSING before any prompt, and status names the package", async () => {
-    const f = await setup(); await rm(f.pkg, { recursive: true })
-    await expect(f.runtime.invoke("timer_set", { name: "x", deadline: "2027-01-01T00:00:00Z" }, invocation())).rejects.toMatchObject({ code: "PLATFORM_PACKAGE_MISSING" })
-    expect(f.authorize).not.toHaveBeenCalled()
+describe("the release programs: platform, first use and integrity", () => {
+  test("a missing time program is downloaded only after its permission: a refused download runs nothing, and status says how to get it", async () => {
+    const f = await setup(); await rm(f.binary("time-keep"))
+    f.authorize.mockImplementation(async requests => { if (requests.some(r => r.action === NATIVE_DOWNLOAD_ACTION)) throw new Error("download refused by the test") })
+    await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toThrow("download refused by the test")
+    expect(requests(f.authorize).flat().map(r => r.action)).toEqual([NATIVE_DOWNLOAD_ACTION])
+    expect(await f.recorded()).toEqual([])
     const status = await f.runtime.status()
-    expect(status.platform).toEqual({ target: "darwin-arm64", package: PACKAGE, availability: "PLATFORM_PACKAGE_MISSING", next: `Reinstall the plugin so npm installs ${PACKAGE}@${VERSION}, then restart OpenCode.` })
-    expect(status.modules.time.availability).toBe("PLATFORM_PACKAGE_MISSING"); expect(status.modules.speech.availability).toBe("AVAILABLE")
+    expect(status.platform).toEqual({ target: "darwin-arm64", availability: "AVAILABLE" })
+    expect(status.modules.time).toEqual({ availability: "NATIVE_FILES_MISSING", next: "Call the time or weather tool with permission to download it, or run /utilities-install." })
+    expect(status.modules.speech.availability).toBe("AVAILABLE")
   })
-  test("an unsupported platform is reported, never resolved to another package", async () => {
+  test("an unsupported platform is reported, and no program is chosen for it", async () => {
     const f = await setup({ runtime: { target: "win32-x64" } })
     await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toMatchObject({ code: "UNSUPPORTED_PLATFORM" })
     const status = await f.runtime.status()
-    expect(status.platform).toMatchObject({ target: "win32-x64", availability: "UNSUPPORTED_PLATFORM" }); expect(status.platform.package).toBeUndefined()
+    expect(status.platform).toEqual({ target: "win32-x64", availability: "UNSUPPORTED_PLATFORM", next: "Time and weather tools have no build for win32-x64." })
     expect(status.modules.speech.availability).toBe("UNSUPPORTED_PLATFORM")
   })
-  test("missing, tampered, linked and non-executable binaries never run", async () => {
-    const f = await setup(), bin = join(f.pkg, "bin/time-keep"), original = await readFile(bin, "utf8")
-    await rm(bin)
-    await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toMatchObject({ code: "BINARY_MISSING" })
+  test("a tampered, linked or non-executable program never runs", async () => {
+    const f = await setup(), bin = f.binary("time-keep"), original = await readFile(bin, "utf8")
+    // Tampered: not the pinned bytes, so the call asks before a download could replace it, and nothing runs.
     await writeFile(bin, original + "\n// tampered", { mode: 0o755 })
-    await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toMatchObject({ code: "INTEGRITY_MISMATCH" })
+    f.authorize.mockImplementation(async () => { throw new Error("download refused by the test") })
+    await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toThrow("download refused by the test")
+    // Linked: the link is never followed to a run.
+    f.authorize.mockImplementation(async () => {})
     await rm(bin); await writeFile(join(f.root, "real"), original, { mode: 0o755 }); await symlink(join(f.root, "real"), bin)
     await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toMatchObject({ code: "UNSAFE_PATH" })
+    // Not executable: the bytes are right, the mode is not.
     await rm(bin); await writeFile(bin, original, { mode: 0o644 })
     await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toMatchObject({ code: "INTEGRITY_MISMATCH" })
     expect(await f.recorded()).toEqual([])
   })
-  test("a binary changed while the prompt waits is re-verified and never runs", async () => {
+  test("a program changed while the prompt waits is re-verified and never runs", async () => {
     const f = await setup()
-    f.authorize.mockImplementation(async () => { await writeFile(join(f.pkg, "bin/time-keep"), "#!/bin/sh\necho tampered", { mode: 0o755 }) })
+    f.authorize.mockImplementation(async () => { await writeFile(f.binary("time-keep"), "#!/bin/sh\necho tampered", { mode: 0o755 }) })
     await expect(f.runtime.invoke("timer_set", { name: "x", deadline: "2027-01-01T00:00:00Z" }, invocation())).rejects.toMatchObject({ code: "INTEGRITY_MISMATCH" })
     expect(await f.recorded()).toEqual([])
   })
   test("integrity is hashed once per process and file identity; status and calls reuse it", async () => {
-    const f = await setup(), digest = vi.spyOn(verifier, "digest"), bin = join(f.pkg, "bin/time-keep")
+    const f = await setup(), digest = vi.spyOn(verifier, "digest"), bin = f.binary("time-keep")
     await f.runtime.status()
     await f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())
     await (await another(f)).invoke("time_calendar", { date: "2026-10-29" }, invocation())
@@ -137,6 +143,30 @@ describe("platform package and integrity", () => {
     await utimes(bin, new Date(), new Date(Date.now() + 5000))
     await f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())
     expect(digest.mock.calls.filter(([path]) => path === bin)).toHaveLength(2)
+  })
+})
+
+describe("first use of a release program", () => {
+  test("the first call downloads the pinned program after its permission, verifies it and runs it; the next call runs the copy without asking", async () => {
+    const server = await releaseServer(); cleanups.push(server.close)
+    const f = await setup(); server.add(f.nativeFiles)
+    await rm(f.binary("time-keep"))
+    await f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())
+    expect(requests(f.authorize).flat().map(r => r.action)).toEqual([NATIVE_DOWNLOAD_ACTION])
+    expect(server.requests.get("time-keep-darwin-arm64.gz")).toBe(1)
+    expect(await f.recorded()).toHaveLength(1)
+    await f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())
+    expect(f.authorize).toHaveBeenCalledTimes(1)
+    expect(server.requests.get("time-keep-darwin-arm64.gz")).toBe(1)
+    expect(await f.recorded()).toHaveLength(2)
+  })
+  test("a download that fails its hash is discarded: nothing runs, and the cache keeps no unverified bytes", async () => {
+    const server = await releaseServer(); cleanups.push(server.close)
+    const f = await setup(); server.add(f.nativeFiles); server.serve("time-keep-darwin-arm64.gz", "tampered")
+    await rm(f.binary("time-keep"))
+    await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toMatchObject({ code: "INTEGRITY_MISMATCH" })
+    expect(await f.recorded()).toEqual([])
+    expect(await lstat(f.binary("time-keep")).catch(() => undefined)).toBeUndefined()
   })
 })
 
@@ -211,8 +241,15 @@ describe("links above the plugin's directories", () => {
     await layout(f, { home: join("var", "home") }); await mkdir(user("var", "home"), { mode: 0o700 })
     const runtime = await another(f, { stateRoot: join(user("home"), ".local/share/opencode-utilities"), cacheRoot: join(user("home"), ".cache/opencode-utilities") })
     const status = await runtime.status()
-    expect(status.modules.time).toEqual({ availability: "AVAILABLE" }); expect(status.modules.speech.availability).toBe("SPEECH_ASSETS_MISSING")
+    // No release copy in a cache that does not exist yet: time says how to get one, and looking creates nothing.
+    expect(status.modules.time.availability).toBe("NATIVE_FILES_MISSING"); expect(status.modules.speech.availability).toBe("SPEECH_ASSETS_MISSING")
     expect(status.speech.cacheDirectory).toBe(join(user("var", "home"), ".cache/opencode-utilities"))
+    // The release copies go where the links lead, as a first download would put them; the tools then run through them.
+    for (const module of ["time-keep", "weather-signal"] as const) {
+      const program = join(user("home"), ".cache/opencode-utilities/native", `v${VERSION}`, module, "darwin-arm64", module)
+      await mkdir(dirname(program), { recursive: true, mode: 0o700 }); await copyFile(f.binary(module), program); await chmod(program, 0o755)
+    }
+    expect((await runtime.status()).modules.time).toEqual({ availability: "AVAILABLE" }); expect(status.speech.cacheDirectory).toBe(join(user("var", "home"), ".cache/opencode-utilities"))
     await works(runtime)
     expect((await lstat(join(user("var", "home"), ".local/share/opencode-utilities"))).mode & 0o777).toBe(0o700)
   })
@@ -397,7 +434,7 @@ describe("status", () => {
   test("the runtime fills platform, modules, speech and timers", async () => {
     const f = await setup()
     const status = await f.runtime.status()
-    expect(status.platform).toEqual({ target: "darwin-arm64", package: PACKAGE, availability: "AVAILABLE" })
+    expect(status.platform).toEqual({ target: "darwin-arm64", availability: "AVAILABLE" })
     expect(status.modules).toEqual({ time: { availability: "AVAILABLE" }, weather: { availability: "AVAILABLE" }, speech: { availability: "AVAILABLE" } })
     expect(status.speech).toMatchObject({ voices: expect.arrayContaining(["Luna"]), cacheDirectory: f.cache, outputDirectory: expect.stringContaining(join(f.state, "speech")) })
     expect(status.speech.assets.map(a => [a.role, a.state])).toEqual([["engine", "cached"], ["tiny-q5_1", "cached"], ["kitten-model", "cached"], ["kitten-voices", "cached"], ["kitten-config", "cached"]])
@@ -408,7 +445,8 @@ describe("status", () => {
     const status = await f.runtime.status()
     expect(status.modules.weather).toEqual({ availability: "DISABLED", next: "Set modules.weather to true in the Utilities plugin options in opencode.json." })
     expect(status.modules.speech.availability).toBe("DISABLED"); expect(status.speech.assets).toEqual([])
-    expect(digest.mock.calls.map(([path]) => path).filter(path => path.startsWith(f.cache))).toEqual([])
+    // Time is enabled, so its program is checked; no speech file or weather program is.
+    expect(digest.mock.calls.map(([path]) => path).filter(path => path.startsWith(f.cache) && path !== f.binary("time-keep"))).toEqual([])
   })
 })
 

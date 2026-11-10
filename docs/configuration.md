@@ -51,7 +51,7 @@ The caches are not under `stateRoot`. They are under `$XDG_CACHE_HOME/opencode-u
 
 ### Symbolic links
 
-At startup the plugin resolves each of its roots once with `realpath`: `stateRoot`, the speech cache, `speech.assetsDir`, the installed package and its platform package. A link above a root, or the root itself, is fine. Examples are macOS `/tmp` (a link to `/private/tmp`), Fedora Atomic and Silverblue `/home` (a link to `/var/home`), and a dotfile setup that links `~/.local` or `~/.cache`. Status shows the resolved paths.
+At startup the plugin resolves each of its roots once with `realpath`: `stateRoot`, the cache, `speech.assetsDir` and the installed package. A link above a root, or the root itself, is fine. Examples are macOS `/tmp` (a link to `/private/tmp`), Fedora Atomic and Silverblue `/home` (a link to `/var/home`), and a dotfile setup that links `~/.local` or `~/.cache`. Status shows the resolved paths.
 
 Inside those roots, the plugin refuses every symbolic link: a timer store, a job folder, a cached or pre-seeded speech file, a program. The error is `UNSAFE_PATH`, never `INTEGRITY_MISMATCH`.
 
@@ -248,7 +248,7 @@ The status RPC starts with the fields every one of these plugins shares:
 | `unguardedAgents` | The agents without the default rules whose own rules would run a Utilities side effect without asking. Always present; `[]` when none. |
 | `nextStep` | Exactly the `Next step` row; `Nothing to do.` when nothing is needed. Missing speech files that download on first use, and the free weather tier, never set it. |
 
-Then Utilities' own: the platform package, per-module availability, the weather tier and key, speech file states (`missing`, `cached` or `pre-seeded`), voices, whether files are pre-seeded, the cache and output directories, the due timer count and the timer store, `shadowedSkills` (each `{ name, path }`: a skill with one of the plugin's skill ids, such as one in `.opencode/skills/utilities-time/`, that OpenCode loads instead of the plugin's own; `[]` when none), and the ask-by-default actions. An item's own `next` is its own next step. The `utilities_status` tool has the same fields, with `unguardedAgents` as a count. For those agents, `nextStep` is: Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.
+Then Utilities' own: the platform, per-module availability, the weather tier and key, speech file states (`missing`, `cached` or `pre-seeded`), voices, whether files are pre-seeded, the cache and output directories, the due timer count and the timer store, `shadowedSkills` (each `{ name, path }`: a skill with one of the plugin's skill ids, such as one in `.opencode/skills/utilities-time/`, that OpenCode loads instead of the plugin's own; `[]` when none), and the ask-by-default actions. An item's own `next` is its own next step. The `utilities_status` tool has the same fields, with `unguardedAgents` as a count. For those agents, `nextStep` is: Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.
 
 ## Bounds
 
@@ -281,13 +281,12 @@ A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next 
 | `HOST_UNTESTED` | OpenCode is outside `>=2.2.3 <2.3.0`. Use 2.2.3, 2.2.4, 2.2.5 or 2.2.6, or set `allowUntestedHost`. |
 | `DISABLED` | Set `modules.<name>` to `true`. |
 | `CLOSED` | The plugin is shutting down. Retry after OpenCode has reloaded it. |
-| `PLATFORM_PACKAGE_MISSING` | Reinstall so the platform package is present, or run `npm run native:build` in a checkout. |
-| `NATIVE_FILES_MISSING` | The plugin's own platform files (`manifest/backends.json`) are not there, so no tool that needs a program can run, while `status` still answers. In a checkout, run `npm run native:build` and restart OpenCode; otherwise reinstall the plugin. |
+| `NATIVE_FILES_MISSING` | The time or weather program is not downloaded yet, or this copy of the plugin has no release manifest. Call the tool with permission to download it, or run `/utilities-install`. In a checkout, run `npm run native:ensure`. |
 | `UNSUPPORTED_PLATFORM` | No build for this platform. Time and weather are unaffected when only speech lacks an engine. |
-| `BINARY_MISSING`, `INTEGRITY_MISMATCH` | Reinstall. For speech, delete the cache and run `/utilities-speech-install`. |
+| `BINARY_MISSING`, `INTEGRITY_MISMATCH` | A program or speech file is missing or is not the pinned file. Call the tool again: a program is downloaded again after its permission. For speech, delete the cache and run `/utilities-speech-install`. |
 | `CONTRACT_MISMATCH` | The plugin's files, or a program's output, do not match this version. Reinstall; if it persists, report it with the `utilities_status` output. |
 | `SPEECH_ASSETS_MISSING` | Approve the download, run `/utilities-speech-install`, or pre-seed. |
-| `DOWNLOAD_FAILED` | Check the network and retry, or pre-seed. |
+| `DOWNLOAD_FAILED` | Check the network and retry, or pre-seed the speech files. |
 | `INPUT_INVALID` | Correct the named field. The message names the rule, such as the 2000–2030 holiday range, never the value. |
 | `INPUT_LIMIT`, `OUTPUT_LIMIT` | The input is over 32 KiB, or the result over 64 KiB. Send less, or narrow the request (fewer days, hours or results). |
 | `QUEUE_FULL` | Wait, then retry. Each module has its own queue. |

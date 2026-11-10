@@ -15,7 +15,7 @@ Unofficial; not affiliated with Open-Meteo. Weather data is from Open-Meteo.com 
 opencode plugin add @joe-broadhead/opencode-utilities
 ```
 
-Run `opencode reload`, or restart OpenCode. Then run `/utilities-status`. npm also installs the matching platform package with the time and weather programs (`@joe-broadhead/opencode-utilities-bin-<platform>`). Install scripts do not run.
+Run `opencode reload`, or restart OpenCode. Then run `/utilities-status`. The time and weather programs download on first use from this repository's GitHub Release, checked against the release manifest; `/utilities-install` downloads them on request. Install scripts do not run.
 
 Transcription and synthesis need a speech engine and models, about 105 MB. They are not in the npm packages. They download from this repository's GitHub Release the first time a speech tool needs them, after a prompt, or you can [pre-seed](#speech-files) them.
 
@@ -57,10 +57,11 @@ No Utilities tool is pinned in the Code Mode catalogue. The `utilities` namespac
 
 ### Status
 
-- `/utilities` (palette: **Utilities: Status**) opens the Utilities status dialog. Its rows are Connection (the optional Open-Meteo key), Account, Access, the platform package and each module, speech files, due timers, the actions that ask, Skills, Tools, Agents without default rules, OpenCode, and one Next step. Press `r` to refresh and `Esc` to close.
+- `/utilities` (palette: **Utilities: Status**) opens the Utilities status dialog. Its rows are Connection (the optional Open-Meteo key), Account, Access, the platform and each module, speech files, due timers, the actions that ask, Skills, Tools, Agents without default rules, OpenCode, and one Next step. Press `r` to refresh and `Esc` to close.
 - `/utilities-status` posts the same status into the session, with the block for any agents without default rules.
 - `utilities_status` gives the model the same view, with those agents as a count.
 - `/utilities-speech-install` downloads the speech files subject to the download permission; the default allows it.
+- `/utilities-install` downloads the time and weather programs subject to the download permission; the default allows it.
 
 ### Scripts
 
@@ -151,6 +152,7 @@ The block for each value, generated from `defaultRules(access)` in `src/host/per
 | `utilities_timer_delete` | `*` | `allow` |
 | `utilities_speech_synthesize` | `*` | `allow` |
 | `utilities_speech_download` | `*` | `allow` |
+| `utilities_native_download` | `*` | `allow` |
 
 <!-- /generated:rules-all -->
 
@@ -186,6 +188,7 @@ The block for each value, generated from `defaultRules(access)` in `src/host/per
 | `utilities_timer_delete` | `*` | `ask` |
 | `utilities_speech_synthesize` | `*` | `ask` |
 | `utilities_speech_download` | `*` | `ask` |
+| `utilities_native_download` | `*` | `ask` |
 
 <!-- /generated:rules-ask-changes -->
 
@@ -221,6 +224,7 @@ The block for each value, generated from `defaultRules(access)` in `src/host/per
 | `utilities_timer_delete` | `*` | `deny` |
 | `utilities_speech_synthesize` | `*` | `deny` |
 | `utilities_speech_download` | `*` | `deny` |
+| `utilities_native_download` | `*` | `deny` |
 
 <!-- /generated:rules-read-only -->
 
@@ -235,6 +239,7 @@ What each call asserts:
 | `utilities_speech_transcribe` | The host's file rules | `read` on the file. Outside the location and the project, `external_directory` on `<directory>/*` first. |
 | `utilities_speech_synthesize` | Yes | `utilities_speech_synthesize`, resource `kitten-nano-int8/<voice>`, saved as `*`. A given `path` also asserts `edit`, and `external_directory` outside the project. |
 | First transcription or synthesis, or `/utilities-speech-install` | Yes | `utilities_speech_download`. Resource and save are the release host (`github.com`). `metadata.bytes` is the download size. |
+| First use of time or weather, or `/utilities-install` | Yes | `utilities_native_download`. Resource and save are the release host (`github.com`). Only a program that is not cached is downloaded, and its size and SHA-256 are checked before it runs. |
 
 **Allow** side effects for one agent, or for the whole config. OpenCode adds top-level rules to every agent after its built-in rules and this plugin's ask rules, then the agent's own `permissions` from your config. The last matching rule wins. So a top-level allow also allows the action for Plan and Explore. To keep a stricter agent strict, put the allow on the agent that should have it.
 
@@ -319,7 +324,7 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 | `AUDIO_DURATION_LIMIT` | The audio is longer than ten minutes. | Split it into shorter files. |
 | `BACKEND_FAILED` | The program behind this tool reported an error. | Check the input and retry. |
 | `BACKEND_JSON_INVALID` | The program behind this tool returned unreadable output. | Retry. If it persists, reinstall the plugin. |
-| `BINARY_MISSING` | A program the plugin needs is missing from its platform package. | Reinstall the plugin, then restart OpenCode. |
+| `BINARY_MISSING` | A program the plugin needs is missing or is not the pinned file. | Call the tool again to download it, or reinstall the plugin, then restart OpenCode. |
 | `BRIDGE_CORRELATION` | The speech engine answered a different request. | Retry. If it persists, delete the speech cache and run /utilities-speech-install. |
 | `CANCELLED` | The call was cancelled. | Call the tool again if you still need the result. |
 | `CLEANUP_FAILED` | The plugin could not remove its temporary files. | Retry. Leftover job directories are removed the next time the plugin starts. |
@@ -327,7 +332,7 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 | `CONTRACT_MISMATCH` | The plugin's files, or a program's output, do not match what this plugin version expects. | Reinstall the plugin. If it persists, report it with the utilities_status output. |
 | `DEADLINE_EXCEEDED` | The call took longer than its time limit. | Retry, or narrow the request. |
 | `DISABLED` | This module is turned off in the plugin options. | Set modules.<name> to true in the Utilities plugin options in opencode.json. |
-| `DOWNLOAD_FAILED` | Downloading the speech files failed. | Check the network and proxy settings and retry, or pre-seed the files in speech.assetsDir. |
+| `DOWNLOAD_FAILED` | Downloading a file the plugin needs failed. | Check the network and proxy settings and retry. A speech file can also be pre-seeded in speech.assetsDir. |
 | `FILE_CHANGED` | A file changed while the plugin was reading it. | Retry. |
 | `FILE_REJECTED` | A file the plugin reads is not a regular file, or is too large. | Reinstall the plugin. |
 | `HOLIDAY_COVERAGE` | Holiday data covers 2000–2030, and this call needs a year outside it. | Use dates from 2000 to 2030, or leave out country to count weekends only. |
@@ -335,14 +340,13 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 | `INPUT_INVALID` | The tool input is invalid. | Correct the named fields and call the tool again. |
 | `INPUT_LIMIT` | The tool input is too large. | Send less text and call the tool again. |
 | `INTEGRITY_MISMATCH` | A program or model file does not match its pinned SHA-256 hash. | Reinstall the plugin, then restart OpenCode. |
-| `NATIVE_FILES_MISSING` | The plugin's platform files were not built or not installed, so no tool that needs a program can run. | In a checkout, run npm run native:build and restart OpenCode. Otherwise reinstall the plugin. |
+| `NATIVE_FILES_MISSING` | The time or weather program is not downloaded yet, or this copy of the plugin has no release manifest. | Call the time or weather tool with permission to download it, or run /utilities-install. In a checkout, run npm run native:ensure. |
 | `OPERATION_FAILED` | The tool failed unexpectedly. | Retry. If it persists, call utilities_status. |
 | `OPTIONS_INVALID` | The plugin options are invalid. | Fix the named option in the Utilities plugin options in opencode.json. |
 | `OUTPUT_EXISTS` | A file already exists at the output path. | Choose another path, or delete the file first. |
 | `OUTPUT_LIMIT` | The result is too large to return. | Narrow the request, for example fewer days, hours or results. |
 | `OUTPUT_PATH_MISMATCH` | The speech engine wrote its output somewhere unexpected. | Retry. If it persists, delete the speech cache and run /utilities-speech-install. |
 | `PERMISSION_DENIED` | The tools RPC refused the call. | Add an allow rule for the action to the session's agent or to the session, or use a session whose agent allows it. |
-| `PLATFORM_PACKAGE_MISSING` | The platform package with the time and weather programs is not installed. | Reinstall the plugin so npm installs its platform package, then restart OpenCode. |
 | `QUEUE_FULL` | Too many calls to this module are waiting. | Wait for earlier calls to finish, then retry. |
 | `SESSION_AGENT_REQUIRED` | The tools RPC refused the call. | Create a session that names an agent this project has, with its project as the location, such as POST /api/session with {"agent":"build","location":{"directory":"/path/to/project"}}, and pass its id. |
 | `SESSION_UNKNOWN` | The tools RPC refused the call. | Create a session in the location you mean, such as POST /api/session with {"agent":"build"} sent with the header "x-opencode-directory: <dir>" or the location[directory] query, and pass its id. |

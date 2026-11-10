@@ -1,17 +1,14 @@
 import * as z from "zod"
-import { lstat, realpath } from "node:fs/promises"
-import { createRequire } from "node:module"
-import { dirname, join } from "node:path"
+import { lstat } from "node:fs/promises"
 import { hashRegular, identity, noSymlinks, readRegular, sameIdentity, type Identity } from "../process/files.js"
-import { fail, parse, UtilitiesError } from "./common.js"
-import { PLATFORMS, type BackendManifest, type Platform, type PlatformModule, type PlatformPackage } from "./contract.js"
+import { cachePath, installNative, NativeError, readNativeManifest, type NativeCode, type NativeManifest } from "../process/install.js"
+import { fail, UtilitiesError } from "./common.js"
+import { PLATFORMS, type FailureCode, type NativeBinary, type Platform } from "./contract.js"
 
 export const sha256 = z.string().regex(/^[a-f0-9]{64}$/)
 export const platformKey = z.enum(Object.keys(PLATFORMS) as [Platform, ...Platform[]])
-const entry = z.strictObject({ path: z.string().max(256).regex(/^bin\/[A-Za-z0-9_.-]+$/), sha256 })
-const manifestSchema = z.strictObject({ platforms: z.partialRecord(platformKey, z.strictObject({ time: entry, weather: entry })) }) satisfies z.ZodType<BackendManifest>
 
-/** The running platform as a PLATFORMS key. Linux packages target glibc; a musl system finds no package to load. */
+/** The running platform as a PLATFORMS key. Linux builds target glibc; a musl system has no build to load. */
 export function detectTarget() {
   return process.platform === "linux" ? `linux-${process.arch}-gnu` : `${process.platform}-${process.arch}`
 }
@@ -19,7 +16,7 @@ export const isPlatform = (target: string): target is Platform => Object.hasOwn(
 
 /**
  * Reads a JSON file that ships in the installed package. A file that is not there is NATIVE_FILES_MISSING, not a
- * contract mismatch: the plugin's own build outputs are the native step's, and a checkout without them cannot run.
+ * contract mismatch: a checkout without its speech manifest cannot run speech.
  */
 export async function packageJson(path: string, max = 65536): Promise<unknown> {
   try { await noSymlinks(path); return JSON.parse((await readRegular(path, max)).toString("utf8")) }
@@ -70,36 +67,80 @@ class Verifier {
 /** The one integrity cache for this process. */
 export const verifier = new Verifier()
 
-/** Time and weather binaries from the per-platform optional npm package. There is no download fallback. */
-export class Backends {
-  private manifest: Promise<BackendManifest> | undefined
-  constructor(private readonly packageRoot: string, private readonly target: string) {}
-  /** The platform package name for this target, if the platform is supported. */
-  get package(): PlatformPackage | undefined { return isPlatform(this.target) ? PLATFORMS[this.target].package : undefined }
-  /** Resolves the platform package root, or fails with UNSUPPORTED_PLATFORM or PLATFORM_PACKAGE_MISSING. */
-  async platform(): Promise<{ root: string; entry: NonNullable<BackendManifest["platforms"][Platform]> }> {
-    if (!isPlatform(this.target)) fail("UNSUPPORTED_PLATFORM")
-    // Read once while it works. A failure is not kept: a checkout whose native build finishes after the plugin loaded
-    // answers correctly on the next call instead of holding the first failure for the life of the process.
-    this.manifest ??= packageJson(join(this.packageRoot, "manifest/backends.json"))
-      .then(raw => parse(manifestSchema, raw))
-      .catch(error => { this.manifest = undefined; throw error })
-    const binaries = (await this.manifest).platforms[this.target]
-    if (!binaries) fail("UNSUPPORTED_PLATFORM")
-    const name = PLATFORMS[this.target].package
-    let root: string
-    // Resolved once, like the other roots: npm and pnpm may reach the package through links above it.
-    try { root = await realpath(dirname(createRequire(join(this.packageRoot, "package.json")).resolve(`${name}/package.json`))) }
-    catch { return fail("PLATFORM_PACKAGE_MISSING") }
-    return { root, entry: binaries }
+/** The native code a refusal from the shared installer becomes here, with its own message and next step. */
+const FAILURES: Readonly<Record<NativeCode, FailureCode>> = {
+  NATIVE_MANIFEST_MISSING: "NATIVE_FILES_MISSING",
+  NATIVE_MANIFEST_INVALID: "CONTRACT_MISMATCH",
+  NATIVE_UNSUPPORTED_PLATFORM: "UNSUPPORTED_PLATFORM",
+  NATIVE_NOT_INSTALLED: "NATIVE_FILES_MISSING",
+  NATIVE_NETWORK: "DOWNLOAD_FAILED",
+  NATIVE_NOT_FOUND: "DOWNLOAD_FAILED",
+  NATIVE_HASH_MISMATCH: "INTEGRITY_MISMATCH",
+  NATIVE_SIZE_MISMATCH: "INTEGRITY_MISMATCH",
+  NATIVE_STALLED: "DOWNLOAD_FAILED",
+  NATIVE_CANCELLED: "CANCELLED",
+  NATIVE_WRITE_FAILED: "DOWNLOAD_FAILED",
+}
+
+function refuse(error: unknown): never {
+  if (error instanceof NativeError) return fail(FAILURES[error.code], { message: error.message.replace(/^NATIVE_[A-Z_]+: /, ""), hint: error.next })
+  throw error
+}
+
+/** A verified executable: its path, and the sha256 every spawn checks it against. */
+export interface NativeExecutable { readonly path: string; readonly sha256: string }
+
+/**
+ * The time and weather programs, from the release manifest (manifest/native.json) and the plugin's cache. A program
+ * is downloaded only by `install`, which the caller reaches after its permission check, so a read never downloads.
+ */
+export class NativeBinaries {
+  private manifest: Promise<NativeManifest> | undefined
+  constructor(private readonly options: { readonly packageRoot: string; readonly cacheRoot: string; readonly target: string }) {}
+
+  /** The release manifest, read once while it works. A failure is not kept, so a fixed checkout answers on the next call. */
+  private release(): Promise<NativeManifest> {
+    this.manifest ??= readNativeManifest(this.options.packageRoot)
+      .then(raw => raw ?? refuse(new NativeError(
+        "NATIVE_MANIFEST_MISSING",
+        "this copy of the plugin has no release manifest, so it names no time or weather program",
+        "Run npm run native:ensure in a checkout, or install a release of the plugin.",
+      )))
+      .catch(error => { this.manifest = undefined; return refuse(error) })
+    return this.manifest
   }
-  /** The verified executable for a module, checked against manifest/backends.json, the executable mode and links. */
-  async executable(module: PlatformModule) {
-    const { root, entry } = await this.platform(), file = entry[module], path = join(root, file.path)
-    const result = await verifier.check(path, file.sha256, true)
-    if (result === "missing") fail("BINARY_MISSING")
-    if (result === "unsafe") fail("UNSAFE_PATH")
-    if (result === "mismatch") fail("INTEGRITY_MISMATCH")
-    return { path, sha256: file.sha256 }
+
+  private optionsFor(release: NativeManifest, module: NativeBinary) {
+    return { manifest: release, module, key: this.options.target, cacheRoot: this.options.cacheRoot, installCommand: "/utilities-install" }
+  }
+
+  /** Whether this platform has a build in the release. Fails with UNSUPPORTED_PLATFORM or NATIVE_FILES_MISSING. */
+  async platform(): Promise<void> {
+    if (!isPlatform(this.options.target)) fail("UNSUPPORTED_PLATFORM")
+    const release = await this.release()
+    if (!release.modules["time-keep"]?.[this.options.target]) fail("UNSUPPORTED_PLATFORM")
+  }
+
+  /**
+   * The verified program when it is already cached; undefined when it must be downloaded first (missing, or not the
+   * pinned bytes: a download replaces it, after its permission check). A link is UNSAFE_PATH. Downloads nothing.
+   * The shared verifier hashes a file once per identity, so a call re-hashes nothing while the file is unchanged.
+   */
+  async cached(module: NativeBinary): Promise<NativeExecutable | undefined> {
+    const release = await this.release()
+    const sha256 = release.modules[module]?.[this.options.target]?.executable.sha256
+    if (sha256 === undefined) fail("UNSUPPORTED_PLATFORM")
+    const path = cachePath(this.optionsFor(release, module))
+    const state = await verifier.check(path, sha256, true)
+    if (state === "unsafe") fail("UNSAFE_PATH")
+    return state === "verified" ? { path, sha256 } : undefined
+  }
+
+  /** The verified program, downloaded now if it is not cached. Only after the caller's permission check. */
+  async install(module: NativeBinary, signal?: AbortSignal): Promise<NativeExecutable> {
+    const release = await this.release()
+    const { path } = await installNative({ ...this.optionsFor(release, module), signal }).catch(refuse)
+    return { path, sha256: release.modules[module]![this.options.target]!.executable.sha256 }
   }
 }
+

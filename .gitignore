@@ -4,8 +4,5 @@ dist/
 .DS_Store
 # Native build outputs (npm run native:build): binaries, speech engine and models, notices, provenance and manifests.
 build/
-manifest/backends.json
+manifest/native.json
 manifest/speech-assets.json
-npm/*/bin/
-npm/*/NOTICE
-npm/*/provenance.json

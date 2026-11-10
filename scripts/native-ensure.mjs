@@ -1,5 +1,5 @@
 // Makes sure this machine's native files are built from the current inputs. npm run check runs it first, so the pack
-// test resolves and hashes a freshly built platform package. It runs scripts/native-build.sh when an output is
+// test resolves and hashes a freshly built program. It runs scripts/native-build.sh when an output is
 // missing or an input changed, and does nothing otherwise. Without Rust it fails and names npm run native:build; it
 // never skips.
 // Usage:
@@ -24,7 +24,7 @@ function inputs(platform) {
   files.push(...readdirSync(join(root,'scripts')).filter(f=>f.startsWith('native-')).map(f=>join('scripts',f)));
   const hash=createHash('sha256');
   for(const file of files.sort())hash.update(`${file}\0`).update(readFileSync(join(root,file))).update('\0');
-  hash.update(`version\0${json('package.json').version}\0${json(`npm/opencode-utilities-bin-${platform}/package.json`).version}`);
+  hash.update(`version\0${json('package.json').version}`);
   return hash.digest('hex');
 }
 
@@ -38,17 +38,17 @@ if(mode==='--record') {
 if(mode!==undefined)throw new Error('usage: native-ensure.mjs [--record <platform>]');
 
 const platform=process.platform==='linux' ? `linux-${process.arch}-gnu` : `${process.platform}-${process.arch}`;
-if(!TARGETS[platform]) { console.error(`There is no platform package for ${process.platform}-${process.arch}, so the native files cannot be built here.`); process.exit(1); }
-const pkg=`npm/opencode-utilities-bin-${platform}`;
+if(!TARGETS[platform]) { console.error(`There is no native build for ${process.platform}-${process.arch}, so the native files cannot be built here.`); process.exit(1); }
+const pkg=`build/native/${platform}`;
 const engine=Boolean(json('native/onnx-provenance.json').distributions[TARGETS[platform]]);
-const outputs=[`${pkg}/bin/time-keep`,`${pkg}/bin/weather-signal`,`${pkg}/NOTICE`,`${pkg}/provenance.json`,'manifest/backends.json','manifest/speech-assets.json',
+const outputs=[`${pkg}/time-keep`,`${pkg}/weather-signal`,`${pkg}/NOTICE`,'manifest/native.json','manifest/speech-assets.json',
   ...json('native/model-sources.json').assets.map(a=>`build/speech-assets/${a.name}`),
   ...engine ? [`build/speech-assets/utilities-speech-${platform}`,'build/speech-assets/utilities-speech-NOTICE.txt'] : []];
 const fresh=()=>{
   const missing=outputs.filter(file=>!existsSync(join(root,file)));
   if(missing.length)return `missing ${missing.join(', ')}`;
   if((existsSync(stamp(platform)) ? readFileSync(stamp(platform),'utf8').trim() : '')!==inputs(platform))return 'built from other inputs';
-  const check=spawnSync(process.execPath,[join(root,'scripts/native-manifest.mjs'),'--check'],{cwd:root,encoding:'utf8'});
+  const check=spawnSync(process.execPath,[join(root,'scripts/native-files.mjs'),'--check'],{cwd:root,encoding:'utf8'});
   return check.status===0 ? undefined : check.stderr.trim();
 };
 const stale=fresh();

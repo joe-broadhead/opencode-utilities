@@ -26,7 +26,7 @@ The runtime plans a call, asks for permission, then starts the module deadline. 
 
 Each module has its own queue. A child is a fixed argument array, `shell: false`, with a scrubbed environment rooted in a private job directory: empty `PATH`, fixed locale, no host credentials. The Open-Meteo key, when connected, is the only extra variable, `OPEN_METEO_API_KEY`. Stdout is capped at 1 MiB and stderr at 64 KiB. Stderr never reaches the model. Cancellation sends `SIGTERM`, then `SIGKILL` after 100 ms, and reaps the process group. Windows is not supported.
 
-Integrity of a program or model file is checked once per process and cached by file identity (`dev`, `ino`, `size`, `mtimeMs`, `ctimeMs`). A symbolic link never passes. The roots (state, cache, `speech.assetsDir`, the installed and platform packages) are resolved once with `realpath` at startup, so links above them are allowed and links inside them are `UNSAFE_PATH`. The state directory must be mode `0700` and owned by the user.
+Integrity of a program or model file is checked once per process and cached by file identity (`dev`, `ino`, `size`, `mtimeMs`, `ctimeMs`). A symbolic link never passes. The roots (state, cache, `speech.assetsDir` and the installed package) are resolved once with `realpath` at startup, so links above them are allowed and links inside them are `UNSAFE_PATH`. The state directory must be mode `0700` and owned by the user.
 
 The plugin does not log tool input, paths, transcripts, timer text or child stderr.
 
@@ -42,7 +42,7 @@ Pins, not release tags:
 | weather-signal | `https://github.com/joe-broadhead/weather-signal` | `ae1dc3b644a37bc566e7d1d0de56576aa6ff45c5` |
 | utilities-speech | `native/speech-bridge` over aurum-core `https://github.com/joe-broadhead/aurum` | `8e3b70fbb0c76add3cbcf7291098e88f2c8bea70` |
 
-The commits and the Rust toolchain (`1.96.0`) are in `native/sources.json` and `native/speech-bridge/Cargo.toml`. Lockfiles are in `native/locks/` and `native/speech-bridge/Cargo.lock`. Version strings do not identify the bytes. `manifest/backends.json` records the SHA-256 of the built programs.
+The commits and the Rust toolchain (`1.96.0`) are in `native/sources.json` and `native/speech-bridge/Cargo.toml`. Lockfiles are in `native/locks/` and `native/speech-bridge/Cargo.lock`. Version strings do not identify the bytes. `manifest/native.json` records the size and SHA-256 of each built program and of its release file.
 
 Weather reads may follow redirects from the fixed starting URLs. Those URLs are always passed on the command line, including the unused historical archive, so the CLI cannot fall back to a default host. A commercial key switches the three URLs to the `customer-*` hosts. The free tier stays on `api.open-meteo.com` and `geocoding-api.open-meteo.com`.
 
@@ -50,24 +50,15 @@ Time's holiday data covers 2000–2030. Timer set is an upstream upsert; the ada
 
 Do not set `AURUM_CACHE`. The pinned aurum core does not implement it. The bridge receives explicit paths and `local_only` behaviour: a missing model fails, it does not download.
 
-## Platform packages
+## Time and weather programs
 
-One optional npm package per platform holds `bin/time-keep` and `bin/weather-signal`:
+`time-keep` and `weather-signal` are built for each platform into `build/native/<platform>/`. Each release file is the gzip of one executable, `<program>-<platform>.gz`, on this repository's GitHub Release. The release commit's `manifest/native.json` pins, for each platform, the file's size and SHA-256 and the executable's size and SHA-256. The package ships that manifest and no program.
 
-| Package | OS | CPU | libc |
-| --- | --- | --- | --- |
-| `@joe-broadhead/opencode-utilities-bin-darwin-arm64` | darwin | arm64 | |
-| `@joe-broadhead/opencode-utilities-bin-darwin-x64` | darwin | x64 | |
-| `@joe-broadhead/opencode-utilities-bin-linux-x64-gnu` | linux | x64 | glibc |
-| `@joe-broadhead/opencode-utilities-bin-linux-arm64-gnu` | linux | arm64 | glibc |
+The first call that needs a program downloads it, after the `utilities_native_download` permission (resource and save: `github.com`). `/utilities-install` downloads both on request, as the person's own command. Status reads the cache and never downloads. A download is checked twice before anything is installed: the file's size and SHA-256 as it arrives, then the executable's size and SHA-256 after decompression. Only then is it renamed into `$XDG_CACHE_HOME/opencode-utilities/native/<tag>/<program>/<platform>/<program>`.
 
-Versions match the main package. None has scripts. `files` is `bin/`, `LICENSE`, `NOTICE` and `provenance.json`.
+Before every run the cached executable is verified again. A link is `UNSAFE_PATH`. Bytes that are not the pinned ones are replaced by a download, after the permission. A file without owner execute is `INTEGRITY_MISMATCH`. Each file is hashed once per process and file identity (`dev`, `ino`, `size`, `mtimeMs`, `ctimeMs`).
 
-The runtime resolves `@joe-broadhead/opencode-utilities-bin-<platform>/package.json` with `createRequire` from the installed plugin, then checks the path in `manifest/backends.json` (`bin/time-keep`, `bin/weather-signal`): exact SHA-256, executable mode, not a symbolic link. If the package is absent, time and weather tools are not registered and status reports `PLATFORM_PACKAGE_MISSING`. There is no download fallback.
-
-musl and Windows have no package. macOS x64 has time and weather only.
-
-In a checkout the packages are npm workspaces under `npm/`. Their `bin/`, `NOTICE` and `provenance.json` are build outputs. They are not in git. Their checked-in `package.json` files have no `os`, `cpu` or `libc`, so `npm ci --ignore-scripts` installs the whole workspace on any machine. `scripts/pack.mjs` adds those fields from `PLATFORMS` in `src/domain/contract.ts` when it packs a platform package, and drops `workspaces` from the main package.
+Time and weather stay registered while their programs are missing, so the first call can download them. Status shows `NATIVE_FILES_MISSING` until then. musl and Windows have no build. macOS x64 has time and weather only.
 
 ## Speech assets
 
@@ -110,7 +101,7 @@ Transcription language defaults to detection. Synthesis defaults to the voice `L
 
 ## Native build
 
-Programs, the speech engine, the models, `NOTICE`, `provenance.json` and both manifests are build outputs. They are gitignored. A clone does not contain them. Contributors need the Rust 1.96.0 toolchain from rustup, plus a C toolchain. `npm run native:build` builds the host platform. It refuses to run without that toolchain.
+The programs, the speech engine, the models, the notices and both manifests (`manifest/native.json`, `manifest/speech-assets.json`) are build outputs. They are gitignored. A clone does not contain them. Contributors need the Rust 1.96.0 toolchain from rustup, plus a C toolchain. `npm run native:build` builds the host platform. It refuses to run without that toolchain.
 
 ```sh
 npm run native:build
@@ -118,9 +109,9 @@ npm run native:build
 
 `NATIVE_BUILD_ROOT` holds source checkouts and Cargo's target directory. It must be outside the repository and must not contain spaces. The default is `$XDG_CACHE_HOME/opencode-utilities-native-build` (or `~/.cache/opencode-utilities-native-build`). Rust and C paths are remapped (`/cargo`, `/build`, `/utilities`) so a binary we compile does not embed a builder's home directory. Strings already compiled into the pinned ONNX Runtime static library are not rewritten. macOS builds set `MACOSX_DEPLOYMENT_TARGET=14.0` and `GGML_NATIVE=OFF`.
 
-The script checks the pinned commits and lockfiles, builds time-keep and weather-signal into `npm/opencode-utilities-bin-<platform>/bin/`, and, where ONNX Runtime has a static library, builds `utilities-speech-<platform>` into `build/speech-assets/`. `scripts/native-models.mjs` fetches the four pinned models into that same directory and checks size and SHA-256. `scripts/native-onnx.mjs` does the same for the ONNX static library. Neither runs on install or during a tool call. The recipe does not claim byte-identical output across linkers. The manifests record the hashes of the bytes just built.
+The script checks the pinned commits and lockfiles, builds time-keep and weather-signal into `build/native/<platform>/`, and, where ONNX Runtime has a static library, builds `utilities-speech-<platform>` into `build/speech-assets/`. `scripts/native-models.mjs` fetches the four pinned models into that same directory and checks size and SHA-256. `scripts/native-onnx.mjs` does the same for the ONNX static library. Neither runs on install or during a tool call. The recipe does not claim byte-identical output across linkers. The manifests record the hashes of the bytes just built.
 
-`npm run check` runs `native:ensure` first. That builds this platform when an output is missing or an input changed, and does nothing when the files are current. Without Rust it fails and names `rustup toolchain install 1.96.0`. CI still runs `npm run native:build` before check, so the ensure step finds the files already built. `release.yml` builds the four platforms on hosted runners, attests the artifacts, uploads the speech engine, models and model licences to the GitHub Release, publishes the platform packages, then the GitHub Release, then the main package. [CONTRIBUTING.md](../CONTRIBUTING.md#releasing) lists the release steps.
+`npm run check` runs `native:ensure` first. That builds this platform when an output is missing or an input changed, and does nothing when the files are current. Without Rust it fails and names `rustup toolchain install 1.96.0`. CI still runs `npm run native:build` before check, so the ensure step finds the files already built. The `native` workflow builds the release files on `master` and attests them. The release commit pins their hashes, and the release job checks them again before it attaches the files to the GitHub Release. [CONTRIBUTING.md](../CONTRIBUTING.md#releasing) lists the release steps.
 
 ## Licences
 

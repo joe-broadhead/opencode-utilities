@@ -22,7 +22,7 @@ export const STATUS_JSON_SCHEMA = object({
   state: choice(STATES),
   unguardedAgents: list(text(256), 256),
   nextStep: next,
-  platform: object({ target: text(64), package: choice(Object.values(PLATFORMS).map(p => p.package)), availability, next }, ["target", "availability"]),
+  platform: object({ target: text(64), availability, next }, ["target", "availability"]),
   modules: object({ weather: module, time: module, speech: module }, ["weather", "time", "speech"]),
   weather: object({ tier: choice(["free", "commercial"]), key: choice(["none", "connected", "rejected"]), attribution: { type: "string", const: WEATHER_ATTRIBUTION }, next }, ["tier", "key", "attribution"]),
   speech: object({
@@ -69,8 +69,7 @@ const AVAILABILITY_TEXT: { readonly [A in Availability]: string } = {
   DISABLED: "disabled",
   CLOSED: "shutting down",
   UNSUPPORTED_PLATFORM: "not supported on this platform",
-  PLATFORM_PACKAGE_MISSING: "failed: platform package missing",
-  NATIVE_FILES_MISSING: "failed: platform files not built",
+  NATIVE_FILES_MISSING: "failed: time or weather program not downloaded",
   BINARY_MISSING: "failed: program missing",
   INTEGRITY_MISMATCH: "failed: integrity check",
   CONTRACT_MISMATCH: "failed: unexpected program version",
@@ -148,7 +147,7 @@ export function statusLines(view: StatusView, { paste, agents }: { readonly past
     line("Connection", connection, key !== "rejected"),
     line("Account", tier === "free" ? "Open-Meteo free tier" : "Open-Meteo commercial key", true),
     line("Access", `${tier === "free" ? "non-commercial use only, rate-limited" : "commercial use"}. ${attribution}`, true),
-    line("Platform", view.platform.package ? `${view.platform.target}, ${view.platform.package}` : view.platform.target, view.platform.availability === "AVAILABLE"),
+    line("Platform", view.platform.target, view.platform.availability === "AVAILABLE"),
     ...MODULES.map(m => line(MODULE_TEXT[m], AVAILABILITY_TEXT[view.modules[m].availability], view.modules[m].availability === "AVAILABLE")),
     line("Speech files", missing.length === 0
       ? `${view.speech.assets.length === 0 ? "none" : view.speech.assets.map(a => `${a.name} ${a.state}`).join(", ")}${view.speech.voices.length ? `. Voices: ${view.speech.voices.join(", ")}` : ""}`

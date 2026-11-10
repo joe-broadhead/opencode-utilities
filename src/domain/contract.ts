@@ -8,7 +8,7 @@ export const TUI_ID = "utilities.local.tui"
  */
 export const DEPRECATED_IDS = { status: "utilities.tools", tools: "utilities.tools.tools", use: PLUGIN_ID } as const
 export const NAMESPACE = "utilities"
-export const COMMANDS = { status: "utilities-status", speechInstall: "utilities-speech-install" } as const
+export const COMMANDS = { status: "utilities-status", speechInstall: "utilities-speech-install", nativeInstall: "utilities-install" } as const
 export const WEATHER_INTEGRATION = "open-meteo"
 export const WEATHER_ATTRIBUTION = "Weather data by Open-Meteo.com (CC BY 4.0)"
 
@@ -61,6 +61,8 @@ export function methodClass(name: ToolName): MethodClass {
 // Permissions
 
 export const SPEECH_DOWNLOAD_ACTION = "utilities_speech_download"
+/** The first-use download of a time or weather program: it writes an executable the plugin then runs. */
+export const NATIVE_DOWNLOAD_ACTION = "utilities_native_download"
 /** Inserted as `{ action, resource: "*", effect: "ask" }` directly after each agent's base `* * allow` rule. */
 /** How much the generated default rules allow. `all` is the default; the other two are how a user restricts the plugin. */
 export const ACCESS_VALUES = ["all", "ask-changes", "read-only"] as const
@@ -68,7 +70,7 @@ export type Access = typeof ACCESS_VALUES[number]
 
 /** The actions that change something: a timer, a file, or a download. Everything else is a read. */
 export const CHANGING_ACTIONS = [
-  "utilities_timer_set", "utilities_timer_delete", "utilities_speech_synthesize", SPEECH_DOWNLOAD_ACTION,
+  "utilities_timer_set", "utilities_timer_delete", "utilities_speech_synthesize", SPEECH_DOWNLOAD_ACTION, NATIVE_DOWNLOAD_ACTION,
 ] as const
 /** The reads: every time tool, every timer read, every weather tool and transcription. */
 export const READ_ACTIONS = Object.keys(TOOLS)
@@ -82,7 +84,7 @@ type DefaultAskAction = typeof DEFAULT_ASK[number]
 
 type AssertedTool = { [K in ToolName]: typeof TOOLS[K]["effect"] extends "write-state" | "network" | "write-file" ? K : never }[ToolName]
 /** Tool actions for write-state, network and write-file calls; host `read`, `edit` and `external_directory` for file paths. */
-type PermissionAction = `${typeof NAMESPACE}_${AssertedTool}` | typeof SPEECH_DOWNLOAD_ACTION | "read" | "edit" | "external_directory"
+type PermissionAction = `${typeof NAMESPACE}_${AssertedTool}` | typeof SPEECH_DOWNLOAD_ACTION | typeof NATIVE_DOWNLOAD_ACTION | "read" | "edit" | "external_directory"
 export interface PermissionRequest {
   readonly action: PermissionAction
   readonly resources: readonly string[]
@@ -96,7 +98,7 @@ export type Authorize = (requests: readonly PermissionRequest[], invocation: Inv
 // Availability and failures
 
 export const AVAILABILITY = [
-  "AVAILABLE", "DISABLED", "CLOSED", "UNSUPPORTED_PLATFORM", "PLATFORM_PACKAGE_MISSING",
+  "AVAILABLE", "DISABLED", "CLOSED", "UNSUPPORTED_PLATFORM",
   "NATIVE_FILES_MISSING", "BINARY_MISSING", "INTEGRITY_MISMATCH", "CONTRACT_MISMATCH", "SPEECH_ASSETS_MISSING", "UNSAFE_PATH",
 ] as const
 export type Availability = typeof AVAILABILITY[number]
@@ -160,7 +162,7 @@ export interface StatusView {
   /** Set only after an old id answered in this process: one line naming it and the id to use. */
   readonly deprecated?: string
   readonly nextStep: string
-  readonly platform: { readonly target: string; readonly package?: PlatformPackage; readonly availability: Availability; readonly next?: string }
+  readonly platform: { readonly target: string; readonly availability: Availability; readonly next?: string }
   readonly modules: { readonly [M in Module]: { readonly availability: Availability; readonly next?: string } }
   readonly weather: {
     readonly tier: "free" | "commercial"
@@ -192,9 +194,9 @@ export interface StatusSummary extends Omit<StatusView, "unguardedAgents"> {
   readonly unguardedAgents: number
 }
 
-/** Whether a module's skill and engine tools are registered. Speech stays registered while only its files are missing: the first call can download them. */
+/** Whether a module's skill and engine tools are registered. Speech and the time and weather programs stay registered while only their files are missing: the first call can download them. */
 export function registrable(module: Module, availability: Availability) {
-  return availability === "AVAILABLE" || (module === "speech" && availability === "SPEECH_ASSETS_MISSING")
+  return availability === "AVAILABLE" || (module === "speech" ? availability === "SPEECH_ASSETS_MISSING" : availability === "NATIVE_FILES_MISSING")
 }
 /** Whether a tool is registered: status always, every other tool when its module is registrable. */
 export function toolRegistrable(tool: ToolName, modules: { readonly [M in Module]: { readonly availability: Availability } }) {
@@ -238,6 +240,7 @@ export type ModuleTool = { [K in ToolName]: typeof TOOLS[K] extends { readonly m
 export type RuntimeStatus = Pick<StatusView, "platform" | "modules" | "speech" | "timers">
 /** The view before its derived fields, `state` and `nextStep`, are filled in. */
 export type StatusFacts = Omit<StatusView, "state" | "nextStep">
+export interface NativeInstallOutput { readonly downloaded: readonly { readonly name: string; readonly bytes: number }[]; readonly bytes: number; readonly cacheDirectory: string }
 export interface SpeechInstallOutput { readonly downloaded: readonly { readonly name: string; readonly bytes: number }[]; readonly bytes: number; readonly cacheDirectory: string }
 export interface Runtime {
   /** Runs a module tool: parse, availability, permission, any speech download, queue, then the deadline-bound work. Every permission request goes through `RuntimeOptions.authorize` before any effect. */
@@ -245,6 +248,8 @@ export interface Runtime {
   status(signal?: AbortSignal): Promise<RuntimeStatus>
   /** Downloads every missing speech file. `authorize`, when given, receives the utilities_speech_download request first. */
   installSpeech(options?: { readonly signal?: AbortSignal; readonly authorize?: (requests: readonly PermissionRequest[]) => Promise<void> }): Promise<AdapterResult<SpeechInstallOutput>>
+  /** Downloads the time and weather programs that are missing. `authorize`, when given, receives the utilities_native_download request first. */
+  installNatives(options?: { readonly signal?: AbortSignal; readonly authorize?: (requests: readonly PermissionRequest[]) => Promise<void> }): Promise<AdapterResult<NativeInstallOutput>>
   /** Calls `listener` whenever a module's availability changes, for example after a speech download, so the host can reload its tools. Returns the unsubscribe function. */
   onAvailabilityChange(listener: () => void): () => void
   close(): Promise<void>
@@ -254,23 +259,20 @@ export type CreateRuntime = (options: RuntimeOptions) => Promise<Runtime>
 // Native distribution
 
 /**
- * One optional npm package per platform holds the time and weather binaries. The one platform table: the native
+ * The platforms with a time and weather build. The one platform table: the native
  * scripts import it too. `triple` is the Rust target; `arch` is what `file` (macOS) or `objdump -f` (Linux) reports
  * for a binary built for it.
  */
 export const PLATFORMS = {
-  "darwin-arm64": { package: "@joe-broadhead/opencode-utilities-bin-darwin-arm64", os: "darwin", cpu: "arm64", triple: "aarch64-apple-darwin", arch: "arm64" },
-  "darwin-x64": { package: "@joe-broadhead/opencode-utilities-bin-darwin-x64", os: "darwin", cpu: "x64", triple: "x86_64-apple-darwin", arch: "x86_64" },
-  "linux-x64-gnu": { package: "@joe-broadhead/opencode-utilities-bin-linux-x64-gnu", os: "linux", cpu: "x64", libc: "glibc", triple: "x86_64-unknown-linux-gnu", arch: "elf64-x86-64" },
-  "linux-arm64-gnu": { package: "@joe-broadhead/opencode-utilities-bin-linux-arm64-gnu", os: "linux", cpu: "arm64", libc: "glibc", triple: "aarch64-unknown-linux-gnu", arch: "elf64-littleaarch64" },
+  "darwin-arm64": { os: "darwin", cpu: "arm64", triple: "aarch64-apple-darwin", arch: "arm64" },
+  "darwin-x64": { os: "darwin", cpu: "x64", triple: "x86_64-apple-darwin", arch: "x86_64" },
+  "linux-x64-gnu": { os: "linux", cpu: "x64", libc: "glibc", triple: "x86_64-unknown-linux-gnu", arch: "elf64-x86-64" },
+  "linux-arm64-gnu": { os: "linux", cpu: "arm64", libc: "glibc", triple: "aarch64-unknown-linux-gnu", arch: "elf64-littleaarch64" },
 } as const
 export type Platform = keyof typeof PLATFORMS
-export type PlatformPackage = typeof PLATFORMS[Platform]["package"]
-export type PlatformModule = Exclude<Module, "speech">
-/** manifest/backends.json. `path` is relative to the platform package root, for example `bin/time-keep`. */
-export interface BackendManifest {
-  readonly platforms: { readonly [P in Platform]?: { readonly [M in PlatformModule]: { readonly path: string; readonly sha256: string } } }
-}
+/** The release's native binaries (manifest/native.json), and the tool module each one serves. */
+export type NativeBinary = "time-keep" | "weather-signal"
+export const NATIVE_OF = { time: "time-keep", weather: "weather-signal" } as const satisfies Readonly<Record<"time" | "weather", NativeBinary>>
 
 export const SPEECH_MODEL_ROLES = ["tiny-q5_1", "kitten-model", "kitten-voices", "kitten-config"] as const
 type SpeechModelRole = typeof SPEECH_MODEL_ROLES[number]

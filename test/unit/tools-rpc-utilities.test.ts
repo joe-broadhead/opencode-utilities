@@ -68,10 +68,10 @@ describe("Utilities' tools RPC", () => {
   test("available() follows the tool list: unavailable with the module's code exactly when the model's tool is not registered", () => {
     const reasons = (modules: StatusView["modules"]) => Object.fromEntries(methods(modules).methods.map(method => [method.name, method.available?.()]))
     expect(Object.values(reasons(modulesWith({}))).every(reason => reason === undefined)).toBe(true)
-    const off = reasons(modulesWith({ weather: "DISABLED", time: "PLATFORM_PACKAGE_MISSING", speech: "UNSUPPORTED_PLATFORM" }))
+    const off = reasons(modulesWith({ weather: "DISABLED", time: "INTEGRITY_MISMATCH", speech: "UNSUPPORTED_PLATFORM" }))
     expect(off.status).toBeUndefined()
-    expect(off.time_now).toBe("PLATFORM_PACKAGE_MISSING")
-    expect(off.timer_check).toBe("PLATFORM_PACKAGE_MISSING")
+    expect(off.time_now).toBe("INTEGRITY_MISMATCH")
+    expect(off.timer_check).toBe("INTEGRITY_MISMATCH")
     expect(off.weather_current).toBe("DISABLED")
     expect(off.speech_transcribe).toBe("UNSUPPORTED_PLATFORM")
     // Cleanup needs no engine; transcription stays available while only its files are missing, as the tool stays registered.

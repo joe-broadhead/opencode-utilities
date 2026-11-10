@@ -20,7 +20,7 @@ When OpenCode loads it, the plugin:
 
 It does not read OpenCode's credential store except through the `open-meteo` connection API. The commercial key is passed to the weather program as an environment variable, never as an argument, and is not written to a log. Tool input, paths, transcripts, timer text and child stderr are not logged.
 
-Time and weather programs come from the platform package. They are checked against a shipped SHA-256, must be executable, and must not be symbolic links. There is no download fallback for those programs. Speech files are downloaded to a temporary file, checked for size and SHA-256, and renamed into place only when both match. A failed check is never executed.
+Time and weather programs are downloaded on first use from this repository's GitHub Release, after the `utilities_native_download` permission. Each download is checked against the release manifest twice, as it arrives and after decompression, before it is installed. A cached program is checked before every run: it must be executable, and a link is refused. Speech files are downloaded to a temporary file, checked for size and SHA-256, and renamed into place only when both match. A failed check is never executed.
 
 Where data goes:
 

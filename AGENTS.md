@@ -14,7 +14,7 @@ This repository builds `@joe-broadhead/opencode-utilities`, an unofficial OpenCo
 - **Tools.** Register only available modules. Transcription and synthesis stay registered while their files are missing, so the first call can download them (at `access: "ask-changes"` it asks first). No tool is pinned: the Code Mode catalogue stays short, and the skills hold the call shapes.
 - **Errors.** `CODE: what happened. Next step.` with one next step. No error, log or status text contains a key, user input or a signed URL.
 - **Skills.** At most three, under `skills/<id>/SKILL.md`, with real tool and parameter names. A bad skill file must not fail setup.
-- **Roots.** `stateRoot`, the cache, `speech.assetsDir` and the installed and platform packages are resolved once with `realpath` at startup. Links above them are the user's setup and are allowed; a link inside them is `UNSAFE_PATH`.
+- **Roots.** `stateRoot`, the cache, `speech.assetsDir` and the installed package are resolved once with `realpath` at startup. Links above them are the user's setup and are allowed; a link inside them is `UNSAFE_PATH`.
 - **Timers** belong to the project (keyed by the project ID), never to a directory.
 - **Native files are build outputs.** Binaries, the speech engine, models, notices, provenance and hash manifests are gitignored. `npm run check` runs `native:ensure` first.
 

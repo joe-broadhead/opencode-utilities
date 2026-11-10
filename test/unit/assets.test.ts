@@ -18,7 +18,8 @@ async function setup(o: FixtureOptions & { serve?: (files: Awaited<ReturnType<ty
   const name = (role: SpeechAssetRole) => f.files.get(role)!.name
   const bytes = (roles: SpeechAssetRole[]) => roles.reduce((n, role) => n + f.files.get(role)!.content.length, 0)
   /** Everything in the cache: final files and any leftovers (temporary files, locks). */
-  const leftovers = async () => (await readdir(f.cache, { recursive: true }).catch(() => [] as string[])).filter(p => p.includes("/")).sort()
+  // The release programs sit under native/ from the fixture; they are not part of the speech files this lists, or the folder.
+  const leftovers = async () => (await readdir(f.cache, { recursive: true }).catch(() => [] as string[])).filter(p => p.includes("/") && !p.startsWith("native/")).sort()
   return { ...f, server, authorize, changed, runtime, name, bytes, leftovers }
 }
 
@@ -90,7 +91,7 @@ describe("verification", () => {
     const error = await f.runtime.invoke("speech_synthesize", { text: "x" }, invocation()).catch(e => e)
     expect(error).toMatchObject({ code: "INTEGRITY_MISMATCH", message: `The downloaded ${ENGINE} does not match its pinned SHA-256 hash, so it was discarded.` })
     expect(await f.leftovers()).toEqual([])
-    expect(await readdir(f.cache)).toEqual([])
+    expect((await readdir(f.cache)).filter(entry => entry !== "native")).toEqual([])
     await expect(lstat(marker)).rejects.toMatchObject({ code: "ENOENT" }); expect(await f.recorded()).toEqual([])
     expect(f.changed).not.toHaveBeenCalled()
   })
@@ -111,7 +112,7 @@ describe("verification", () => {
     const f = await setup({ serve: () => ({ [ENGINE]: "missing" }) })
     await expect(f.runtime.installSpeech()).rejects.toMatchObject({ code: "DOWNLOAD_FAILED", message: `Downloading ${ENGINE} failed with HTTP status 404.` })
     expect(await f.leftovers()).toEqual([])
-    expect(await readdir(f.cache)).toEqual([]) // not even an empty folder for the file
+    expect((await readdir(f.cache)).filter(entry => entry !== "native")).toEqual([]) // not even an empty folder for the file
   })
   test("cancelling a download removes the partial file", async () => {
     const f = await setup({ serve: () => ({ [ENGINE]: "slow" }) }), controller = new AbortController()

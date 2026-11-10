@@ -4,9 +4,9 @@ import { extname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type * as z from "zod"
 import { identifySource, readSource, type OutputTarget } from "./artifacts/audio.js"
-import { Backends, detectTarget, packageJson, verifier } from "./domain/backends.js"
+import { NativeBinaries, detectTarget, verifier } from "./domain/backends.js"
 import { LIMITS, bounded, deadline, fail, fence, parse, UtilitiesError, abortCode } from "./domain/common.js"
-import { AVAILABILITY, SPEECH_MODEL_ROLES, TOOLS, type AdapterResult, type Availability, type Invocation, type Module, type ModuleTool, type PermissionRequest, type PlatformModule, type Runtime, type RuntimeOptions, type RuntimeStatus, type SpeechAssetRole, type SpeechInstallOutput, type SynthesisInput, type TranscriptionInput } from "./domain/contract.js"
+import { AVAILABILITY, NATIVE_DOWNLOAD_ACTION, NATIVE_OF, SPEECH_MODEL_ROLES, TOOLS, type AdapterResult, type Availability, type Invocation, type Module, type ModuleTool, type PermissionRequest, type NativeBinary, type NativeInstallOutput, type Runtime, type RuntimeOptions, type RuntimeStatus, type SpeechAssetRole, type SpeechInstallOutput, type SynthesisInput, type TranscriptionInput } from "./domain/contract.js"
 import type { ModuleContext } from "./modules/context.js"
 import { timeInputs } from "./modules/time/contracts.js"
 import { weatherInputs, type WeatherOperation } from "./modules/weather/contracts.js"
@@ -34,6 +34,8 @@ interface Plan {
   readonly requests: PermissionRequest[]
   /** The speech download request, asked on its own after `requests` and, for a transcription, after the source is checked. */
   readonly download?: PermissionRequest
+  /** A time or weather program that is not cached: its download request, asked after `requests`, before the program runs. */
+  readonly native?: { readonly module: NativeBinary; readonly request: PermissionRequest }
   readonly executable?: { readonly path: string; readonly sha256: string }
   readonly env?: Readonly<Record<string, string>>
   readonly commercial?: boolean
@@ -54,28 +56,31 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
   const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
   const scope = hash([options.location.project])
   const paths = { store: join(options.stateRoot, "projects", scope, "timers"), jobs: join(options.stateRoot, "jobs"), speech: join(options.stateRoot, "speech"), output: join(options.stateRoot, "speech", scope), weatherCache: join(options.cacheRoot, "weather") }
-  const backends = new Backends(packageRoot, target)
+  const binaries = new NativeBinaries({ packageRoot, cacheRoot: options.cacheRoot, target })
   const assets = new SpeechAssets({ packageRoot, cacheRoot: options.cacheRoot, target, ...options.speechAssetsDir === undefined ? {} : { assetsDir: options.speechAssetsDir } })
   const shutdown = new AbortController(), queue = new Queue(), pending = new Set<Promise<unknown>>(), listeners = new Set<() => void>()
   let closed = false, closing: Promise<void> | undefined
 
-  const packageVersion = packageJson(join(packageRoot, "package.json")).then(v => (v as { version?: unknown }).version, () => undefined)
   const track = <T>(work: Promise<T>) => { pending.add(work); void work.finally(() => pending.delete(work)).catch(() => undefined); return work }
   const changed = () => { for (const listener of listeners) { try { listener() } catch { /* A listener's failure is its own. */ } } }
+
+  /** The permission for one program's first-use download: the release files come from github.com. */
+  const nativeRequest = (module: NativeBinary): PermissionRequest => ({ action: NATIVE_DOWNLOAD_ACTION, resources: ["github.com"], save: ["github.com"], metadata: { program: module } })
+  const nativeStep = (module: NativeBinary) => ({ module, request: nativeRequest(module) })
 
   async function plan(tool: ModuleTool, input: unknown): Promise<Plan> {
     const { module, operation } = TOOLS[tool]
     if (module === "time") {
-      const executable = await backends.executable("time")
+      const executable = await binaries.cached(NATIVE_OF.time)
       const write = tool === "timer_set" || tool === "timer_delete" ? [timerRequest(`utilities_${tool}`, (input as { name: string }).name)] : []
-      return { executable, requests: write }
+      return { executable, requests: write, ...executable ? {} : { native: nativeStep(NATIVE_OF.time) } }
     }
     if (module === "weather") {
-      const executable = await backends.executable("weather"), key = await options.weatherKey?.(), commercial = key !== undefined
+      const executable = await binaries.cached(NATIVE_OF.weather), key = await options.weatherKey?.(), commercial = key !== undefined
       const i = input as { location?: string; query?: string }
       const request = weatherRequest(`utilities_${tool}` as WeatherAction, weatherHosts(operation as WeatherOperation, commercial), i.location ?? i.query ?? "")
       // XDG_CACHE_HOME outlives the job, so weather-signal's response cache (forecasts 30 minutes, places 30 days) works.
-      return { executable, commercial, env: { XDG_CACHE_HOME: paths.weatherCache, ...key === undefined ? {} : { OPEN_METEO_API_KEY: key } }, requests: [request] }
+      return { executable, commercial, env: { XDG_CACHE_HOME: paths.weatherCache, ...key === undefined ? {} : { OPEN_METEO_API_KEY: key } }, requests: [request], ...executable ? {} : { native: nativeStep(NATIVE_OF.weather) } }
     }
     const op = operation as EngineOperation, roles = SPEECH_ROLES[op], entries = await assets.inspect(roles)
     const missing = entries.filter(e => e.state === "missing")
@@ -160,9 +165,16 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
     if (!options.modules[module]) fail("DISABLED")
     bounded(raw, LIMITS.input, "INPUT_LIMIT")
     const input = parse(INPUTS[module][TOOLS[tool].operation]!, raw, "INPUT_INVALID")
-    const step = await plan(tool, input); fence(signal)
+    let step = await plan(tool, input); fence(signal)
     // Permission errors propagate unchanged: no catch wraps this await.
     if (step.requests.length) await options.authorize(step.requests, { ...invocation, signal })
+    if (step.native) {
+      // The program is downloaded only after its own permission check, and only for this call.
+      await options.authorize([step.native.request], { ...invocation, signal })
+      fence(signal)
+      step = { ...step, executable: await binaries.install(step.native.module, signal) }
+      changed()
+    }
     fence(signal)
     if (step.download) {
       // A source that is not a usable WAV fails here, after its read was approved, so it never costs a 105 MB prompt.
@@ -179,7 +191,9 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
     if (!options.modules[module]) return { availability: "DISABLED", next: `Set modules.${module} to true in the Utilities plugin options in opencode.json.` }
     if (closed) return { availability: "CLOSED" }
     try {
-      if (module !== "speech") await backends.executable(module as PlatformModule)
+      if (module !== "speech") {
+        if (await binaries.cached(NATIVE_OF[module]) === undefined) return { availability: "NATIVE_FILES_MISSING", next: "Call the time or weather tool with permission to download it, or run /utilities-install." }
+      }
       else if ((await speech).some(e => e.state === "missing")) return { availability: "SPEECH_ASSETS_MISSING", next: assets.preseeded ? "Copy the missing speech files into speech.assetsDir." : "Run /utilities-speech-install, or download on the first speech call, subject to permissions." }
       return { availability: "AVAILABLE" }
     } catch (error) {
@@ -193,6 +207,8 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
     try {
       if (!await lstat(paths.store).then(() => true, () => false)) return 0
       const step = await plan("timer_check", { offset: 0, limit: 1 })
+      // A background check never downloads a program: without one, there is nothing to check yet.
+      if (!step.executable) return undefined
       const { output } = await perform("timer_check", parse(timeInputs.timer_check, { offset: 0, limit: 1 }), step, signal)
       return (output as { total: number }).total
     } catch { return undefined }
@@ -200,14 +216,12 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
 
   async function status(signal?: AbortSignal): Promise<RuntimeStatus> {
     const work = signal ? AbortSignal.any([signal, shutdown.signal]) : shutdown.signal
-    const version = await packageVersion, name = backends.package
-    const platform: RuntimeStatus["platform"] = await backends.platform().then(
-      () => ({ target, ...name ? { package: name } : {}, availability: "AVAILABLE" as const }),
+    const platform: RuntimeStatus["platform"] = await binaries.platform().then(
+      () => ({ target, availability: "AVAILABLE" as const }),
       error => {
         const code = availability(error)
-        const next = code === "PLATFORM_PACKAGE_MISSING" ? `Reinstall the plugin so npm installs ${name}${typeof version === "string" ? `@${version}` : ""}, then restart OpenCode.`
-          : code === "UNSUPPORTED_PLATFORM" ? `Time and weather tools have no build for ${target}.` : new UtilitiesError(code).hint
-        return { target, ...name ? { package: name } : {}, availability: code, ...next ? { next } : {} }
+        const next = code === "UNSUPPORTED_PLATFORM" ? `Time and weather tools have no build for ${target}.` : new UtilitiesError(code).hint
+        return { target, availability: code, ...next ? { next } : {} }
       })
     // A disabled module's files are not inspected, so its large files are never hashed.
     const inspected = options.modules.speech ? assets.inspect(ALL_ROLES) : Promise.resolve([])
@@ -225,6 +239,24 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
       },
       timers: { directory: paths.store, ...due === undefined ? {} : { due }, ...due ? { next: "Call utilities_timer_check to see the due timers." } : {} },
     }
+  }
+
+  /** Downloads each missing time or weather program, each after its own permission check. A cached program is kept. */
+  async function installNatives(install: Parameters<Runtime["installNatives"]>[0] = {}): Promise<AdapterResult<NativeInstallOutput>> {
+    if (closed) fail("CLOSED")
+    const signal = install.signal ? AbortSignal.any([install.signal, shutdown.signal]) : shutdown.signal
+    const downloaded: { name: string; bytes: number }[] = []
+    for (const module of ["time-keep", "weather-signal"] as const) {
+      if (await binaries.cached(module)) continue
+      if (install.authorize) await install.authorize([nativeRequest(module)])
+      fence(signal)
+      const executable = await binaries.install(module, signal)
+      downloaded.push({ name: module, bytes: (await lstat(executable.path)).size })
+    }
+    if (downloaded.length) changed()
+    const bytes = downloaded.reduce((n, e) => n + e.bytes, 0)
+    const output = { downloaded, bytes, cacheDirectory: options.cacheRoot }
+    return { output, text: downloaded.length ? `Downloaded ${files(downloaded.length)} (${megabytes(bytes)}) into the plugin cache. Time and weather tools are ready.` : "The time and weather programs are already installed. Time and weather tools are ready." }
   }
 
   async function installSpeech(install: Parameters<Runtime["installSpeech"]>[0] = {}): Promise<AdapterResult<SpeechInstallOutput>> {
@@ -258,6 +290,7 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
     invoke: (tool, input, invocation) => track(execute(tool, input, invocation)),
     status: signal => track(status(signal)),
     installSpeech: install => track(installSpeech(install)),
+    installNatives: install => track(installNatives(install)),
     onAvailabilityChange(listener) { listeners.add(listener); return () => { listeners.delete(listener) } },
     close() {
       if (closing) return closing

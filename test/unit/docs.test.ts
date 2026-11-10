@@ -96,7 +96,9 @@ describe("the README's generated blocks", () => {
       for (const match of text.matchAll(/\b(?:fail|failure|error|reason)\(\s*"([A-Z][A-Z0-9_]{2,})"/g)) raised.add(match[1]!)
       for (const match of text.matchAll(/"(?:code|reason)":\s*"([A-Z][A-Z0-9_]{2,})"/g)) raised.add(match[1]!)
     }
-    expect([...raised].filter(code => !table.has(code))).toEqual([])
+    // NATIVE_* are the shared release-program installer's codes (src/process/install.ts). refuse() in src/domain/backends.ts
+    // maps each to a code in the table before any tool reports it.
+    expect([...raised].filter(code => !table.has(code) && !code.startsWith("NATIVE_"))).toEqual([])
     // A code written into a message string ("CODE: what happened") is a code too. Comments that show the shape are not.
     for (const path of SOURCES) {
       if (path.endsWith("src/host/tools-rpc.ts")) continue
@@ -106,7 +108,7 @@ describe("the README's generated blocks", () => {
         for (const match of line.matchAll(/[`"']([A-Z][A-Z0-9_]{2,}): /g)) raised.add(match[1]!)
       }
     }
-    expect([...raised].filter(code => !table.has(code))).toEqual([])
+    expect([...raised].filter(code => !table.has(code) && !code.startsWith("NATIVE_"))).toEqual([])
   })
 })
 

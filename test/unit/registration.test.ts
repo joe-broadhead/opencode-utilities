@@ -56,7 +56,8 @@ describe("tools", () => {
       [{}, 24],
       [{ speech: "SPEECH_ASSETS_MISSING" }, 24],
       [{ speech: "UNSUPPORTED_PLATFORM" }, 22],
-      [{ weather: "PLATFORM_PACKAGE_MISSING", time: "PLATFORM_PACKAGE_MISSING" }, 3],
+      [{ weather: "NATIVE_FILES_MISSING", time: "NATIVE_FILES_MISSING" }, 24],
+      [{ weather: "INTEGRITY_MISMATCH", time: "INTEGRITY_MISMATCH" }, 3],
       [{ weather: "DISABLED", time: "INTEGRITY_MISMATCH", speech: "DISABLED" }, 1],
     ] as const) {
       const { added, namespaces, editor } = toolEditor()
@@ -323,7 +324,8 @@ describe("status rendering", () => {
     expect(VIEW.permissions.askByDefault).toEqual([...DEFAULT_ASK])
     expect(VIEW.permissions.block).toEqual([...DEFAULT_RULES])
     expect(status({ modules: modulesWith({ weather: "DISABLED", time: "DISABLED", speech: "DISABLED" }) }).state).toBe("disabled")
-    expect(status({ modules: modulesWith({ weather: "PLATFORM_PACKAGE_MISSING", time: "PLATFORM_PACKAGE_MISSING", speech: "UNSUPPORTED_PLATFORM" }) }).state).toBe("failed")
+    expect(status({ modules: modulesWith({ weather: "INTEGRITY_MISMATCH", time: "INTEGRITY_MISMATCH", speech: "UNSUPPORTED_PLATFORM" }) }).state).toBe("failed")
+    expect(status({ modules: modulesWith({ weather: "NATIVE_FILES_MISSING", time: "NATIVE_FILES_MISSING", speech: "UNSUPPORTED_PLATFORM" }) }).state).toBe("ready")
     expect(status({ modules: modulesWith({ speech: "SPEECH_ASSETS_MISSING" }) }).state).toBe("ready")
   })
 

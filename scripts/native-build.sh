@@ -1,9 +1,9 @@
 #!/bin/bash
 # Builds the native files for one platform from pinned sources. Developer and release use only; nothing runs on install.
-#   time-keep, weather-signal -> npm/opencode-utilities-bin-<platform>/bin/, with its NOTICE and provenance.json
+#   time-keep, weather-signal -> build/native/<platform>/, with its NOTICE
 #   the speech engine         -> build/speech-assets/utilities-speech-<platform>, where ONNX Runtime allows one
 #   the pinned models         -> build/speech-assets/, on every platform
-# Then it regenerates manifest/backends.json and manifest/speech-assets.json from the files present. All of these are
+# Then it regenerates manifest/native.json and manifest/speech-assets.json from the files present. All of these are
 # build outputs, never committed.
 #
 # Usage: [NATIVE_BUILD_ROOT=<directory>] scripts/native-build.sh [<platform>] [--no-speech]
@@ -28,9 +28,9 @@ for arg; do
   esac
 done
 TARGET="$(platforms "$PLATFORM" triple)"
-[[ -n "$TARGET" ]] || { echo "There is no platform package for $(uname -s)-$(uname -m)." >&2; exit 2; }
+[[ -n "$TARGET" ]] || { echo "There is no native build for $(uname -s)-$(uname -m)." >&2; exit 2; }
 if [[ "$(uname -s)" == Linux && "$PLATFORM" == linux-* ]] && ! getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
-  echo 'The Linux platform packages target glibc; build them on a glibc system.' >&2; exit 1
+  echo 'The Linux builds target glibc; build them on a glibc system.' >&2; exit 1
 fi
 mkdir -p "$NATIVE_BUILD_ROOT"
 NATIVE_BUILD_ROOT="$(cd "$NATIVE_BUILD_ROOT" && pwd -P)"
@@ -47,8 +47,7 @@ if ! command -v rustup >/dev/null 2>&1 || ! rustup run "$RUST" cargo --version >
   exit 1
 fi
 CARGO="${NATIVE_CARGO:-build}"
-PKG="$ROOT/npm/opencode-utilities-bin-$PLATFORM"
-[[ -f "$PKG/package.json" ]] || { echo "Missing platform package: $PKG" >&2; exit 1; }
+PKG="$ROOT/build/native/$PLATFORM"
 
 unset ORT_LIB_PATH ORT_LIB_LOCATION ORT_PREFER_DYNAMIC_LINK ORT_LIB_PROFILE ORT_LIB_NAME ORT_SKIP_DOWNLOAD ORT_OFFLINE
 unset RUSTFLAGS CARGO_ENCODED_RUSTFLAGS CFLAGS CXXFLAGS CPPFLAGS LDFLAGS
@@ -80,9 +79,9 @@ for name in time-keep weather-signal; do
   cmp -s "$dir/Cargo.lock" "$ROOT/native/locks/$name.Cargo.lock" || { echo "$name: Cargo.lock differs from native/locks/$name.Cargo.lock" >&2; exit 1; }
   cmp -s "$dir/LICENSE" "$ROOT/licenses/upstream/$name-MIT.txt" || { echo "$name: LICENSE differs from licenses/upstream/$name-MIT.txt" >&2; exit 1; }
   cargo_build "$dir/Cargo.toml"
-  mkdir -p "$PKG/bin"
-  install -m 0755 "$CARGO_TARGET_DIR/$TARGET/release/$name" "$PKG/bin/$name"
-  built+=("$PKG/bin/$name")
+  mkdir -p "$PKG"
+  install -m 0755 "$CARGO_TARGET_DIR/$TARGET/release/$name" "$PKG/$name"
+  built+=("$PKG/$name")
 done
 
 speech=()
@@ -102,6 +101,5 @@ node "$ROOT/scripts/native-models.mjs"
 
 node "$ROOT/scripts/native-closure.mjs" "$PLATFORM" "${built[@]}"
 node "$ROOT/scripts/native-notices.mjs" "$PLATFORM" "$NATIVE_BUILD_ROOT/src" ${speech[@]+"${speech[@]}"}
-node "$ROOT/scripts/native-manifest.mjs" --provenance "$PLATFORM"
-node "$ROOT/scripts/native-manifest.mjs"
+node "$ROOT/scripts/native-files.mjs"
 node "$ROOT/scripts/native-ensure.mjs" --record "$PLATFORM"

@@ -1,24 +1,29 @@
-// The real time-keep program from this machine's platform package, which `npm run check` builds first
+// The real time-keep program from this machine's native build (build/native), which `npm run check` builds first
 // (native:ensure). These tests pin what the synthetic fixture cannot: time-keep's own parsing and error messages.
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
-import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises"
-import { createRequire } from "node:module"
+import { chmod, copyFile, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { createRuntime } from "../../src/runtime.js"
-import { PLATFORMS, type Runtime } from "../../src/domain/contract.js"
+import type { Runtime } from "../../src/domain/contract.js"
 import { detectTarget } from "../../src/domain/backends.js"
 import { timeFailure } from "../../src/modules/time/failures.js"
-import { invocation } from "../fixtures.js"
+import { invocation, VERSION } from "../fixtures.js"
 
 const repo = fileURLToPath(new URL("../../", import.meta.url))
+/** The release copy this platform's build made, where the first-use path looks for it under a cache root. */
+async function seedCache(cache: string) {
+  const program = join(cache, "native", `v${VERSION}`, "time-keep", detectTarget(), "time-keep")
+  await mkdir(dirname(program), { recursive: true, mode: 0o700 }); await copyFile(join(repo, "build/native", detectTarget(), "time-keep"), program); await chmod(program, 0o755)
+}
 let root: string, runtime: Runtime
 beforeAll(async () => {
   root = await mkdtemp(join(await realpath(tmpdir()), "utilities-time-keep-"))
   await mkdir(join(root, "state"), { mode: 0o700 }); await mkdir(join(root, "project"))
+  await seedCache(join(root, "cache"))
   runtime = await createRuntime({
     location: { project: "project-real", directory: join(root, "project"), projectDirectory: join(root, "project") }, authorize: async () => {},
     modules: { time: true, weather: false, speech: false }, stateRoot: join(root, "state"), cacheRoot: join(root, "cache"), packageRoot: repo,
@@ -167,7 +172,7 @@ describe("regional holidays (UTIL-4)", () => {
 })
 
 describe("timers belong to the project (UTIL-5)", () => {
-  const timeKeep = join(dirname(createRequire(join(repo, "package.json")).resolve(`${PLATFORMS[detectTarget() as keyof typeof PLATFORMS].package}/package.json`)), "bin/time-keep")
+  const timeKeep = join(repo, "build/native", detectTarget(), "time-keep")
   const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
   /** A store where 0.0.1 kept it, per folder: projects/sha256([project, directory])/timers. */
   async function legacy(state: string, project: string, directory: string, timers: { name: string; deadline: string; description?: string; tags?: string[] }[]) {
@@ -180,6 +185,7 @@ describe("timers belong to the project (UTIL-5)", () => {
     const base = await mkdtemp(join(await realpath(tmpdir()), "utilities-move-")), state = join(base, "state"), dir = join(base, directory)
     await mkdir(state, { mode: 0o700 }); await mkdir(dir, { recursive: true }); cleanups.push(() => rm(base, { recursive: true, force: true }))
     const open = async (location: string) => {
+      await seedCache(join(base, "cache"))
       const r = await createRuntime({ location: { project: name, directory: join(base, location), projectDirectory: join(base, "repo") }, authorize: async () => {}, modules: { time: true, weather: false, speech: false }, stateRoot: state, cacheRoot: join(base, "cache"), packageRoot: repo })
       cleanups.push(() => r.close()); return r
     }

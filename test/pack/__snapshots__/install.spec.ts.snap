@@ -11,7 +11,7 @@ exports[`the tarball holds the whitelisted files only, under 1 MB 1`] = `
   "assets/icon.svg",
   "dist/index.js",
   "dist/tui.js",
-  "manifest/backends.json",
+  "manifest/native.json",
   "manifest/speech-assets.json",
   "package.json",
   "skills/utilities-speech/SKILL.md",

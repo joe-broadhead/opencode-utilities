@@ -1,9 +1,8 @@
 import * as z from "zod"
-import { AVAILABILITY, DEFAULT_ASK, PLATFORMS, SPEECH_MODEL_ROLES, STATES, WEATHER_ATTRIBUTION, type PlatformPackage, type StatusSummary, type StatusView } from "../domain/contract.js"
+import { AVAILABILITY, DEFAULT_ASK, PLATFORMS, SPEECH_MODEL_ROLES, STATES, WEATHER_ATTRIBUTION, type StatusSummary, type StatusView } from "../domain/contract.js"
 
 // Server only. The status RPC validates its answer with StatusSchema, and the status tool declares StatusSummarySchema
 // as its output. The RPC contract itself is plain JSON Schema (src/rpc.ts); a unit test keeps the two identical.
-const PACKAGES = Object.values(PLATFORMS).map(p => p.package) as [PlatformPackage, ...PlatformPackage[]]
 const next = z.string().max(4096).optional()
 const availability = z.enum(AVAILABILITY)
 const module = z.strictObject({ availability, next })
@@ -13,7 +12,7 @@ export const StatusSchema = z.strictObject({
   state: z.enum(STATES),
   unguardedAgents: z.array(z.string().max(256)).max(256),
   nextStep: z.string().max(4096),
-  platform: z.strictObject({ target: z.string().max(64), package: z.enum(PACKAGES).optional(), availability, next }),
+  platform: z.strictObject({ target: z.string().max(64), availability, next }),
   modules: z.strictObject({ weather: module, time: module, speech: module }),
   weather: z.strictObject({ tier: z.enum(["free", "commercial"]), key: z.enum(["none", "connected", "rejected"]), attribution: z.literal(WEATHER_ATTRIBUTION), next }),
   speech: z.strictObject({

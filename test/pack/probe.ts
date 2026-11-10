@@ -2,15 +2,14 @@
 // built, and prints what they export. OpenCode provides @opencode/plugin, effect, OpenTUI and Solid to plugins, so
 // this process serves exactly those imports from the repository's dev install as virtual modules; every other
 // import, the plugin's own files included, must resolve inside the project.
-// Usage: bun test/pack/probe.ts <project> [platform package]
+// Usage: bun test/pack/probe.ts <project>
 import { plugin } from "bun"
 import { readdirSync, readFileSync } from "node:fs"
-import { createRequire } from "node:module"
-import { dirname, join } from "node:path"
+import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 
-const [project, platformPackage] = process.argv.slice(2)
-if (!project) throw new Error("usage: bun test/pack/probe.ts <project> [platform package]")
+const [project] = process.argv.slice(2)
+if (!project) throw new Error("usage: bun test/pack/probe.ts <project>")
 const repo = fileURLToPath(new URL("../../", import.meta.url))
 const NAME = "@joe-broadhead/opencode-utilities"
 const installed = join(project, "node_modules", NAME)
@@ -30,12 +29,9 @@ plugin({
 const entry = async (subpath: string) => import(Bun.resolveSync(subpath ? `${NAME}/${subpath}` : NAME, project))
 const server = (await entry("")).default
 const tui = (await entry("tui")).default
-// The runtime finds the binaries the same way, from the installed package root.
-const platform = platformPackage ? dirname(createRequire(join(installed, "package.json")).resolve(`${platformPackage}/package.json`)) : undefined
 
 console.log(JSON.stringify({
   served: [...specifiers].sort(),
   server: { id: server.id, setup: typeof server.setup, path: Bun.resolveSync(NAME, project) },
   tui: { id: tui.id, setup: typeof tui.setup },
-  platform,
 }))

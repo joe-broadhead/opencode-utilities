@@ -3,15 +3,16 @@
 // Run `npm run build` first. OPENCODE_BIN_2_2_3, OPENCODE_BIN_2_2_4 and OPENCODE_BIN_2_2_5 name the stock
 // `opencode` binaries when set. When unset, each release is installed into this test's temp project with
 // --ignore-scripts, once per version.
-// PACKED_DIR names a folder of tarballs that are already packed, as release.yml does: the test then checks the
-// main tarball and this platform's tarball from there, the exact files that will be published.
+// PACKED_DIR names a folder with the main tarball already packed, as release.yml does: the test then checks the exact
+// file that will be published. Each stock host gets this platform's release programs in its cache (npm run native:ensure
+// builds them), so the status and the tools see what a release install would have there.
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { execFileSync, spawn, type ChildProcess } from "node:child_process"
 import { createHash, randomBytes } from "node:crypto"
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { createServer } from "node:net"
 import { arch, homedir, platform, tmpdir } from "node:os"
-import { join, resolve, sep } from "node:path"
+import { dirname, join, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { DEFAULT_ASK, READ_ACTIONS, MODULES, PLATFORMS, PLUGIN_ID } from "../../src/domain/contract.js"
 import { detectTarget, isPlatform } from "../../src/domain/backends.js"
@@ -26,10 +27,8 @@ const NAME = "@joe-broadhead/opencode-utilities"
 const VERSIONS = TESTED_HOSTS
 const source = JSON.parse(readFileSync(join(repo, "package.json"), "utf8")) as { version: string }
 const target = detectTarget()
-const platformPackage = isPlatform(target) ? PLATFORMS[target].package : undefined
-// Platform packages are npm workspaces in npm/<name without scope>/. Once any exists, this platform's must too.
-const workspaces = existsSync(join(repo, "npm")) ? readdirSync(join(repo, "npm")).filter(dir => existsSync(join(repo, "npm", dir, "package.json"))) : []
-const platformDir = platformPackage && workspaces.length > 0 ? join(repo, "npm", platformPackage.split("/")[1]!) : undefined
+// The release programs this platform's build made (npm run native:ensure), seeded into each stock host's cache.
+const BUILT = join(repo, "build/native", target)
 // A speech engine is built where ONNX Runtime ships a static library (native/onnx-provenance.json): every target but
 // x86_64-apple-darwin, so darwin-x64 has no speech tools.
 const onnx = JSON.parse(readFileSync(join(repo, "native/onnx-provenance.json"), "utf8")) as { distributions: Record<string, unknown> }
@@ -46,7 +45,7 @@ let main: Packed
 const servers = new Set<ChildProcess>()
 
 const run = (command: string, args: string[], cwd: string) => execFileSync(command, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })
-// Packed as release.yml packs them: the main package without `workspaces`, platform packages with os, cpu and libc.
+// Packed as release.yml packs it: the main package without `workspaces`.
 const pack = (dir: string) => (JSON.parse(run(process.execPath, [join(repo, "scripts/pack.mjs"), dir, temp], repo)) as Packed[])[0]!
 
 /** A tarball packed earlier, described the way `npm pack --json` describes one. */
@@ -62,15 +61,12 @@ beforeAll(() => {
   // No prepare or prepack script exists (check-forbidden), so packing never rebuilds dist/.
   main = PACKED_DIR ? existing(NAME) : pack(repo)
   // npm pack reports a file name in temp; a tarball from PACKED_DIR has an absolute path.
-  const tarballs = [resolve(temp, main.filename)]
-  if (platformDir) {
-    if (!existsSync(join(platformDir, "package.json"))) throw new Error(`npm/ has platform packages but none for ${target} (${platformPackage})`)
-    tarballs.push(resolve(temp, PACKED_DIR ? existing(platformPackage!).filename : pack(platformDir).filename))
-  }
+  const tarball = resolve(temp, main.filename)
+  if (!existsSync(join(BUILT, "time-keep"))) throw new Error(`build/native/${target} is missing: run npm run native:ensure first`)
   mkdirSync(project)
   writeFileSync(join(project, "package.json"), JSON.stringify({ name: "pack-probe", private: true }))
-  // Offline: the main package has no dependencies, and optional platform packages that are not given are skipped.
-  run("npm", ["install", "--offline", "--ignore-scripts", "--no-audit", "--no-fund", "--cache", join(temp, "npm-cache"), ...tarballs], project)
+  // Offline: the main package has no dependencies and carries no program: the release copies come on first use.
+  run("npm", ["install", "--offline", "--ignore-scripts", "--no-audit", "--no-fund", "--cache", join(temp, "npm-cache"), tarball], project)
 })
 
 afterAll(async () => {
@@ -84,15 +80,17 @@ describe("the tarball", () => {
     expect(main.size).toBeLessThan(1_000_000)
     // No TypeScript, JSX or declaration files: nothing consumes plugin types.
     expect(files.filter(file => /\.(?:tsx|jsx|ts)$/.test(file))).toEqual([])
+    // The programs and the speech files come from the release on first use: none is packed.
+    expect(files.filter(file => /^bin\//.test(file) || /(?:^|\/)(?:time-keep|weather-signal|utilities-speech-[a-z0-9-]+|ggml-[^/]+|kitten[^/]*)$/.test(file))).toEqual([])
     expect(files.sort()).toMatchSnapshot()
   })
 
-  test("has the published manifest: no dependencies or peers, the tested host range, and the platform packages", () => {
+  test("has the published manifest: no dependencies, peers or optional packages, and the tested host range", () => {
     const manifest = JSON.parse(readFileSync(join(installed, "package.json"), "utf8")) as Record<string, unknown>
     // Only release.yml checks "private"; this test passes with or without it.
     expect(manifest).toMatchObject({ name: NAME, version: source.version, type: "module", opencode: { host: HOST_RANGE } })
     for (const field of ["workspaces", "dependencies", "peerDependencies", "peerDependenciesMeta", "bundleDependencies", "bundledDependencies", "overrides", "engines"]) expect(manifest[field]).toBeUndefined()
-    expect(manifest.optionalDependencies).toEqual(Object.fromEntries(Object.values(PLATFORMS).map(p => [p.package, source.version])))
+    expect(manifest.optionalDependencies).toBeUndefined()
     // The server part at "." and "./tui" (the TUI imports the RPC contract from its own bundle), plus the three icons
     // the host and Jelly read. Nothing else, and no ./rpc.
     expect(manifest.exports).toEqual({
@@ -138,23 +136,17 @@ test("its entries import from the empty project with only host-provided modules 
   expect(probe.tui).toEqual({ id: "utilities.local.tui", setup: "function" })
 })
 
-test("the platform package installs beside it with the binaries manifest/backends.json pins", () => {
-  expect(platformPackage).toBeDefined()
-  if (!platformDir) {
-    // Until the platform packages exist, npm skips the optional dependency and the plugin still installs.
-    expect(workspaces).toEqual([])
-    expect(existsSync(join(project, "node_modules", platformPackage!))).toBe(false)
-    return
+test("the package carries the release manifest and no program: the programs come from the release on first use", () => {
+  const manifest = JSON.parse(readFileSync(join(installed, "manifest/native.json"), "utf8")) as { tag: string; modules: Record<string, Record<string, { url: string; executable: { sha256: string } }>> }
+  expect(manifest.tag).toBe(`v${source.version}`)
+  expect(Object.keys(manifest.modules).sort()).toEqual(["time-keep", "weather-signal"])
+  for (const module of ["time-keep", "weather-signal"]) {
+    const entry = manifest.modules[module]![target]!
+    expect(entry.url).toBe(`https://github.com/joe-broadhead/opencode-utilities/releases/download/v${source.version}/${module}-${target}.gz`)
+    // The executable the release holds is the build this check ran on.
+    expect(createHash("sha256").update(readFileSync(join(BUILT, module))).digest("hex")).toBe(entry.executable.sha256)
   }
-  const probe = JSON.parse(run(process.execPath, [join(repo, "test/pack/probe.ts"), project, platformPackage!], repo)) as { platform: string }
-  expect(probe.platform).toBe(join(project, "node_modules", platformPackage!))
-  const manifest = JSON.parse(readFileSync(join(installed, "manifest/backends.json"), "utf8")) as { platforms: Record<string, Record<string, { path: string; sha256: string }>> }
-  const binaries = Object.entries(manifest.platforms[target] ?? {})
-  expect(binaries.map(([module]) => module).sort()).toEqual(["time", "weather"])
-  for (const [, { path, sha256 }] of binaries) expect(createHash("sha256").update(readFileSync(join(probe.platform, path))).digest("hex")).toBe(sha256)
-  const { os, cpu, libc } = JSON.parse(readFileSync(join(probe.platform, "package.json"), "utf8")) as Record<string, unknown>
-  const expected = PLATFORMS[target as keyof typeof PLATFORMS]
-  expect({ os, cpu, libc }).toEqual({ os: [expected.os], cpu: [expected.cpu], libc: "libc" in expected ? [expected.libc] : undefined })
+  expect(existsSync(join(installed, "bin"))).toBe(false)
 })
 
 for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
@@ -180,15 +172,14 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
     // `locked`, defined only in config, missed the block and denies only the time tools, so weather would run there unasked.
     expect(view).toMatchObject({ state: "ready", unguardedAgents: ["locked"] })
     expect(view.nextStep).toBe("Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.")
-    expect(view.platform).toMatchObject({ target, ...platformPackage ? { package: platformPackage } : {} })
+    expect(view.platform).toEqual({ target, availability: "AVAILABLE" })
     expect(Object.keys(view.modules).sort()).toEqual([...MODULES].sort())
     expect(view.permissions.askByDefault).toEqual([...DEFAULT_ASK])
   })
 
-  test("finds the platform package, manifest/ and the speech cache from the installed bundle", async () => {
+  test("finds manifest/, the cached programs and the speech cache from the installed bundle", async () => {
     const view = ((await host.api("POST", `/api/rpc/${PLUGIN_ID}/status`, { input: {} })).data as { output: Record<string, any> }).output
-    if (!platformDir) return
-    // manifest/backends.json, resolved from dist/index.js's package root, pins the platform package's verified binaries.
+    // manifest/native.json, resolved from dist/index.js's package root, pins the programs this host's cache holds.
     expect(view.platform.availability).toBe("AVAILABLE")
     expect([view.modules.time.availability, view.modules.weather.availability]).toEqual(["AVAILABLE", "AVAILABLE"])
     // manifest/speech-assets.json is read from the same root and has an engine exactly where one is built.
@@ -245,7 +236,7 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
       const { value } = await script(host, "describe", {})
       expect(value.methods.map((method: { name: string }) => method.name)).toEqual([...SCRIPT_TOOLS])
       for (const method of value.methods) expect(method).toMatchObject({ kind: "plugin", action: `utilities_${method.name}` })
-      if (platformDir) for (const method of value.methods.filter((m: { name: string }) => /^(?:time|timer|weather)_/.test(m.name))) expect(method).toMatchObject({ available: true })
+      for (const method of value.methods.filter((m: { name: string }) => /^(?:time|timer|weather)_/.test(m.name))) expect(method).toMatchObject({ available: true })
       expect(Object.fromEntries(value.methods.map((method: { name: string; class: string }) => [method.name, method.class]))).toMatchObject({
         time_now: "read", timer_set: "write", timer_delete: "write", speech_synthesize: "export",
       })
@@ -256,7 +247,6 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
 
     test("runs a read with the real time program as the session's agent, with no model turn", async () => {
       const result = await call("build", "time_now", { timezones: ["UTC"] })
-      if (!platformDir) return void expect(result).toMatchObject({ type: "failed", code: "PLATFORM_PACKAGE_MISSING" })
       expect(result.value).toMatchObject({ format: "rfc3339", times: [{ timezone: "UTC", utc_offset: "+00:00" }] })
       const session = (await host.api("GET", `/api/session/${sessions.build}`)).data as { data: { tokens: { input: number; output: number } } }
       expect(session.data.tokens).toMatchObject({ input: 0, output: 0 })
@@ -337,6 +327,12 @@ async function serve(version: string, binary: string) {
   const root = join(temp, `host-${version}`)
   const home = join(root, "home"), directory = join(root, "project"), tmp = join(root, "tmp")
   for (const dir of [join(home, ".config"), join(home, ".local/share"), join(home, ".cache"), join(home, ".local/state"), directory, tmp]) mkdirSync(dir, { recursive: true })
+  // This host's release copy: the programs this platform's build made, where a release install would cache them.
+  for (const module of ["time-keep", "weather-signal"]) {
+    const program = join(home, ".cache", "opencode-utilities", "native", `v${source.version}`, module, target, module)
+    mkdirSync(dirname(program), { recursive: true })
+    copyFileSync(join(BUILT, module), program); chmodSync(program, 0o755)
+  }
   // `locked`, an agent defined only in config, hides the time tools: the tools RPC tests use it.
   // `access: "ask-changes"` exercises the option end to end on the installed package: its block asks for the changes.
   writeFileSync(join(directory, "opencode.json"), JSON.stringify({ plugins: [{ package: installed, options: { access: "ask-changes" } }], agents: { locked: { mode: "primary", permissions: [rule("utilities_time_*", "deny")] } } }))
