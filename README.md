@@ -17,7 +17,13 @@ opencode plugin add github:joe-broadhead/opencode-utilities#v0.0.0
 
 Run `opencode reload`, or restart OpenCode, then run `/utilities-status`.
 
-A Git install is removed and updated by its installed spec: `opencode plugin remove github:joe-broadhead/opencode-utilities#v0.0.0`. `opencode plugin update` and `opencode plugin check` take the same spec.
+Each release has its own tag, and a Git install does not update by itself. To move to a newer release, remove the old entry with `opencode plugin remove github:joe-broadhead/opencode-utilities#v0.0.0`, then add the new tag with `opencode plugin add github:joe-broadhead/opencode-utilities#v<version>`.
+
+Or add the plugin to `opencode.json` instead, with the same spec:
+
+```json
+{ "plugins": [{ "package": "github:joe-broadhead/opencode-utilities#v0.0.0" }] }
+```
 
 The install takes the GitHub release tag. Its commit carries the built `dist/`, so the install runs no build.
 A new release is a new tag: install it with its own `#v<version>` spec.
@@ -306,6 +312,7 @@ Members have nothing to set. To forbid an action everywhere, add a top-level `de
 - **Timers belong to a project and do not wake an agent.** A timer is checked with `utilities_timer_check`; nothing runs when it is due.
 - **Machine time is the server's time zone.** On a remote server, `machine_timezone` is that server's zone, not necessarily the user's.
 - **Tested on OpenCode 2.2.3, 2.2.4, 2.2.5 and 2.2.6 only.** Other releases inside `>=2.2.3 <2.3.0` start, and status reports them as untested.
+- Updates are not automatic for a Git install, and `opencode plugin update` and `opencode plugin check` do not work on one: to move to a newer release, remove the old entry and add the new tag.
 
 ## Troubleshooting
 
