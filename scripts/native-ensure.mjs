@@ -41,7 +41,7 @@ const platform=process.platform==='linux' ? `linux-${process.arch}-gnu` : `${pro
 if(!TARGETS[platform]) { console.error(`There is no native build for ${process.platform}-${process.arch}, so the native files cannot be built here.`); process.exit(1); }
 const pkg=`build/native/${platform}`;
 const engine=Boolean(json('native/onnx-provenance.json').distributions[TARGETS[platform]]);
-const outputs=[`${pkg}/time-keep`,`${pkg}/weather-signal`,`${pkg}/NOTICE`,'manifest/native.json','manifest/speech-assets.json',
+const outputs=[`${pkg}/time-keep`,`${pkg}/weather-signal`,`${pkg}/NOTICE`,'manifest/native.json',
   ...json('native/model-sources.json').assets.map(a=>`build/speech-assets/${a.name}`),
   ...engine ? [`build/speech-assets/utilities-speech-${platform}`,'build/speech-assets/utilities-speech-NOTICE.txt'] : []];
 const fresh=()=>{

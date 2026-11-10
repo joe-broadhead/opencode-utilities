@@ -3,7 +3,8 @@
 #   time-keep, weather-signal -> build/native/<platform>/, with its NOTICE
 #   the speech engine         -> build/speech-assets/utilities-speech-<platform>, where ONNX Runtime allows one
 #   the pinned models         -> build/speech-assets/, on every platform
-# Then it regenerates manifest/native.json and manifest/speech-assets.json from the files present. All of these are
+# Then it regenerates manifest/native.json from the files present. manifest/speech-assets.json is committed; only the
+# maintainer command `npm run speech:manifest` writes it. All of these are
 # build outputs, never committed.
 #
 # Usage: [NATIVE_BUILD_ROOT=<directory>] scripts/native-build.sh [<platform>] [--no-speech]

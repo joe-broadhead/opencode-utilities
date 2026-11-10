@@ -17,7 +17,7 @@ The time and weather programs, the speech engine, the models, their notices and 
 
 The root `NOTICE` holds the licence of every package bundled into `dist/` (zod). `npm run build` fails when it no longer matches the bundle; run `node scripts/build.mjs --notice` to rewrite it, then commit it. The native notices ship with the GitHub Release assets; see `licenses/README.md`.
 
-The time and weather programs are built with `npm run native:build` into `build/native/<platform>/`, which is gitignored. `scripts/native-files.mjs` writes `manifest/native.json` and `manifest/speech-assets.json` from those files.
+The time and weather programs are built with `npm run native:build` into `build/native/<platform>/`, which is gitignored. `scripts/native-files.mjs` writes `manifest/native.json` from those files. `manifest/speech-assets.json` is committed, pinned to the seven speech files at v0.0.0 (`test/unit/speech-manifest.test.ts`). Only the maintainer command `npm run speech:manifest -- --from <folder>` writes it, from a folder of the release files; build, pack and release never run it. The release files are attached to the Release after the release run, checked against that manifest.
 
 To try a checkout in OpenCode, point a `plugins` entry's `package` at the repository directory. Until a release has them, the time and weather tools cannot download their programs in a checkout: copy `build/native/<platform>/<program>` into the plugin cache (`$XDG_CACHE_HOME/opencode-utilities/native/v<version>/<program>/<platform>/`) to try them.
 
@@ -25,6 +25,7 @@ To try a checkout in OpenCode, point a `plugins` entry's `package` at the reposi
 
 `npm run check` runs, in order: the native ensure step, the typecheck of `src` and `test`, the unit tests, the JS build, the host tests on the embedded `@opencode/sdk` for each tested release (`scripts/host-tests.mjs`; `HOST_SDK_DIR` runs one), the TUI test, the forbidden-API scan (`npm run lint`) and the pack test, which runs every tested release. The pack test packs the plugin and this platform's package, installs them into an empty project with scripts off, and loads them in each tested stock OpenCode release. The tested releases are one list, `TESTED_HOSTS` in `src/host/versions.ts` (2.2.3, 2.2.4, 2.2.5 and 2.2.6); the status, the tests and CI all read it.
 
+- The pack test needs no program and no `build/native`: it checks the tarball, and that status reports each program as not installed, with its next step. The tool runs that need a program are in the host tests, which `npm run check` runs after `native:ensure`.
 - Set `OPENCODE_BIN_2_2_3`, `OPENCODE_BIN_2_2_4`, `OPENCODE_BIN_2_2_5` and `OPENCODE_BIN_2_2_6` to stock `opencode` binaries to skip installing them. Unset, the pack test installs each release into its own temp folder, as CI and the release do.
 - Host and pack tests put their temp roots under `/private/tmp` on macOS (the system temp folder elsewhere), never under your home, because OpenCode searches upward for `.opencode/` folders. Each stock server gets its own free port.
 - The unit tests in `test/unit/time-keep.test.ts` run this platform's real `time-keep`, which `npm run check` builds first.

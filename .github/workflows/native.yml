@@ -3,7 +3,7 @@ name: native
 # Builds the time-keep and weather-signal programs and the speech engine for each platform, then the release files and
 # the candidate manifest the release commit pins (NATIVE-DESIGN.md, section 4). Runs on master only, so the candidate
 # pins master's commit. Each platform builds on its own runner; one job then gzips the programs, writes
-# manifest/native.json and manifest/speech-assets.json from the same bytes, checks every platform, attests the gzips
+# manifest/native.json from the same bytes, checks every platform, attests the gzips
 # and uploads them. It publishes nothing: the release job reads this run's artifacts and checks them against the pins.
 
 on:
@@ -120,7 +120,7 @@ jobs:
           done
           node scripts/native-models.mjs
 
-      # Writes manifest/native.json and manifest/speech-assets.json, and the gzips they pin, from the same bytes.
+      # Writes manifest/native.json, and the gzips it pins, from the same bytes. The speech manifest is committed.
       - name: Write the manifests and the release files
         run: node scripts/native-files.mjs --commit "$GITHUB_SHA" --run "$GITHUB_RUN_ID" --release-files "$RUNNER_TEMP/release"
 

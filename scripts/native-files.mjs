@@ -1,8 +1,8 @@
-// Writes the release manifests from the native files present:
+// Writes the release manifest for the programs from the native files present:
 //   manifest/native.json          time-keep and weather-signal, per platform: the gzip of each executable, pinned by
 //                                 its size and SHA-256 and the executable's own size and SHA-256 (NATIVE-DESIGN.md)
-//   manifest/speech-assets.json   the speech engine (build/speech-assets/utilities-speech-<platform>) and the four
-//                                 models pinned in native/model-sources.json, as release files
+// manifest/speech-assets.json is committed and is not written here: `npm run speech:manifest` (scripts/speech-manifest.mjs)
+// writes it, as a maintainer command only. Build, pack and release never do.
 // Every URL is the release asset of this repository at v<package version>.
 // Usage:
 //   node scripts/native-files.mjs [--commit <sha> --run <id>]   write both manifests (the release passes the build's
@@ -91,14 +91,12 @@ if(mode==='write') {
   await writeFile(resolve(root,'manifest/native.json'),text(await native({commit,run,workflow:'native'})));
   const releaseDir=flag('--release-files');
   if(releaseDir){await mkdir(resolve(releaseDir),{recursive:true});for(const f of RELEASE_FILES)await writeFile(resolve(releaseDir,f.name),f.data);console.log(`wrote ${RELEASE_FILES.length} release files to ${releaseDir}`);}
-  await writeFile(resolve(root,'manifest/speech-assets.json'),text(await speechAssets()));
 } else {
   const problems=[];
   const recorded=await json('manifest/native.json').catch(()=>undefined);
   const generated=await native(recorded?.built??{commit:'0'.repeat(40),run:0,workflow:'native'});
   if(JSON.stringify(recorded)!==JSON.stringify(generated)) problems.push('manifest/native.json does not match the files; run node scripts/native-files.mjs');
   const speech=await speechAssets();
-  if(await readFile(resolve(root,'manifest/speech-assets.json'),'utf8').catch(()=>'')!==text(speech))problems.push('manifest/speech-assets.json does not match the files; run node scripts/native-files.mjs');
   if(args.includes('--release')) {
     const {distributions}=await json('native/onnx-provenance.json');
     for(const [p,info] of Object.entries(PLATFORMS)) {

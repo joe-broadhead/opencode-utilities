@@ -5,4 +5,3 @@ dist/
 # Native build outputs (npm run native:build): binaries, speech engine and models, notices, provenance and manifests.
 build/
 manifest/native.json
-manifest/speech-assets.json
