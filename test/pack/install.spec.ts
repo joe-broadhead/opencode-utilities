@@ -4,15 +4,15 @@
 // `opencode` binaries when set. When unset, each release is installed into this test's temp project with
 // --ignore-scripts, once per version.
 // PACKED_DIR names a folder with the main tarball already packed, as release.yml does: the test then checks the exact
-// file that will be published. Each stock host gets this platform's release programs in its cache (npm run native:ensure
-// builds them), so the status and the tools see what a release install would have there.
+// file that will be published. No program is needed here: the package carries none, and the status reports each program as
+// not installed, with its next step. The tool runs that need a program are in test/host, which runs after native:ensure.
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { execFileSync, spawn, type ChildProcess } from "node:child_process"
-import { createHash, randomBytes } from "node:crypto"
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs"
+import { randomBytes } from "node:crypto"
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, statSync, writeFileSync } from "node:fs"
 import { createServer } from "node:net"
 import { arch, homedir, platform, tmpdir } from "node:os"
-import { dirname, join, resolve, sep } from "node:path"
+import { join, resolve, sep } from "node:path"
 import { fileURLToPath } from "node:url"
 import { DEFAULT_ASK, READ_ACTIONS, MODULES, PLATFORMS, PLUGIN_ID } from "../../src/domain/contract.js"
 import { detectTarget, isPlatform } from "../../src/domain/backends.js"
@@ -27,8 +27,6 @@ const NAME = "@joe-broadhead/opencode-utilities"
 const VERSIONS = TESTED_HOSTS
 const source = JSON.parse(readFileSync(join(repo, "package.json"), "utf8")) as { version: string }
 const target = detectTarget()
-// The release programs this platform's build made (npm run native:ensure), seeded into each stock host's cache.
-const BUILT = join(repo, "build/native", target)
 // A speech engine is built where ONNX Runtime ships a static library (native/onnx-provenance.json): every target but
 // x86_64-apple-darwin, so darwin-x64 has no speech tools.
 const onnx = JSON.parse(readFileSync(join(repo, "native/onnx-provenance.json"), "utf8")) as { distributions: Record<string, unknown> }
@@ -62,7 +60,6 @@ beforeAll(() => {
   main = PACKED_DIR ? existing(NAME) : pack(repo)
   // npm pack reports a file name in temp; a tarball from PACKED_DIR has an absolute path.
   const tarball = resolve(temp, main.filename)
-  if (!existsSync(join(BUILT, "time-keep"))) throw new Error(`build/native/${target} is missing: run npm run native:ensure first`)
   mkdirSync(project)
   writeFileSync(join(project, "package.json"), JSON.stringify({ name: "pack-probe", private: true }))
   // Offline: the main package has no dependencies and carries no program: the release copies come on first use.
@@ -136,17 +133,17 @@ test("its entries import from the empty project with only host-provided modules 
   expect(probe.tui).toEqual({ id: "utilities.local.tui", setup: "function" })
 })
 
-test("the package carries the release manifest and no program: the programs come from the release on first use", () => {
-  const manifest = JSON.parse(readFileSync(join(installed, "manifest/native.json"), "utf8")) as { tag: string; modules: Record<string, Record<string, { url: string; executable: { sha256: string } }>> }
+test("ships no program: its release manifest, when it has one, pins the two programs at this tag", () => {
+  expect(existsSync(join(installed, "bin"))).toBe(false)
+  // A checkout's package has no manifest/native.json, so status reports the programs NATIVE_FILES_MISSING (tested below).
+  // A release commit carries one, and then it must pin both programs at this tag.
+  if (!existsSync(join(installed, "manifest/native.json"))) return
+  const manifest = JSON.parse(readFileSync(join(installed, "manifest/native.json"), "utf8")) as { tag: string; modules: Record<string, Record<string, { url: string }>> }
   expect(manifest.tag).toBe(`v${source.version}`)
   expect(Object.keys(manifest.modules).sort()).toEqual(["time-keep", "weather-signal"])
   for (const module of ["time-keep", "weather-signal"]) {
-    const entry = manifest.modules[module]![target]!
-    expect(entry.url).toBe(`https://github.com/joe-broadhead/opencode-utilities/releases/download/v${source.version}/${module}-${target}.gz`)
-    // The executable the release holds is the build this check ran on.
-    expect(createHash("sha256").update(readFileSync(join(BUILT, module))).digest("hex")).toBe(entry.executable.sha256)
+    expect(manifest.modules[module]?.[target]?.url).toBe(`https://github.com/joe-broadhead/opencode-utilities/releases/download/v${source.version}/${module}-${target}.gz`)
   }
-  expect(existsSync(join(installed, "bin"))).toBe(false)
 })
 
 for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
@@ -171,22 +168,28 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
     expect(view.host).toEqual({ version, range: HOST_RANGE, tested: true })
     // `locked`, defined only in config, missed the block and denies only the time tools, so weather would run there unasked.
     expect(view).toMatchObject({ state: "ready", unguardedAgents: ["locked"] })
-    expect(view.nextStep).toBe("Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.")
+    // No program is installed, so the first next step is the program download; the rules step follows it (test/host covers it with programs).
+    expect(view.nextStep).toBe("Call the time or weather tool with permission to download it, or run /utilities-install.")
     expect(view.platform).toEqual({ target, availability: "AVAILABLE" })
     expect(Object.keys(view.modules).sort()).toEqual([...MODULES].sort())
     expect(view.permissions.askByDefault).toEqual([...DEFAULT_ASK])
   })
 
-  test("finds manifest/, the cached programs and the speech cache from the installed bundle", async () => {
+  test("reports the time and weather programs not installed, with the coded availability and its next step, and downloads nothing", async () => {
     const view = ((await host.api("POST", `/api/rpc/${PLUGIN_ID}/status`, { input: {} })).data as { output: Record<string, any> }).output
-    // manifest/native.json, resolved from dist/index.js's package root, pins the programs this host's cache holds.
     expect(view.platform.availability).toBe("AVAILABLE")
-    expect([view.modules.time.availability, view.modules.weather.availability]).toEqual(["AVAILABLE", "AVAILABLE"])
+    // Nothing is cached and the package carries none: each program is reported with its code and a next step.
+    for (const module of ["time", "weather"]) {
+      expect(view.modules[module]).toMatchObject({ availability: "NATIVE_FILES_MISSING" })
+      expect(String(view.modules[module].next)).toMatch(/\S/)
+    }
     // manifest/speech-assets.json is read from the same root and has an engine exactly where one is built.
     const speech = JSON.parse(readFileSync(join(installed, "manifest/speech-assets.json"), "utf8")) as { engines: Record<string, unknown> }
     expect(Boolean(speech.engines[target])).toBe(speechEngine)
-    if (speechEngine) expect(view.speech.assets.length).toBeGreaterThan(0)
-    else {
+    if (speechEngine) {
+      expect(view.modules.speech.availability).toBe("SPEECH_ASSETS_MISSING")
+      expect(view.speech.assets.length).toBeGreaterThan(0)
+    } else {
       // With no engine for this platform, speech is unsupported and no speech files are offered for download.
       expect(view.modules.speech.availability).toBe("UNSUPPORTED_PLATFORM")
       expect(view.speech.assets).toEqual([])
@@ -245,18 +248,9 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
       expect(await call("allowed", "unknown_tool", {})).toMatchObject({ type: "rpc.method_not_found" })
     })
 
-    test("runs a read with the real time program as the session's agent, with no model turn", async () => {
-      const result = await call("build", "time_now", { timezones: ["UTC"] })
-      expect(result.value).toMatchObject({ format: "rfc3339", times: [{ timezone: "UTC", utc_offset: "+00:00" }] })
-      const session = (await host.api("GET", `/api/session/${sessions.build}`)).data as { data: { tokens: { input: number; output: number } } }
-      expect(session.data.tokens).toMatchObject({ input: 0, output: 0 })
-    })
-
     test("refuses a tool the agent hides, and applies the session's rules after the agent's", async () => {
       expect(await call("locked", "time_now", {})).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
       expect(await call("narrow", "time_now", {})).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
-      expect(await call("narrow", "time_zones", { region: "Europe" })).not.toMatchObject({ code: "PERMISSION_DENIED" })
-      expect(await call("reopen", "time_now", {})).not.toMatchObject({ code: "PERMISSION_DENIED" })
       expect(await call("reopen", "time_zones", {})).toMatchObject({ type: "failed", code: "PERMISSION_DENIED" })
     })
 
@@ -327,12 +321,7 @@ async function serve(version: string, binary: string) {
   const root = join(temp, `host-${version}`)
   const home = join(root, "home"), directory = join(root, "project"), tmp = join(root, "tmp")
   for (const dir of [join(home, ".config"), join(home, ".local/share"), join(home, ".cache"), join(home, ".local/state"), directory, tmp]) mkdirSync(dir, { recursive: true })
-  // This host's release copy: the programs this platform's build made, where a release install would cache them.
-  for (const module of ["time-keep", "weather-signal"]) {
-    const program = join(home, ".cache", "opencode-utilities", "native", `v${source.version}`, module, target, module)
-    mkdirSync(dirname(program), { recursive: true })
-    copyFileSync(join(BUILT, module), program); chmodSync(program, 0o755)
-  }
+  // No program is seeded: the host's cache starts empty, as a first install's does.
   // `locked`, an agent defined only in config, hides the time tools: the tools RPC tests use it.
   // `access: "ask-changes"` exercises the option end to end on the installed package: its block asks for the changes.
   writeFileSync(join(directory, "opencode.json"), JSON.stringify({ plugins: [{ package: installed, options: { access: "ask-changes" } }], agents: { locked: { mode: "primary", permissions: [rule("utilities_time_*", "deny")] } } }))
