@@ -31,6 +31,7 @@ To try a checkout in OpenCode, point a `plugins` entry's `package` at the reposi
 - The README's default-rules and code tables are generated from the source: run `UPDATE_DOCS=1 npm test` after changing `DEFAULT_ASK` or a failure code, and `test/unit/docs.test.ts` fails while they differ.
 - `npm run lint` runs actionlint over `.github/workflows` when it is on `PATH` (set `ACTIONLINT_BIN` for another path) and prints a notice when it is not. CI runs it in its own job.
 - The default checks make no network calls to Open-Meteo or GitHub. Live weather runs only with `UTILITIES_LIVE_WEATHER=1`.
+- `npm run drift` is a manual check, not part of `npm run check`. It compares the Jelly declaration's tool list with the tools the code registers, prints each difference by name and exits 1 when there is one.
 
 Commit messages use `type(scope): summary`. Keep the README, `docs/configuration.md`, `SECURITY.md` and this file in step with the code. See [AGENTS.md](AGENTS.md) for the design rules.
 

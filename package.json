@@ -72,6 +72,7 @@
     "test:host": "node scripts/host-tests.mjs",
     "test:tui": "bun test test/tui",
     "test:pack": "bun test test/pack",
+    "drift": "bun scripts/drift.mjs",
     "lint": "node scripts/check-forbidden.mjs && node scripts/check-copies.mjs && node scripts/check-icons.mjs && node scripts/check-workflows.mjs",
     "native:build": "bash scripts/native-build.sh",
     "native:ensure": "node scripts/native-ensure.mjs",
