@@ -1,6 +1,6 @@
 ---
 name: utilities-time
-description: Exact answers for times, time zones, dates, public holidays and working days, and polled project timers, from Utilities' offline tools. Use it for "what time is it in Tokyo", "3pm London in New York", "is Monday a bank holiday", "how many working days in March", "the next business day after a given date", "90 days from today", or a project timer to check, instead of counting yourself, the shell's date, or a web search.
+description: Exact answers for times, time zones, dates, public holidays and working days, and polled project timers, from Utilities' offline tools. Use it for "what time is it in Tokyo", "3pm London in New York", "is Monday a bank holiday", "how many working days in March", "the next business day after a given date", "90 days from today", or a project timer to check, instead of counting yourself, the shell's date, or a web search. Not for weather or forecasts: use utilities-weather for those.
 ---
 
 # Time, dates and timers
