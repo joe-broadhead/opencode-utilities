@@ -44,7 +44,7 @@ const servers = new Set<ChildProcess>()
 
 const run = (command: string, args: string[], cwd: string) => execFileSync(command, args, { cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })
 // Packed as release.yml packs it: the main package without `workspaces`.
-const pack = (dir: string) => (JSON.parse(run(process.execPath, [join(repo, "scripts/pack.mjs"), dir, temp], repo)) as Packed[])[0]!
+const pack = (dir: string) => (JSON.parse(run(process.execPath, [join(repo, "scripts/pack.mjs"), dir, temp, "--without-native-manifest"], repo)) as Packed[])[0]!
 
 /** A tarball packed earlier, described the way `npm pack --json` describes one. */
 const existing = (name: string): Packed => {
@@ -79,7 +79,9 @@ describe("the tarball", () => {
     expect(files.filter(file => /\.(?:tsx|jsx|ts)$/.test(file))).toEqual([])
     // The programs and the speech files come from the release on first use: none is packed.
     expect(files.filter(file => /^bin\//.test(file) || /(?:^|\/)(?:time-keep|weather-signal|utilities-speech-[a-z0-9-]+|ggml-[^/]+|kitten[^/]*)$/.test(file))).toEqual([])
-    expect(files.sort()).toMatchSnapshot()
+    // manifest/native.json is written by the native step, so it is in the tarball exactly when the checkout has it.
+    expect(files.includes("manifest/native.json")).toBe(existsSync(join(repo, "manifest/native.json")))
+    expect(files.filter(file => file !== "manifest/native.json").sort()).toMatchSnapshot()
   })
 
   test("has the published manifest: no dependencies, peers or optional packages, and the tested host range", () => {

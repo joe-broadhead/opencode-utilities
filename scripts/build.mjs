@@ -34,11 +34,12 @@ const solid = {
 // build outputs that a checkout does not carry. A dist/ without them loads and then refuses every tool that needs a
 // program, so the build refuses first, before it touches dist/, with the step that produces them.
 if (!existsSync(join(root, "manifest", "native.json"))) {
-  console.error(
-    "NATIVE_FILES_MISSING: manifest/native.json is not there, so a build of this checkout would refuse every tool " +
-      "that needs a program. Next step: Run npm run native:build (or npm run native:ensure), then npm run build.",
+  // The dist holds no program, so a checkout builds without them. Its tools report the time and weather programs not installed,
+  // with the next step, until npm run native:ensure writes the manifest. npm run check runs native:ensure first.
+  console.warn(
+    "NATIVE_FILES_MISSING: manifest/native.json is not there, so this build's tools report the time and weather programs not installed. " +
+      "Next step: Run npm run native:ensure, then npm run build. The build continues.",
   )
-  process.exit(1)
 }
 rmSync(dist, { recursive: true, force: true })
 const result = await build({
