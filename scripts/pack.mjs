@@ -1,6 +1,6 @@
-// Packs the main package the way it is published, from a staged copy, so the checked-in package.json stays as the
-// workspace needs it: the dev-only `workspaces` field is dropped. The package carries no program: the time and weather
-// programs are downloaded from the release on first use, so a tarball without manifest/native.json is refused here.
+// Packs the main package the way it is published, from a staged copy of its whitelisted files. The package carries no
+// program: the time and weather programs are downloaded from the release on first use, so a tarball without
+// manifest/native.json is refused here.
 // Usage: bun scripts/pack.mjs <package dir> <destination>. Prints npm pack's JSON report.
 import { execFileSync } from "node:child_process"
 import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
@@ -11,7 +11,7 @@ const [dir, destination] = process.argv.slice(2)
 if (!dir || !destination) throw new Error("usage: bun scripts/pack.mjs <package dir> <destination>")
 const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"))
 if (manifest.name !== "@joe-broadhead/opencode-utilities") throw new Error(`${manifest.name} is not the main package`)
-const { workspaces: _, ...packed } = manifest
+const packed = manifest
 
 // A tarball without the native manifest installs and then refuses every tool that needs a program. The manifest is a
 // build output, so packing before the native step is the one way to ship that; refuse instead.

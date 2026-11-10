@@ -62,9 +62,6 @@
       }
     ]
   },
-  "workspaces": [
-    "npm/*"
-  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=2",
