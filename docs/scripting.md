@@ -47,10 +47,10 @@ its model would have:
   `access` option's `"ask-changes"` makes an ask of the timer writes, synthesis and the speech download, and `"read-only"`
   denies them. A script's agent can also narrow it: a rules block of its own, or `access` on the plugin, decides.
 
-Create a session for the script once, with the agent it runs as, and keep its id (`data.id` in the result):
+Create a session for the script once, with the agent it runs as and the project as its `location`, and keep its id (`data.id` in the result). A session made without a location belongs to the service's default location, where the project's agents may not exist, and each call then fails `Agent not found`.
 
 ```sh
-opencode api post /api/session -d '{"title":"morning check","agent":"build"}'
+opencode api post /api/session -d '{"title":"morning check","agent":"build","location":{"directory":"/path/to/project"}}'
 ```
 
 A test of a script creates its own session in the same way. Never borrow an existing session found through history or a
@@ -60,7 +60,7 @@ Session rules come after the agent's, so a session can open or narrow what its s
 `weather_current` and `weather_daily`, and nothing else from Utilities that asks:
 
 ```sh
-opencode api post /api/session -d '{"title":"morning check","agent":"build","permissions":[
+opencode api post /api/session -d '{"title":"morning check","agent":"build","location":{"directory":"/path/to/project"},"permissions":[
   {"action":"utilities_weather_current","resource":"*","effect":"allow"},
   {"action":"utilities_weather_daily","resource":"*","effect":"allow"}
 ]}'
