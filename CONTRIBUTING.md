@@ -35,15 +35,21 @@ To try a checkout in OpenCode, point a `plugins` entry's `package` at the reposi
 
 Commit messages use `type(scope): summary`. Keep the README, `docs/configuration.md`, `SECURITY.md` and this file in step with the code. See [AGENTS.md](AGENTS.md) for the design rules.
 
-## Releasing
+## Release
 
-A release is a `vX.Y.Z` tag on `master` whose version equals `package.json`. The `release` environment's reviewers approve the run; then `.github/workflows/release.yml` publishes from CI with npm trusted publishing and provenance:
+### Releasing
 
-1. A guard refuses a package marked `private`, a tag that differs from the version, a platform package at another version, and any install or pack script.
-2. The four platforms build their native files on hosted runners, and the files are attested.
-3. The manifests are regenerated from those bytes, `npm run check` runs, the platform packages and the main package are packed, the pack test runs against those exact tarballs, and they are attested.
-4. The four platform packages are published with `npm publish <tarball> --provenance --access public`.
-5. The GitHub Release for the tag is published with the speech engines, the models, `utilities-speech-NOTICE.txt` and the model licences. Speech downloads point at it.
-6. The main package is published the same way.
+Every plugin releases as `v0.0.0`, and it installs from that GitHub tag. The release is one commit on top of a `master`
+head that CI passed, and the tag points at it.
 
-Each publish skips a version that is already on npm, so a failed run can be rerun.
+1. Set `version` to `0.0.0` in `package.json`, date the `## [0.0.0]` entry in `CHANGELOG.md`, then run `npm run check`.
+2. Push that commit to `master`, and wait for CI to pass on it.
+3. In a clean checkout of `master` at that commit, run `node scripts/release-commit.mjs --ci-sha <its full sha>`. It builds
+   `dist/`, removes the lifecycle scripts, and creates the signed commit and the signed annotated tag `v0.0.0`. It never
+   pushes; `--dry-run` shows the change first.
+4. Push the tag only: `git push origin v0.0.0`.
+5. Approve the run in the `release` environment. The release workflow checks the tag and its commit, installs the tag on
+   each stock OpenCode host (2.2.3 to 2.2.6), packs it, and creates the GitHub Release with the notes, the tarball and
+   `SHA256SUMS`.
+
+A tag that already exists stops step 3. Delete the old tag and its Release first, then start again.

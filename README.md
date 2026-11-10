@@ -12,21 +12,13 @@ Unofficial; not affiliated with Open-Meteo. Weather data is from Open-Meteo.com 
 ## Install
 
 ```sh
-opencode plugin add @joe-broadhead/opencode-utilities
+opencode plugin add github:joe-broadhead/opencode-utilities#v0.0.0
 ```
 
-Run `opencode reload`, or restart OpenCode. Then run `/utilities-status`. The time and weather programs download on first use from this repository's GitHub Release, checked against the release manifest; `/utilities-install` downloads them on request. Install scripts do not run.
+Run `opencode reload`, or restart OpenCode, then run `/utilities-status`.
 
-Transcription and synthesis need a speech engine and models, about 105 MB. They are not in the npm packages. They download from this repository's GitHub Release the first time a speech tool needs them, after a prompt, or you can [pre-seed](#speech-files) them.
-
-### Update
-
-```sh
-opencode plugin update @joe-broadhead/opencode-utilities
-opencode reload
-```
-
-An entry pinned to a version, such as `@joe-broadhead/opencode-utilities@<version>` in `plugins`, does not update: remove the `@<version>` from it first.
+The install takes the GitHub release tag. Its commit carries the built `dist/`, so the install runs no build.
+A new release is a new tag: install it with its own `#v<version>` spec.
 
 ## Sign in
 

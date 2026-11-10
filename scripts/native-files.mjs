@@ -40,6 +40,8 @@ async function file(path,executable) {
 const binaries=Object.entries(sources.binaries).map(([name,{module}])=>({name,module}));
 
 /** The release manifest for the native programs, from build/native/<platform>/<name>. */
+// The gzips the manifest names, written by --release-files: the same bytes whose sha256 the manifest pins.
+const RELEASE_FILES=[];
 async function native(built) {
   const modules={};
   for(const {name,module} of binaries) {
@@ -48,6 +50,7 @@ async function native(built) {
       const found=await file(`${nativeDir(platform)}/${name}`,true);
       if(!found)continue;
       const gz=gzipSync(found.data,{level:9}), asset=`${name}-${platform}.gz`;
+      RELEASE_FILES.push({name:asset,data:gz});
       platforms[platform]={name:asset,url:RELEASE(asset),bytes:gz.length,sha256:sha(gz),executable:{name,bytes:found.bytes,sha256:found.sha256}};
     }
     if(Object.keys(platforms).length)modules[name]=platforms;
@@ -86,6 +89,8 @@ if(mode==='write') {
   if(!/^[a-f0-9]{40}$/.test(commit)||!Number.isInteger(run))throw new Error('--commit needs a 40-hex commit, --run a workflow run id');
   await mkdir(resolve(root,'manifest'),{recursive:true});
   await writeFile(resolve(root,'manifest/native.json'),text(await native({commit,run,workflow:'native'})));
+  const releaseDir=flag('--release-files');
+  if(releaseDir){await mkdir(resolve(releaseDir),{recursive:true});for(const f of RELEASE_FILES)await writeFile(resolve(releaseDir,f.name),f.data);console.log(`wrote ${RELEASE_FILES.length} release files to ${releaseDir}`);}
   await writeFile(resolve(root,'manifest/speech-assets.json'),text(await speechAssets()));
 } else {
   const problems=[];

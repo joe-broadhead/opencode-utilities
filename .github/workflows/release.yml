@@ -1,256 +1,135 @@
-# Releases the plugin from a v<version> tag on master, once the protected `release` environment approves it:
-#   1. a guard refuses a package marked private, a tag that differs from the version, and install scripts;
-#   2. builds the native files on hosted runners for the four platforms, and attests them;
-#   3. regenerates the manifests from those bytes, runs npm run check, packs the platform packages and the main package,
-#      runs the pack test against those exact tarballs, and attests them;
-#   4. publishes the platform packages with npm trusted publishing and provenance;
-#   5. publishes the GitHub Release with the speech engines, models and their licences;
-#   6. publishes the main package the same way.
-# Every publish skips a version that is already on npm, so a rerun is safe.
-name: Release
+name: release
+
+# Creates the GitHub Release for a v* tag. The tag points at a release commit that the release kit built on master
+# (scripts/release-commit.mjs); this run verifies that commit and then publishes it. Nothing here touches npm.
+# One approval per release: only the `release` job uses the `release` environment, so the owner approves once, after
+# every verify job has passed. The verify jobs run on the tag push with a read-only token and no secrets.
+
 on:
   push:
-    tags: ['v*']
-  workflow_dispatch:
-permissions: {}
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
+
+env:
+  # Set when the kit is copied into a plugin: the plugin's status RPC id and its skill id (the stock check reads them).
+  PLUGIN_RPC: utilities.local
+  PLUGIN_SKILL: utilities-time
+
 jobs:
-  gate:
+  verify:
+    name: verify the tag
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: read
-    outputs:
-      version: ${{ steps.gate.outputs.version }}
+      actions: read # the native run's facts, for a native plugin
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          persist-credentials: false
-      - id: gate
-        name: Refuse private packages and a ref that is not the version's tag
-        shell: node {0}
-        run: |
-          const fs = require("node:fs")
-          const read = path => JSON.parse(fs.readFileSync(path, "utf8"))
-          const main = read("package.json"), problems = []
-          const platforms = fs.readdirSync("npm").map(dir => read(`npm/${dir}/package.json`))
-          for (const pkg of [main, ...platforms]) {
-            // npm publish --dry-run does not refuse a private package, so this gate does.
-            if (pkg.private !== undefined && pkg.private !== false) problems.push(`${pkg.name} is marked private; the release commit removes "private"`)
-            if (pkg.version !== main.version) problems.push(`${pkg.name} is ${pkg.version}, not ${main.version}`)
-            for (const script of ["preinstall", "install", "postinstall", "prepare", "prepack", "postpack"]) if (pkg.scripts?.[script]) problems.push(`${pkg.name} has a ${script} script`)
-          }
-          const sorted = record => JSON.stringify(Object.entries(record ?? {}).sort(([a], [b]) => a.localeCompare(b)))
-          if (sorted(main.optionalDependencies) !== sorted(Object.fromEntries(platforms.map(p => [p.name, main.version])))) problems.push("optionalDependencies must pin exactly the platform packages at the main version")
-          if (process.env.GITHUB_REF_TYPE !== "tag" || process.env.GITHUB_REF_NAME !== `v${main.version}`) problems.push(`run this from the tag v${main.version}`)
-          if (problems.length) { for (const p of problems) console.log(`::error::${p}`); process.exit(1) }
-          fs.appendFileSync(process.env.GITHUB_OUTPUT, `version=${main.version}\n`)
-
-  native:
-    needs: gate
-    name: native (${{ matrix.platform }})
-    strategy:
-      fail-fast: true
-      matrix:
-        # macos-15 builds against the macOS 14.0 deployment target. Linux builds on ubuntu-24.04, because the prebuilt
-        # ONNX Runtime static library links glibc 2.38 and GCC 13 libstdc++ symbols; native-closure.mjs prints the floor.
-        include:
-          - platform: darwin-arm64
-            runner: macos-15
-          - platform: darwin-x64
-            runner: macos-15-intel
-          - platform: linux-x64-gnu
-            runner: ubuntu-24.04
-          - platform: linux-arm64-gnu
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
+          fetch-depth: 0
+          fetch-tags: true
           persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-      - name: Rust toolchain
-        run: rustup toolchain install "$(node -p 'require("./native/sources.json").rust')" --profile minimal
-      - name: Build
-        run: bash scripts/native-build.sh "$PLATFORM"
-        env:
-          PLATFORM: ${{ matrix.platform }}
-          NATIVE_BUILD_ROOT: ${{ runner.temp }}/native-build
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: |
-            npm/opencode-utilities-bin-${{ matrix.platform }}/bin/*
-            build/speech-assets/utilities-speech-${{ matrix.platform }}
-      # A tar keeps the executable modes, which artifacts drop.
-      - name: Collect
-        run: |
-          # The input stamp lets npm run check in the assemble job see these files as current, with no rebuild.
-          files=("npm/opencode-utilities-bin-$PLATFORM"/{bin,NOTICE,provenance.json} "build/native-$PLATFORM.inputs")
-          if [[ -f "build/speech-assets/utilities-speech-$PLATFORM" ]]; then
-            files+=("build/speech-assets/utilities-speech-$PLATFORM" build/speech-assets/utilities-speech-NOTICE.txt)
-          fi
-          tar -cf "native-$PLATFORM.tar" "${files[@]}"
-        env:
-          PLATFORM: ${{ matrix.platform }}
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: native-${{ matrix.platform }}
-          path: native-${{ matrix.platform }}.tar
-          if-no-files-found: error
-
-  assemble:
-    needs: [gate, native]
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: read
-      id-token: write
-      attestations: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.4.4
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          pattern: native-*
-          path: ${{ runner.temp }}/native
-          merge-multiple: true
-      - name: Manifests from the built bytes
-        run: |
-          for tar in "$RUNNER_TEMP"/native/native-*.tar; do tar -xf "$tar"; done
-          node scripts/native-models.mjs
-          node scripts/native-manifest.mjs
-          node scripts/native-manifest.mjs --check --release
-      - run: npm ci --ignore-scripts
-      - run: npm run check
-      - name: Pack
-        run: |
-          out="$RUNNER_TEMP/release"
-          mkdir -p "$out/npm" "$out/assets"
-          # scripts/pack.mjs adds os, cpu and libc to platform packages, and drops workspaces from the main package.
-          for dir in npm/*/ .; do bun scripts/pack.mjs "$dir" "$out/npm" > /dev/null; done
-          cp build/speech-assets/* manifest/backends.json manifest/speech-assets.json "$out/assets/"
-          cp licenses/upstream/{Whisper-MIT.txt,whisper-model-card.md,KittenTTS-Apache-2.0.txt,kitten-model-card.md,misaki-original-LICENSE.txt,misaki-original-README.md.txt} "$out/assets/"
-      - name: Run the pack test against those exact tarballs
-        run: PACKED_DIR="$RUNNER_TEMP/release/npm" bun test test/pack
-      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: ${{ runner.temp }}/release/npm/*.tgz
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: release
-          path: ${{ runner.temp }}/release
-          if-no-files-found: error
-
-  npm-platforms:
-    needs: [gate, assemble]
-    runs-on: ubuntu-24.04
-    environment: release
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release
-          path: release
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          registry-url: https://registry.npmjs.org
-      # Platform packages first, so the main package never names a version that is missing.
-      - name: Publish the platform packages
-        run: |
-          node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); if (a * 1e6 + b * 1e3 + c < 11005001) { console.log("::error::npm trusted publishing needs npm 11.5.1 or later"); process.exit(1) }' "$(npm --version)"
-          for tarball in release/npm/joe-broadhead-opencode-utilities-bin-*-"$VERSION".tgz; do
-            name="$(tar -xzOf "$tarball" package/package.json | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).name')"
-            # npm view prints the version when it exists, and fails with E404 when it is not published yet. Any other
-            # failure stops the release, so a network error never reads as "not published".
-            found="$(npm view "$name@$VERSION" version 2> "$RUNNER_TEMP/view.err")" && status=0 || status=$?
-            if [[ $status -eq 0 && "$found" == "$VERSION" ]]; then
-              echo "$name@$VERSION is already on npm; skipping it."
-              continue
-            fi
-            if [[ $status -ne 0 ]] && ! grep -q E404 "$RUNNER_TEMP/view.err"; then
-              cat "$RUNNER_TEMP/view.err" >&2
-              echo "::error::npm view $name@$VERSION failed, so the workflow cannot tell whether it is already published."
-              exit 1
-            fi
-            npm publish "$tarball" --provenance --access public
-          done
-        env:
-          VERSION: ${{ needs.gate.outputs.version }}
-
-  github-release:
-    needs: [gate, npm-platforms]
-    runs-on: ubuntu-24.04
-    environment: release
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
-        with:
-          name: release
-          path: release
-      # The speech files go public before the main package that downloads them. A rerun finishes a draft from an
-      # earlier run, and leaves a published release as it is.
-      - name: Publish the speech engines, models and licences
-        run: |
-          if draft="$(gh release view "v$VERSION" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null)"; then
-            if [[ "$draft" != true ]]; then echo "Release v$VERSION is already published; skipping it."; exit 0; fi
-          else
-            gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "v$VERSION" \
-              --notes "Speech engines and models that @joe-broadhead/opencode-utilities $VERSION downloads on first use. Verify a file with: gh attestation verify <file> --repo $GITHUB_REPOSITORY"
-          fi
-          gh release upload "v$VERSION" --repo "$GITHUB_REPOSITORY" --clobber release/assets/*
-          gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --draft=false
+          package-manager-cache: false
+      - name: "Check the tag (annotated, signed by the owner, v0.0.0, one parent on master, the allowed change, no lifecycle scripts, and the native manifest when there is one)"
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ needs.gate.outputs.version }}
+        run: node scripts/check-release-shape.mjs --tag "$GITHUB_REF_NAME" --branch origin/master --verify github-api --notes "$RUNNER_TEMP/notes.md"
+      - name: Rebuild the tag's parent and compare dist/ byte for byte
+        run: |
+          parent="$(git rev-parse "$GITHUB_REF_NAME^")"
+          git worktree add --detach "$RUNNER_TEMP/parent" "$parent"
+          (cd "$RUNNER_TEMP/parent" && npm ci --ignore-scripts && node scripts/build.mjs)
+          node scripts/check-release-shape.mjs --tag "$GITHUB_REF_NAME" --branch origin/master --verify github-api --rebuilt "$RUNNER_TEMP/parent"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
-  npm-main:
-    needs: [gate, github-release]
+  hosts:
+    name: stock OpenCode ${{ matrix.host }}
+    needs: verify
     runs-on: ubuntu-24.04
-    environment: release
-    permissions:
-      contents: read
-      id-token: write
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        host: ["2.2.3", "2.2.4", "2.2.5", "2.2.6"]
     steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          name: release
-          path: release
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
-      - name: Publish the main package
+          package-manager-cache: false
+      - name: Install the tag as a Git plugin on the stock host, in an isolated HOME, and check it loads
+        run: sh scripts/check-release-plugin-add.sh "${{ matrix.host }}" "$GITHUB_WORKSPACE" "$GITHUB_REF_NAME" "$RUNNER_TEMP/host" "$PLUGIN_SKILL" "$PLUGIN_RPC"
+
+  release:
+    name: create the GitHub Release
+    needs: [verify, hosts]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: release
+    permissions:
+      contents: write # the Release
+      actions: read # the native run's artifacts
+      attestations: read # the attestation of each native file
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.4.4 # the Bun inside stock OpenCode 2.2.3, 2.2.4, 2.2.5 and 2.2.6
+          no-cache: true
+      - name: Pack the tag and run the pack test against that exact tarball
         run: |
-          node -e 'const [a, b, c] = process.argv[1].split(".").map(Number); if (a * 1e6 + b * 1e3 + c < 11005001) { console.log("::error::npm trusted publishing needs npm 11.5.1 or later"); process.exit(1) }' "$(npm --version)"
-          name=@joe-broadhead/opencode-utilities
-          found="$(npm view "$name@$VERSION" version 2> "$RUNNER_TEMP/view.err")" && status=0 || status=$?
-          if [[ $status -eq 0 && "$found" == "$VERSION" ]]; then
-            echo "$name@$VERSION is already on npm; skipping it."
-            exit 0
-          fi
-          if [[ $status -ne 0 ]] && ! grep -q E404 "$RUNNER_TEMP/view.err"; then
-            cat "$RUNNER_TEMP/view.err" >&2
-            echo "::error::npm view $name@$VERSION failed, so the workflow cannot tell whether it is already published."
-            exit 1
-          fi
-          npm publish "release/npm/joe-broadhead-opencode-utilities-$VERSION.tgz" --provenance --access public
+          npm ci --ignore-scripts
+          mkdir -p "$RUNNER_TEMP/release"
+          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/release"
+          PACK_TARBALL="$(ls "$RUNNER_TEMP"/release/*.tgz)" node scripts/check.mjs pack
+      # No second gate here, on purpose: the download runs inside the approved release job, and every file is checked
+      # against the manifest's sizes and sha256s and must carry a verified attestation before it is attached.
+      # Native plugins only (a repository with no manifest/native.json skips this step). The run is the one the manifest
+      # pins: its artifacts must match the manifest's sizes and sha256, the gzips must hold the pinned executables, and
+      # each file must carry a verified attestation. The release job builds nothing (NATIVE-DESIGN §4).
+      - name: Verify and stage the pinned native binaries and licence files
+        if: hashFiles('manifest/native.json') != ''
+        run: node scripts/attach-native.mjs --out "$RUNNER_TEMP/release/native"
         env:
-          VERSION: ${{ needs.gate.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+      - name: Write SHA256SUMS and the release notes
+        run: |
+          cd "$RUNNER_TEMP/release"
+          list="$RUNNER_TEMP/sums-list.txt"
+          find . -type f ! -name SHA256SUMS | sed 's#^\./##' | sort > "$list"
+          while IFS= read -r file; do sha256sum "$file"; done < "$list" > "$RUNNER_TEMP/SHA256SUMS"
+          mv "$RUNNER_TEMP/SHA256SUMS" SHA256SUMS
+          cat SHA256SUMS
+          node "$GITHUB_WORKSPACE/scripts/check-release-shape.mjs" --tag "$GITHUB_REF_NAME" --branch origin/master --verify github-api --notes "$RUNNER_TEMP/notes.md"
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Create the GitHub Release on the tag
+        run: |
+          assets="$(cd "$RUNNER_TEMP/release" && find . -type f ! -name SHA256SUMS | sed 's#^\./##' | sort)"
+          set --
+          for file in $assets; do set -- "$@" "$RUNNER_TEMP/release/$file"; done
+          gh release create "$GITHUB_REF_NAME" --verify-tag --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" "$@" "$RUNNER_TEMP/release/SHA256SUMS"
+        env:
+          GH_TOKEN: ${{ github.token }}
