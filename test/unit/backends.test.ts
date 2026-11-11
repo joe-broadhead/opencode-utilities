@@ -5,10 +5,14 @@ import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSy
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { NativeBinaries, detectTarget } from "../../src/domain/backends.js"
+import { PLATFORMS } from "../../src/domain/contract.js"
 
 const repo = fileURLToPath(new URL("../../", import.meta.url))
 const TEMP = existsSync("/private/tmp") ? "/private/tmp" : "/tmp"
 const target = detectTarget()
+// A platform other than this one. A manifest for it names nothing here, whatever platform the runner is on (CI runs linux-x64-gnu).
+const other = Object.keys(PLATFORMS).find(platform => platform !== target)
+if (other === undefined) throw new Error("PLATFORMS names only this platform")
 // The manifest this build wrote (npm run native:ensure), which the checks below read rather than invent.
 const built = (): { tag: string; modules: Record<string, Record<string, { executable: { sha256: string } }>> } =>
   JSON.parse(readFileSync(join(repo, "manifest/native.json"), "utf8"))
@@ -56,7 +60,7 @@ describe("the release programs", () => {
     try {
       await expect(binaries.platform()).rejects.toMatchObject({ code: "NATIVE_FILES_MISSING" })
       // The manifest arrives after the plugin loaded, as when the native build finishes after OpenCode started.
-      writeFileSync(join(root, "manifest", "native.json"), manifestFor("linux-x64-gnu"))
+      writeFileSync(join(root, "manifest", "native.json"), manifestFor(other))
       await expect(binaries.platform()).rejects.toMatchObject({ code: "UNSUPPORTED_PLATFORM" })
     } finally {
       rmSync(root, { recursive: true, force: true })
