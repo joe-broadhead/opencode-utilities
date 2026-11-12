@@ -240,12 +240,6 @@
         "permission": "utilities_speech_synthesize",
         "effect": "allow",
         "readOnly": false
-      },
-      {
-        "name": "utilities.speech_download",
-        "permission": "utilities_speech_download",
-        "effect": "allow",
-        "readOnly": false
       }
     ],
     "skills": [

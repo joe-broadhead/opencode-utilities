@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The Jelly declaration listed `utilities.speech_download`, which is a permission (the consent to fetch the speech files), not a tool, so Jelly's engine registered 24 tools against the 25 declared. It now declares only the registered tools, and a test fails when the two lists differ in either direction.
+
 ## [0.0.0] - 2026-11-10
 <!-- kit-release: the GitHub release v0.0.0 -->
 
