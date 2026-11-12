@@ -1,6 +1,6 @@
 {
   "name": "@joe-broadhead/opencode-utilities",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "Unofficial OpenCode plugin: weather, time, polled timers and local speech tools",
   "keywords": [
     "opencode",
