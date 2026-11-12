@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 import { loadConfig } from "../../src/domain/config.js"
-import { NAMESPACE, SPEECH_DOWNLOAD_ACTION, TOOLS, WEATHER_INTEGRATION } from "../../src/domain/contract.js"
+import { NAMESPACE, TOOLS, WEATHER_INTEGRATION } from "../../src/domain/contract.js"
 import { DEFAULT_RULES } from "../../src/host/permissions.js"
 import { type Declaration, type DeclaredTool, declarationProblems, docProblems, effectFromRules, readPackage } from "../support/jelly-kit.js"
 
@@ -17,11 +17,18 @@ const jelly = pkg.jelly as Declaration & { rpc: unknown[]; views: unknown[]; con
 const known = new Map<string, boolean>(
   Object.entries(TOOLS).map(([name, tool]): [string, boolean] => [`${NAMESPACE}_${name}`, tool.effect !== "write-state" && tool.effect !== "write-file"]),
 )
-known.set(SPEECH_DOWNLOAD_ACTION, false)
 
 describe("the jelly declaration", () => {
   it("follows the plugin authors' standard, with the effects the plugin's own default rules give", () => {
     expect(declarationProblems(ROOT, { effectOf: effectFromRules(DEFAULT_RULES), registered: [...known.keys()] })).toEqual([])
+  })
+
+  it("declares exactly the tools the plugin registers, no more and no fewer", () => {
+    const declared = jelly.tools.map(tool => tool.name).sort()
+    const registered = Object.keys(TOOLS).map(name => `${NAMESPACE}.${name}`).sort()
+    expect(declared.filter(name => !registered.includes(name)), "declared but not registered").toEqual([])
+    expect(registered.filter(name => !declared.includes(name)), "registered but not declared").toEqual([])
+    expect(jelly.tools.map(tool => tool.permission).sort()).toEqual([...known.keys()].sort())
   })
 
   it("marks read-only exactly the tools that write no state or file", () => {
