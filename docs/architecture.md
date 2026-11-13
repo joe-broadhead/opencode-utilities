@@ -11,7 +11,7 @@ User-facing options, permission rules and limits are in [configuration.md](confi
 - a tool transform for the `utilities` namespace;
 - default ask rules, inserted after each agent's base allow;
 - the `open-meteo` key integration;
-- `/utilities-status` and `/utilities-speech-install`;
+- `/utilities-status`, `/utilities-install` and `/utilities-speech-install`;
 - one RPC method, `status`;
 - the tools RPC `utilities.local.tools`, with one `evaluate` permission hook;
 - three skills.

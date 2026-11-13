@@ -120,7 +120,7 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     const skills = await host.sdk.skill.list({ location: { directory: dirs.main } })
     expect(skills.data.map((s: { id: string }) => s.id).filter((id: string) => id.startsWith("utilities")).sort()).toEqual(["utilities-speech", "utilities-time", "utilities-weather"])
     const commands = await host.sdk.command.list({ location: { directory: dirs.main } })
-    expect(commands.data.map((c: { name: string }) => c.name).filter((n: string) => n.startsWith("utilities")).sort()).toEqual(["utilities-speech-install", "utilities-status"])
+    expect(commands.data.map((c: { name: string }) => c.name).filter((n: string) => n.startsWith("utilities")).sort()).toEqual(["utilities-install", "utilities-speech-install", "utilities-status"])
   })
 
   test("inserts the ask rules right after each agent's base allow; config-only agents are named with the fix", async () => {

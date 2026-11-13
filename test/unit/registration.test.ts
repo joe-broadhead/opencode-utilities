@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
@@ -251,13 +251,14 @@ describe("commands", () => {
     const added: { name: string; execute(input: { sessionID: string; delivery: string }): Promise<void> }[] = []
     const posts: { sessionID: string; text: string; resume?: boolean; description?: string }[] = []
     const assert = vi.fn(async (..._args: unknown[]) => {})
-    commandTransform({ assert, synthetic: (async (input: never) => { posts.push(input) }) as never, runtime: { installSpeech } as never, status: async () => ({ version: "9.9.9" } as StatusView), signal: new AbortController().signal })({ add: (c: never) => { added.push(c) } } as never)
+    const installNatives = vi.fn(async () => ({ output: { downloaded: [], bytes: 0, cacheDirectory: "/cache" }, text: "The time and weather programs are already installed. Time and weather tools are ready." }))
+    commandTransform({ assert, synthetic: (async (input: never) => { posts.push(input) }) as never, runtime: { installSpeech, installNatives } as never, status: async () => ({ version: "9.9.9" } as StatusView), signal: new AbortController().signal })({ add: (c: never) => { added.push(c) } } as never)
     const run = (name: string) => added.find(c => c.name === name)!.execute({ sessionID: "ses_1", delivery: "steer" })
-    return { added, posts, assert, run, installSpeech }
+    return { added, posts, assert, run, installSpeech, installNatives }
   }
-  test("both commands exist; status posts a synthetic note that does not resume the session", async () => {
+  test("every command exists; status posts a synthetic note that does not resume the session", async () => {
     const c = setup()
-    expect(c.added.map(a => a.name)).toEqual(["utilities-status", "utilities-speech-install"])
+    expect(c.added.map(a => a.name)).toEqual(["utilities-status", "utilities-speech-install", "utilities-install"])
     await c.run("utilities-status").catch(() => undefined)
     expect(c.posts[0]).toMatchObject({ sessionID: "ses_1", resume: false, description: "Utilities status" })
     expect(c.posts[0]!.text).toBe("STATUS_UNAVAILABLE: Utilities status could not be read. Next step: Run /utilities-status in a session to see the error, or check the OpenCode server log.")
@@ -275,6 +276,25 @@ describe("commands", () => {
     const failed = setup(vi.fn(async () => { throw failure("DOWNLOAD_FAILED", "The download stopped early.", "Check the network and run /utilities-speech-install again.") }))
     await failed.run("utilities-speech-install")
     expect(failed.posts[0]!.text).toBe("DOWNLOAD_FAILED: The download stopped early. Next step: Check the network and run /utilities-speech-install again.")
+  })
+})
+
+describe("named commands", () => {
+  // Every `/utilities-…` a message, a next step or a document tells the user to run must be a registered command.
+  // A path such as `skills/utilities-time/` or `<assetsDir>/utilities-speech-…` is not a command.
+  test("every /utilities-… command named in the source, the README and the docs is registered", async () => {
+    const added: string[] = []
+    commandTransform({ assert: (async () => {}) as never, synthetic: (async () => {}) as never, runtime: {} as never, status: async () => ({} as StatusView), signal: new AbortController().signal })({ add: (c: { name: string }) => { added.push(c.name) } } as never)
+    const files = [
+      ...(await readdir(join(packageRoot, "src"), { recursive: true })).filter(f => f.endsWith(".ts")).map(f => join("src", f)),
+      ...(await readdir(join(packageRoot, "skills"), { recursive: true })).filter(f => f.endsWith(".md")).map(f => join("skills", f)),
+      ...(await readdir(join(packageRoot, "docs"))).filter(f => f.endsWith(".md")).map(f => join("docs", f)),
+      "README.md", "SECURITY.md",
+    ]
+    const named = new Map<string, string>()
+    for (const file of files) for (const [, name] of (await readFile(join(packageRoot, file), "utf8")).matchAll(/(?<![\w./>-])\/(utilities-[a-z]+(?:-[a-z]+)*)(?![\w/.-])/g)) named.set(name!, file)
+    expect(named.get("utilities-install")).toBeDefined()
+    expect([...named].filter(([name]) => !added.includes(name))).toEqual([])
   })
 })
 

@@ -4,7 +4,8 @@ import { dirname, join } from "node:path"
 import { createRuntime } from "../../src/runtime.js"
 import { verifier } from "../../src/domain/backends.js"
 import { LIMITS } from "../../src/domain/common.js"
-import { NATIVE_DOWNLOAD_ACTION, WEATHER_ATTRIBUTION, type Authorize, type Runtime, type RuntimeOptions } from "../../src/domain/contract.js"
+import { COMMANDS, NATIVE_DOWNLOAD_ACTION, WEATHER_ATTRIBUTION, type Authorize, type Runtime, type RuntimeOptions, type StatusView } from "../../src/domain/contract.js"
+import { commandTransform } from "../../src/host/commands.js"
 import { invoke as timeInvoke } from "../../src/modules/time/adapter.js"
 import { calendar, fixture, invocation, MODELS, place, releaseServer, VERSION, type Fixture, type FixtureOptions } from "../fixtures.js"
 
@@ -143,6 +144,43 @@ describe("the release programs: platform, first use and integrity", () => {
     await utimes(bin, new Date(), new Date(Date.now() + 5000))
     await f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())
     expect(digest.mock.calls.filter(([path]) => path === bin)).toHaveLength(2)
+  })
+})
+
+describe("/utilities-install", () => {
+  function command(runtime: Runtime, assert: (input: { action: string }) => Promise<void>) {
+    const added: { name: string; execute(input: { sessionID: string; delivery: string }): Promise<void> }[] = [], posts: string[] = []
+    commandTransform({ assert: assert as never, synthetic: (async (input: { text: string }) => { posts.push(input.text) }) as never, runtime, status: async () => ({} as StatusView), signal: new AbortController().signal })({ add: (c: never) => { added.push(c) } } as never)
+    return { posts, run: () => added.find(c => c.name === COMMANDS.nativeInstall)!.execute({ sessionID: "ses_1", delivery: "steer" }) }
+  }
+  test("asks before each download; a refusal downloads and installs nothing and is reported", async () => {
+    const server = await releaseServer(); cleanups.push(server.close)
+    const f = await setup(); server.add(f.nativeFiles)
+    await rm(f.binary("time-keep")); await rm(f.binary("weather-signal"))
+    const assert = vi.fn(async (_input: { action: string; metadata?: { program?: string } }): Promise<void> => { throw Object.assign(new Error(""), { _tag: "Permission.DeclinedError" }) })
+    const c = command(f.runtime, assert)
+    await c.run()
+    expect(assert.mock.calls.map(([input]) => input)).toEqual([expect.objectContaining({ sessionID: "ses_1", action: NATIVE_DOWNLOAD_ACTION, resources: ["github.com"] })])
+    expect([...server.requests.values()]).toEqual([])
+    expect(await lstat(f.binary("time-keep")).catch(() => undefined)).toBeUndefined()
+    expect(c.posts).toEqual(["The time and weather program download was not approved."])
+    expect((await f.runtime.status()).modules.time.availability).toBe("NATIVE_FILES_MISSING")
+  })
+  test("once approved, downloads and verifies both programs, reports them, and is a no-op afterwards", async () => {
+    const server = await releaseServer(); cleanups.push(server.close)
+    const f = await setup(); server.add(f.nativeFiles)
+    await rm(f.binary("time-keep")); await rm(f.binary("weather-signal"))
+    const assert = vi.fn(async (_input: { action: string; metadata?: { program?: string } }) => {})
+    const c = command(f.runtime, assert)
+    await c.run()
+    expect(assert.mock.calls.map(([input]) => input.metadata?.program)).toEqual(["time-keep", "weather-signal"])
+    expect(server.requests.get("time-keep-darwin-arm64.gz")).toBe(1)
+    expect(c.posts[0]).toMatch(/^Downloaded 2 files \(.+\) into the plugin cache\. Time and weather tools are ready\.$/)
+    const status = await f.runtime.status()
+    expect([status.modules.time.availability, status.modules.weather.availability]).toEqual(["AVAILABLE", "AVAILABLE"])
+    await c.run()
+    expect(assert).toHaveBeenCalledTimes(2)
+    expect(c.posts[1]).toBe("The time and weather programs are already installed. Time and weather tools are ready.")
   })
 })
 
