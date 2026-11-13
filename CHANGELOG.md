@@ -4,6 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+
+- The `jelly` settings declare their choices: `access` is drawn as Allowed, Ask before changes or Read only, with
+  Jelly's own line for each (needs a jelly that includes app#1301).
+
 ### Fixed
 
 - `/utilities-install` is registered. The `NATIVE_FILES_MISSING` next step, the `NATIVE_NOT_INSTALLED` message and the README named it, but only `/utilities-status` and `/utilities-speech-install` existed. It asks `utilities_native_download` as the session's agent before each time or weather program it downloads, verifies the program against the release manifest, and posts the result, or the refusal, into the session. A test fails when a message or document names a `/utilities-…` command that is not registered.

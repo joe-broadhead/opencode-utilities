@@ -47,9 +47,18 @@ Nothing is required. `jelly.signIns` declares one optional sign-in, `open-meteo`
 
 Jelly folds the declared sign-ins into this plugin's one card, which shows each as Connected, Not signed in or Sign in again (expired or revoked), and starts, renews and signs out of each. An agent's `jelly_connection_request`, or a tool result that names this plugin's "Run /connect and choose …" next step, opens the same card. The plugin still signs in through OpenCode, as it does without Jelly; the declaration only tells Jelly which of the engine's integrations and servers are this plugin's.
 
+## Settings
+
+`jelly.contributes.settings` declares one setting, `access`, the option of the same name, as a choice of three:
+**Allowed** (`all`, the default), **Ask before changes** (`ask-changes`) and **Read only** (`read-only`), with Jelly's
+own line for each. Jelly draws it as a choice, never as free text, and saves only one of the three, the options
+parser's own set. A Jelly that does not know declared choices (before app#1301) refuses the whole declaration.
+`test/unit/jelly.test.ts` checks the setting against Jelly's setting rules, restated in `test/support/jelly-settings.ts`,
+and each declared value against the options parser.
+
 ## Versions
 
 Jelly's curated catalogue pins an exact version. Each release is published under a new version, so a review in
 Jelly can tell the two apart.
 
-The declaration test runs the shared kit, `test/support/jelly-kit.ts`, which checks the declaration and this page against Jelly's plugin authors' standard. `scripts/check-copies.mjs` holds the kit, and the shared part of the tools RPC (`src/host/tools-rpc.ts`), equal to the copy every plugin carries.
+The declaration test runs the shared kit, `test/support/jelly-kit.ts`, which checks the declaration and this page against Jelly's plugin authors' standard. `scripts/check-copies.mjs` holds the kit, Jelly's setting rules (`test/support/jelly-settings.ts`) and the shared part of the tools RPC (`src/host/tools-rpc.ts`), equal to the copies every plugin carries.
