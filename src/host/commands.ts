@@ -10,20 +10,23 @@ type CommandEditor = Parameters<Parameters<Plugin.Context["command"]["transform"
 export interface CommandSources {
   readonly assert: Plugin.Context["permission"]["assert"]
   readonly synthetic: Plugin.Context["session"]["synthetic"]
-  readonly runtime: Pick<Runtime, "installSpeech">
+  readonly runtime: Pick<Runtime, "installSpeech" | "installNatives">
   readonly status: () => Promise<StatusView>
   /** Aborts an install in progress when the plugin unloads. */
   readonly signal: AbortSignal
 }
 
-const describe = (error: unknown) => {
+const describe = (what: string, error: unknown) => {
   if (isFailure(error)) return formatFailure(error)
   const tag = typeof error === "object" && error !== null && "_tag" in error ? String(error._tag) : ""
-  if (tag.startsWith("Permission.")) return `The speech download was not approved${error instanceof Error && error.message ? `: ${error.message}` : "."}`
+  if (tag.startsWith("Permission.")) return `The ${what} download was not approved${error instanceof Error && error.message ? `: ${error.message}` : "."}`
   return `Failed: ${error instanceof Error ? error.message : String(error)}`
 }
 
-/** `/utilities-status` posts the status into the session; `/utilities-speech-install` downloads the speech assets after asking. */
+/**
+ * `/utilities-status` posts the status into the session; `/utilities-install` downloads the time and weather programs,
+ * and `/utilities-speech-install` the speech assets, each after asking as the session's agent.
+ */
 export function commandTransform(sources: CommandSources) {
   const post = (sessionID: string, delivery: Parameters<CommandSources["synthetic"]>[0]["delivery"], text: string, description: string) =>
     sources.synthetic({ sessionID, delivery, text, description, resume: false, metadata: { source: PLUGIN_ID } })
@@ -44,8 +47,19 @@ export function commandTransform(sources: CommandSources) {
         let text: string
         try {
           text = (await sources.runtime.installSpeech({ signal: sources.signal, authorize: commandAuthorize(sources.assert, sessionID, sources.signal) })).text
-        } catch (error) { text = describe(error) }
+        } catch (error) { text = describe("speech", error) }
         await post(sessionID, delivery, text, "Utilities speech download")
+      },
+    })
+    editor.add({
+      name: COMMANDS.nativeInstall,
+      description: "Download and verify the Utilities time and weather programs",
+      async execute({ sessionID, delivery }) {
+        let text: string
+        try {
+          text = (await sources.runtime.installNatives({ signal: sources.signal, authorize: commandAuthorize(sources.assert, sessionID, sources.signal) })).text
+        } catch (error) { text = describe("time and weather program", error) }
+        await post(sessionID, delivery, text, "Utilities program download")
       },
     })
   }

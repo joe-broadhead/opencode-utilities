@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- `/utilities-install` is registered. The `NATIVE_FILES_MISSING` next step, the `NATIVE_NOT_INSTALLED` message and the README named it, but only `/utilities-status` and `/utilities-speech-install` existed. It asks `utilities_native_download` as the session's agent before each time or weather program it downloads, verifies the program against the release manifest, and posts the result, or the refusal, into the session. A test fails when a message or document names a `/utilities-…` command that is not registered.
+
 ## [0.0.1] - 2026-11-12
 
 ### Fixed
