@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest"
 import { loadConfig } from "../../src/domain/config.js"
-import { NAMESPACE, TOOLS, WEATHER_INTEGRATION } from "../../src/domain/contract.js"
+import { ACCESS_VALUES, NAMESPACE, TOOLS, WEATHER_INTEGRATION } from "../../src/domain/contract.js"
 import { DEFAULT_RULES } from "../../src/host/permissions.js"
 import { type Declaration, type DeclaredTool, declarationProblems, docProblems, effectFromRules, readPackage } from "../support/jelly-kit.js"
+import { ACCESS_CHOICES, type PluginSetting, settingChoices, settingsProblems, settingValueIssue } from "../support/jelly-settings.js"
 
 /**
  * The `jelly` section of package.json, which Jelly reads without loading the plugin. Jelly's agents have no base
@@ -13,7 +14,7 @@ import { type Declaration, type DeclaredTool, declarationProblems, docProblems, 
 
 const ROOT = new URL("../../", import.meta.url)
 const pkg = readPackage(ROOT)
-const jelly = pkg.jelly as Declaration & { rpc: unknown[]; views: unknown[]; contributes: Record<string, unknown[]>; tools: DeclaredTool[] }
+const jelly = pkg.jelly as Declaration & { rpc: unknown[]; views: unknown[]; contributes: Record<string, unknown[]> & { settings: PluginSetting[] }; tools: DeclaredTool[] }
 const known = new Map<string, boolean>(
   Object.entries(TOOLS).map(([name, tool]): [string, boolean] => [`${NAMESPACE}_${name}`, tool.effect !== "write-state" && tool.effect !== "write-file"]),
 )
@@ -47,11 +48,38 @@ describe("the jelly declaration", () => {
     ])
   })
 
-  it("declares the flat access option and no RPC methods, views or other contributions", () => {
+  it("declares the flat access option, with Jelly's own words for its three values, and no RPC methods, views or other contributions", () => {
     expect(jelly.rpc).toEqual([])
     expect(jelly.views).toEqual([])
-    expect(jelly.contributes).toEqual({ homeFeeds: [], homeWidgets: [], workKinds: [], settings: [{ key: "access", label: "Access", type: "string", default: loadConfig({}).access, description: expect.any(String) }] })
-    expect(loadConfig({ access: "read-only" }).access).toBe("read-only")
+    expect(jelly.contributes).toEqual({
+      homeFeeds: [],
+      homeWidgets: [],
+      workKinds: [],
+      settings: [
+        {
+          key: "access",
+          label: "Access",
+          type: "string",
+          description: "How much the plugin's tools may do. Generates default rules for agents with a base allow rule.",
+          choices: ACCESS_CHOICES,
+          default: loadConfig({}).access,
+        },
+      ],
+    })
+  })
+
+  it("the settings follow Jelly's rules for a declared setting", () => {
+    expect(settingsProblems(jelly.contributes.settings)).toEqual([])
+  })
+
+  it("the options parser takes every declared access choice, its default included, and refuses a value outside them", () => {
+    const access = jelly.contributes.settings.find(setting => setting.key === "access")!
+    const values = (settingChoices(access) ?? []).map(choice => choice.value)
+    expect(values).toEqual([...ACCESS_VALUES])
+    for (const value of values) expect<string>(loadConfig({ access: value }).access).toBe(value)
+    expect<string>(loadConfig({}).access).toBe(access.default as string)
+    expect(settingValueIssue(access, "write")).not.toBeNull()
+    expect(() => loadConfig({ access: "write" })).toThrow("OPTIONS_INVALID")
   })
 })
 
