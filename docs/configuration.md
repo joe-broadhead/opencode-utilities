@@ -6,7 +6,7 @@ Plugin ID: `utilities.local`. Options live on the `plugins` entry in `opencode.j
 {
   "$schema": "https://opencode.ai/config.json",
   "plugins": [{
-    "package": "github:joe-broadhead/opencode-utilities#v0.0.2",
+    "package": "github:joe-broadhead/opencode-utilities#v0.0.3",
     "options": {
       "modules": { "weather": true, "time": true, "speech": true },
       "stateRoot": "<absolute path>",
