@@ -22,5 +22,5 @@ export function deprecatedNote(): string | undefined {
   if (called.size === 0) return undefined
   const old = [...called].sort().map(kind => (kind === "status" ? DEPRECATED_IDS.status : DEPRECATED_IDS.tools))
   const replacement = [...called].sort().map(kind => (kind === "status" ? DEPRECATED_IDS.use : `${DEPRECATED_IDS.use}.tools`))
-  return `Deprecated id called: ${old.join(", ")}. Use ${replacement.join(", ")} instead; the old id works until 0.1.0, which removes it.`
+  return `Deprecated id called: ${old.join(", ")}. Use ${replacement.join(", ")} instead; the old id works until ${DEPRECATED_IDS.removedIn}, which removes it.`
 }

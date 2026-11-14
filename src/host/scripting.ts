@@ -62,7 +62,7 @@ export function registerScripting(ctx: ToolsRpcContext, sources: ToolSources, on
       Object.entries(handlers).map(([name, handler]) => [name, async (raw: unknown, context: never) => {
         onAliasCalled?.()
         const value = await handler(raw, context) as Record<string, unknown>
-        return name === "describe" ? { ...value, deprecated: `use ${DEPRECATED_IDS.use}.tools` } : value
+        return name === "describe" ? { ...value, deprecated: `use ${DEPRECATED_IDS.use}.tools; removed in ${DEPRECATED_IDS.removedIn}` } : value
       }]),
     )
     // The host validates an output against its declared schema, so the alias's describe declares the extra field.
