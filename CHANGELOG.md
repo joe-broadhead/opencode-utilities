@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Changed
+
+- `docs/jelly.md` says what Jelly does with the two first-use download consents, `utilities_native_download` and
+  `utilities_speech_download`, which are not tools and so are not declared: Jelly decides them by the `utilities_*`
+  namespace, so at Read only they are denied and a time, weather or speech tool fails on its first call until its
+  files are cached. It says how to cache them first. The declaration is unchanged.
+
 ### Deprecated
 
 - The RPC ids before the rename, `utilities.tools` and `utilities.tools.tools`, are removed in 0.1.0. Until then they

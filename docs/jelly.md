@@ -24,9 +24,24 @@ changes nothing in Jelly.
 - Ask: none: every declared tool is allowed.
 - Off: none.
 
-Weather sends a place to Open-Meteo and is read-only by class; `utilities_speech_download` is not declared: it is not a
-tool but the consent the speech tools assert before a download, and Jelly's declaration has no place for a permission. To make the changes ask instead, set `access: "ask-changes"` in
-the plugin options.
+Weather sends a place to Open-Meteo and is read-only by class. To make the changes ask instead, set
+`access: "ask-changes"` in the plugin options.
+
+### The first-use downloads
+
+Two consents are not declared: `utilities_native_download`, which the first time or weather call (and
+`/utilities-install`) asserts before it downloads that program, and `utilities_speech_download`, which the first
+transcription or synthesis (and `/utilities-speech-install`) asserts before it downloads the speech files. They are not
+tools, and Jelly's declaration has no place for a consent that is not a tool, so Jelly decides them by the plugin's
+`utilities_*` namespace, as it does any undeclared action:
+
+- At **Allowed** they run, so the first call downloads what it needs.
+- At **Ask before changes** each one asks before its download.
+- At **Read only** each one is **denied**. A time or weather tool whose program is not cached yet then fails on its
+  first call, even though the tool itself is a read, and so do `/utilities-install` and the speech tools. Download the
+  programs once at **Allowed** (or run `/utilities-install` there), or pre-seed the speech files with
+  `speech.assetsDir`, before choosing Read only. A program or file already in the cache needs no download, so it keeps
+  working at Read only.
 
 The declaration lists the tools of this version. Keep `jelly.tools` in step with the tool table in
 `src/domain/contract.ts`; `test/unit/jelly.test.ts` checks each declared effect against the plugin's own
