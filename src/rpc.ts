@@ -50,7 +50,7 @@ export const Utilities = Rpc.define({
   events: {},
 })
 
-/** The status contract under the id before the rename, so a script that calls it keeps working for one release. */
+/** The status contract under the id before the rename, so a script that calls it keeps working until 0.1.0, which removes it. */
 export const DeprecatedUtilities = Rpc.define({
   id: DEPRECATED_IDS.status,
   methods: { status: { input: object({}, []), output: STATUS_JSON_SCHEMA, errors: { unavailable: object({ nextStep: { type: "string" } }, ["nextStep"]) } } },

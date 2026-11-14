@@ -49,8 +49,8 @@ interface Contract {
 /**
  * Registers the tools RPC, and the id it had before the rename (`utilities.tools.tools`) alongside it. The shared module
  * builds one contract, so a context whose `register` takes every contract twice gives the old id the same handlers,
- * the same resolve and the same refusal, and its `describe` says it is deprecated. The old id answers until the next
- * minor release.
+ * the same resolve and the same refusal, and its `describe` says it is deprecated. The old id answers until 0.1.0,
+ * which removes it.
  */
 export function registerScripting(ctx: ToolsRpcContext, sources: ToolSources, onAliasCalled?: () => void) {
   type Registration = { dispose(): Promise<void> }
@@ -62,7 +62,7 @@ export function registerScripting(ctx: ToolsRpcContext, sources: ToolSources, on
       Object.entries(handlers).map(([name, handler]) => [name, async (raw: unknown, context: never) => {
         onAliasCalled?.()
         const value = await handler(raw, context) as Record<string, unknown>
-        return name === "describe" ? { ...value, deprecated: `use ${DEPRECATED_IDS.use}.tools` } : value
+        return name === "describe" ? { ...value, deprecated: `use ${DEPRECATED_IDS.use}.tools; removed in ${DEPRECATED_IDS.removedIn}` } : value
       }]),
     )
     // The host validates an output against its declared schema, so the alias's describe declares the extra field.

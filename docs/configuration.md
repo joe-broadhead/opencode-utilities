@@ -6,7 +6,7 @@ Plugin ID: `utilities.local`. Options live on the `plugins` entry in `opencode.j
 {
   "$schema": "https://opencode.ai/config.json",
   "plugins": [{
-    "package": "github:joe-broadhead/opencode-utilities#v0.0.2",
+    "package": "github:joe-broadhead/opencode-utilities#v0.0.3",
     "options": {
       "modules": { "weather": true, "time": true, "speech": true },
       "stateRoot": "<absolute path>",
@@ -236,8 +236,8 @@ Use the engine name for the platform you run on. A hash mismatch or a missing fi
 | `/utilities-install` | Asserts `utilities_native_download` for each time or weather program that is not cached, then downloads it and checks its size and SHA-256 against the release manifest. A refusal downloads nothing. |
 | `/utilities-speech-install` | Asserts `utilities_speech_download`, then downloads missing files. |
 | `/utilities` | TUI dialog, palette "Utilities: Status". Reads the `status` RPC method only, when it opens, and on server, agent and Open-Meteo key events, which it hears only while open. Shows the same lines as `/utilities-status`. `r` refreshes, `Esc` closes. The key hint reads `r refresh · esc close`. |
-| RPC `status` | The `utilities.local` RPC's only method. Returns the same status object. The TUI imports its contract from its own bundle; the package does not export it. The id the plugin had before the rename, `utilities.tools`, answers the same method until the next minor release, and status then says it is deprecated. |
-| RPC `utilities.local.tools` | The tools RPC for scripts: `describe`, plus one method per tool, run as a session and its agent. Every tool is allowed by default; `access` and a script's own rules restrict it. A call resolves the rule before dispatch: an ask is refused, not prompted, and only an allow runs. See [scripting.md](scripting.md). The old id `utilities.tools.tools` answers the same methods until the next minor release, and its `describe` carries `"deprecated": "use utilities.local.tools"`. |
+| RPC `status` | The `utilities.local` RPC's only method. Returns the same status object. The TUI imports its contract from its own bundle; the package does not export it. The id the plugin had before the rename, `utilities.tools`, answers the same method until 0.1.0, which removes it, and status then says it is deprecated. |
+| RPC `utilities.local.tools` | The tools RPC for scripts: `describe`, plus one method per tool, run as a session and its agent. Every tool is allowed by default; `access` and a script's own rules restrict it. A call resolves the rule before dispatch: an ask is refused, not prompted, and only an allow runs. See [scripting.md](scripting.md). The old id `utilities.tools.tools` answers the same methods until 0.1.0, which removes it, and its `describe` carries `"deprecated": "use utilities.local.tools; removed in 0.1.0"`. |
 
 The status RPC starts with the fields every one of these plugins shares:
 
