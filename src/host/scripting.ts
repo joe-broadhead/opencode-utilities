@@ -49,8 +49,8 @@ interface Contract {
 /**
  * Registers the tools RPC, and the id it had before the rename (`utilities.tools.tools`) alongside it. The shared module
  * builds one contract, so a context whose `register` takes every contract twice gives the old id the same handlers,
- * the same resolve and the same refusal, and its `describe` says it is deprecated. The old id answers until the next
- * minor release.
+ * the same resolve and the same refusal, and its `describe` says it is deprecated. The old id answers until 0.1.0,
+ * which removes it.
  */
 export function registerScripting(ctx: ToolsRpcContext, sources: ToolSources, onAliasCalled?: () => void) {
   type Registration = { dispose(): Promise<void> }

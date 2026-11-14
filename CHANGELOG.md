@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Deprecated
+
+- The RPC ids before the rename, `utilities.tools` and `utilities.tools.tools`, are removed in 0.1.0. Until then they
+  answer as before; the status note, the tools RPC's `describe`, the README and the docs now name 0.1.0 instead of "the
+  next minor release".
+
 ## [0.0.2] - 2026-11-13
 
 ### Added

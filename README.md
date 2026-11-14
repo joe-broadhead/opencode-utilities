@@ -65,7 +65,7 @@ No Utilities tool is pinned in the Code Mode catalogue. The `utilities` namespac
 
 ### Scripts
 
-A script or a cron job can call the tools with no model, through `opencode api`. It runs as a session and its agent, with the same default: every tool is allowed unless the `access` option or the agent's rules restrict it, and an `ask` is refused when no one can answer it. The id before the rename, `utilities.tools.tools`, still answers until the next minor release, with `"deprecated": "use utilities.local.tools"` in its `describe`.
+A script or a cron job can call the tools with no model, through `opencode api`. It runs as a session and its agent, with the same default: every tool is allowed unless the `access` option or the agent's rules restrict it, and an `ask` is refused when no one can answer it. The id before the rename, `utilities.tools.tools`, still answers until 0.1.0, which removes it, with `"deprecated": "use utilities.local.tools"` in its `describe`.
 
 ```sh
 opencode api post /api/rpc/utilities.local.tools/time_now \

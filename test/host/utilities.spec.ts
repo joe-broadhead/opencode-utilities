@@ -346,7 +346,7 @@ describe(`the tools RPC ${TOOLS_RPC_ID} on @opencode/sdk, host version ${HOST_VE
     const old = host.sdk.rpc(Rpc.define({ id: "utilities.tools", methods: { status: { input: any, output: any, errors: { failed: any } } }, events: {} } as never)) as unknown as { status: (i: unknown, o: object) => Promise<Record<string, any>> }
     expect((await old.status({}, { location: { directory } })).version).toBe(version)
     const status = await host.sdk.rpc(Utilities).status({}, { location: { directory } })
-    expect(status.deprecated).toBe("Deprecated id called: utilities.tools, utilities.tools.tools. Use utilities.local, utilities.local.tools instead; the old id works until the next minor release.")
+    expect(status.deprecated).toBe("Deprecated id called: utilities.tools, utilities.tools.tools. Use utilities.local, utilities.local.tools instead; the old id works until 0.1.0, which removes it.")
     expect(formatStatus(status)).toContain("Deprecated: Deprecated id called:")
   })
 

@@ -9,8 +9,8 @@ The envelope is
 `opencode api post /api/rpc/utilities.local.tools/<method> -H "x-opencode-directory:$PWD" -d '{"input":{"sessionID":"<id>","input":{…}}}'`.
 
 The id before the rename, `utilities.tools.tools`, still answers the same methods, and its `describe` carries
-`"deprecated": "use utilities.local.tools"`: move a script to the new id before the next minor release, when the old one
-goes. The status command says so once an old id has been called.
+`"deprecated": "use utilities.local.tools"`: move a script to the new id before 0.1.0, which removes the old
+one. The status command says so once an old id has been called.
 
 | Methods | The tools | Class |
 | --- | --- | --- |

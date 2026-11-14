@@ -68,7 +68,7 @@ export function createPlugin({ createRuntime, packageRoot }: PluginSources): Plu
           }
         }
         await ctx.rpc.register(Utilities, { status: statusHandler } as never)
-        // The id before the rename answers for one release: the same handler, and a note once an alias is called.
+        // The id before the rename answers until 0.1.0: the same handler, and a note once an alias is called.
         await ctx.rpc.register(DeprecatedUtilities, { status: async (input: unknown, context: never) => {
           markAliasCalled("status")
           return statusHandler(input, context)

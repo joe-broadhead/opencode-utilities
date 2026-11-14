@@ -3,8 +3,8 @@
 export const PLUGIN_ID = "utilities.local"
 export const TUI_ID = "utilities.local.tui"
 /**
- * The ids before the rename to `utilities.local`. They answer for one release, running the same handlers, so a script
- * written against them keeps working; `deprecated` and one status line say so.
+ * The ids before the rename to `utilities.local`. They answer until 0.1.0, which removes them, running the same
+ * handlers, so a script written against them keeps working; `deprecated` and one status line say so.
  */
 export const DEPRECATED_IDS = { status: "utilities.tools", tools: "utilities.tools.tools", use: PLUGIN_ID } as const
 export const NAMESPACE = "utilities"
