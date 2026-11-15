@@ -4,7 +4,7 @@ This repository builds `@joe-broadhead/opencode-utilities`, an unofficial OpenCo
 
 ## Design
 
-- **Host.** Public `@opencode/plugin` APIs only. The host range is exactly `>=2.2.3 <2.3.0`, in `package.json` `opencode.host` and in the startup check; never `^2.2.3`.
+- **Host.** Public `@opencode/plugin` APIs only. The host range is exactly `>=2.2.3 <2.4.0`, in `package.json` `opencode.host` and in the startup check; never `^2.2.3`.
 - **Stable IDs.** Plugin `utilities.local`, TUI `utilities.local.tui`, namespace `utilities`, the status RPC `utilities.local` and the tools RPC `utilities.local.tools`.
 - **Scripts.** The tools RPC (`src/host/scripting.ts`, on the shared `src/host/tools-rpc.ts`) makes a method of every tool, with its class: `compute`, `read-state`, `network` and `read-file` are reads, `write-state` is a write, `write-file` is an export. A call resolves the rule before dispatch: only an `allow` runs; an `ask` is refused with no tool call, and so is a `deny`. Each method runs the tool's own path (`runTool`), checks its own input, and keeps `available()` in step with the model's tool list.
 - `src/host/tools-rpc.ts` is a copy of a module shared by several plugins: change only its block between the `PLUGIN-SPECIFIC` markers here, and the rest in the shared copy first.

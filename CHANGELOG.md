@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- The plugin admits OpenCode 2.3: the host range is `>=2.2.3 <2.4.0` (`opencode.host` and `HOST_RANGE`), tested on 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 and 2.3.0 (`TESTED_HOSTS`); the host, pack and stock stages, CI and the release's install check run every one. Below 2.2.3 or from 2.4.0 the plugin refuses with `HOST_UNTESTED`, whose next step names the six tested releases. Nothing in the plugin relied on what 2.3 changes: it starts no subagent and reads no `session.tool.failed` event. Each tool already passes its `signal` to the queue, the lock and the native process it runs, so Stop on 2.3 ends a transcription, a speech render or a weather call.
+
 ## [0.0.3] - 2026-11-14
 
 ### Changed

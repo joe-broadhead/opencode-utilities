@@ -31,7 +31,7 @@ const modulesWith = (availability: Partial<Record<(typeof MODULES)[number], Avai
   Object.fromEntries(MODULES.map(m => [m, { availability: availability[m] ?? "AVAILABLE" }])) as StatusView["modules"]
 const FACTS: StatusFacts = {
   version: VERSION,
-  host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true },
+  host: { version: "2.2.3", range: ">=2.2.3 <2.4.0", tested: true },
   unguardedAgents: [],
   access: "all",
   platform: { target: "darwin-arm64", availability: "AVAILABLE" },
@@ -339,7 +339,7 @@ describe("status rendering", () => {
 
   test("the status RPC has the shared S13 fields first, with these names, and the JSON Schema requires them", () => {
     expect(Object.keys(VIEW).slice(0, 5)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep"])
-    expect(VIEW).toMatchObject({ version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, state: "ready", unguardedAgents: [], nextStep: "Nothing to do." })
+    expect(VIEW).toMatchObject({ version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.4.0", tested: true }, state: "ready", unguardedAgents: [], nextStep: "Nothing to do." })
     expect(STATUS_JSON_SCHEMA.required.slice(0, 5)).toEqual(["version", "host", "state", "unguardedAgents", "nextStep"])
     expect(VIEW.permissions.askByDefault).toEqual([...DEFAULT_ASK])
     expect(VIEW.permissions.block).toEqual([...DEFAULT_RULES])
@@ -349,16 +349,16 @@ describe("status rendering", () => {
     expect(status({ modules: modulesWith({ speech: "SPEECH_ASSETS_MISSING" }) }).state).toBe("ready")
   })
 
-  test("tested hosts are 2.2.3, 2.2.4, 2.2.5 and 2.2.6; another 2.2 release runs untested; outside the range needs allowUntestedHost (X1, INSTALL-4)", () => {
-    for (const version of ["2.2.3", "2.2.4", "2.2.5", "2.2.6"]) expect(checkHost(version, false)).toEqual({ version, range: ">=2.2.3 <2.3.0", tested: true })
+  test("tested hosts are 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 and 2.3.0; another 2.2 or 2.3 release runs untested; outside the range needs allowUntestedHost (X1, INSTALL-4)", () => {
+    for (const version of ["2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.2.7", "2.3.0"]) expect(checkHost(version, false)).toEqual({ version, range: ">=2.2.3 <2.4.0", tested: true })
     // S13: an untested release in the range sets up normally; only host.tested and the OpenCode row change.
     const later = status({ host: checkHost("2.2.99", false) })
     expect(later).toMatchObject({ state: "ready", host: { version: "2.2.99", tested: false }, nextStep: "Nothing to do." })
-    const allowed = status({ host: checkHost("2.3.0", true) })
+    const allowed = status({ host: checkHost("2.4.0", true) })
     expect(allowed).toMatchObject({ state: "ready", host: { tested: false }, nextStep: expect.stringContaining("allowUntestedHost is set") })
-    expect(formatStatus(later)).toContain("OpenCode: 2.2.99 (untested; supported range >=2.2.3 <2.3.0)")
-    expect(() => checkHost("2.3.0", false)).toThrow("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0, found 2.3.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5 or 2.2.6, or set the plugin option allowUntestedHost: true to run anyway.")
-    expect(formatStatus(status({ host: checkHost("2.3.0", true) }))).toContain("OpenCode: 2.3.0 (host untested: outside >=2.2.3 <2.3.0; allowUntestedHost is set)")
+    expect(formatStatus(later)).toContain("OpenCode: 2.2.99 (untested; supported range >=2.2.3 <2.4.0)")
+    expect(() => checkHost("2.4.0", false)).toThrow("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found 2.4.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 or 2.3.0, or set the plugin option allowUntestedHost: true to run anyway.")
+    expect(formatStatus(status({ host: checkHost("2.4.0", true) }))).toContain("OpenCode: 2.4.0 (host untested: outside >=2.2.3 <2.4.0; allowUntestedHost is set)")
   })
 
   test("a fresh install reads Nothing to do.: the speech download and the free weather tier stay in their rows (INSTALL-13)", () => {
@@ -443,7 +443,7 @@ describe("weather key and status", () => {
     const runtime = await fakeRuntimes().create({ location: { project: "p", directory: "/d", projectDirectory: "/d" }, authorize: async () => {}, modules: { weather: true, time: true, speech: true }, stateRoot: "/state", cacheRoot: "/cache" })
     const own = [{ name: "utilities-time", path: "/pkg/skills/utilities-time/SKILL.md" }, { name: "utilities-weather", path: "/pkg/skills/utilities-weather/SKILL.md" }]
     const view = await buildStatus({
-      version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) },
+      version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.4.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) },
       agents: async () => [], ownSkills: own,
       skills: async () => [{ id: "utilities-time", path: "/elsewhere/skills/utilities-time/SKILL.md" }, { id: "utilities-weather", path: own[1]!.path }, { id: "other", path: "/x/SKILL.md" }],
     })
@@ -451,13 +451,13 @@ describe("weather key and status", () => {
     expect(view.nextStep).toBe("Rename or move the skill at /elsewhere/skills/utilities-time/SKILL.md, which uses the id of the plugin's utilities-time skill, so OpenCode loads it instead of the plugin's own.")
     expect(formatStatus(view)).toContain("\nSkills: utilities-time is replaced by /elsewhere/skills/utilities-time/SKILL.md\n")
     // A skill list that fails only hides shadowed skills.
-    const failed = await buildStatus({ version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) }, agents: async () => [], ownSkills: own, skills: async () => { throw new Error("x") } })
+    const failed = await buildStatus({ version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.4.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) }, agents: async () => [], ownSkills: own, skills: async () => { throw new Error("x") } })
     expect(failed).toMatchObject({ shadowedSkills: [], nextStep: "Nothing to do." })
   })
   test("the status joins runtime and host items and drops undefined fields", async () => {
     const runtime = await fakeRuntimes().create({ location: { project: "p", directory: "/d", projectDirectory: "/d" }, authorize: async () => {}, modules: { weather: true, time: true, speech: true }, stateRoot: "/state", cacheRoot: "/cache" })
     const view = await buildStatus({
-      version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.3.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) },
+      version: VERSION, host: { version: "2.2.3", range: ">=2.2.3 <2.4.0", tested: true }, runtime, weather: { status: async () => ({ tier: "free", key: "none", attribution: WEATHER_ATTRIBUTION }) },
       agents: async () => [{ id: "build", permissions: [{ action: "*", resource: "*", effect: "allow" }, ...defaultRules("ask-changes")] }, { id: "reviewer", permissions: [{ action: "*", resource: "*", effect: "allow" }] }],
       ownSkills: [], skills: async () => [], access: "ask-changes",
     })
