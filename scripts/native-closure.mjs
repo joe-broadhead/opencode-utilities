@@ -5,7 +5,7 @@
 //   node scripts/native-closure.mjs --floors <platform> <binary>...        also refuses a Linux binary above its floor
 //   node scripts/native-closure.mjs --floors-only <platform> <binary>...   only the floor check, for binaries built on
 //                                                                          another runner (readelf reads any architecture)
-// The floors are GLIBC_FLOORS in src/domain/contract.ts: 2.35 for time-keep and weather-signal (built on Ubuntu 22.04),
+// The floors are GLIBC_FLOORS in src/domain/contract.ts: 2.34 for time-keep and weather-signal (built on Ubuntu 22.04),
 // 2.39 for the speech engine (built on Ubuntu 24.04). A binary's floor is the newest GLIBC_ version it requires.
 import { execFileSync } from 'node:child_process';
 import { basename } from 'node:path';

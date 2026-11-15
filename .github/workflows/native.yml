@@ -2,7 +2,7 @@ name: native
 
 # Builds the time-keep and weather-signal programs and the speech engine for each platform, then the release files and
 # the candidate manifest the release commit pins (NATIVE-DESIGN.md, section 4). Each platform builds on its own runner.
-# On Linux the programs build on Ubuntu 22.04, so they run on glibc 2.35 or later, and the speech engine on Ubuntu
+# On Linux the programs build on Ubuntu 22.04, so they run on glibc 2.34 or later, and the speech engine on Ubuntu
 # 24.04, because the ONNX Runtime library it links needs glibc 2.38 and GCC 13's libstdc++ (GLIBC_FLOORS in
 # src/domain/contract.ts). One job then merges every build, checks each Linux binary against its floor, gzips the
 # programs, writes manifest/native.json from the same bytes, checks every platform, attests the gzips and uploads them.
@@ -154,7 +154,7 @@ jobs:
           done
           node scripts/native-models.mjs
 
-      # The merged Linux binaries, each against its glibc floor: the programs 2.35, the speech engine 2.39. readelf
+      # The merged Linux binaries, each against its glibc floor: the programs 2.34, the speech engine 2.39. readelf
       # reads both architectures on this runner.
       - name: Check each Linux binary's glibc floor
         run: |

@@ -4,7 +4,7 @@
 
 Fixes go into the newest release. Use the latest release from GitHub (`github:joe-broadhead/opencode-utilities#v<version>`) on OpenCode `>=2.2.3 <2.4.0`.
 
-Supported platforms are macOS 14 or later, and Linux with glibc: 2.35 or later for the time and weather programs, and 2.39 or later for the speech engine. The release builds the Linux programs on Ubuntu 22.04 and the speech engine on Ubuntu 24.04, and checks every Linux binary against its floor before it is attested. On a Linux below a floor, the plugin reports `UNSUPPORTED_PLATFORM` for that module and downloads and runs nothing for it.
+Supported platforms are macOS 14 or later, and Linux with glibc: 2.34 or later for the time and weather programs, and 2.39 or later for the speech engine. The release builds the Linux programs on Ubuntu 22.04 and the speech engine on Ubuntu 24.04, and checks every Linux binary against its floor before it is attested. On a Linux below a floor, the plugin reports `UNSUPPORTED_PLATFORM` for that module and downloads and runs nothing for it.
 
 ## Reporting a vulnerability
 

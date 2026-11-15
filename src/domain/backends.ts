@@ -125,7 +125,7 @@ export class NativeBinaries {
   /** UNSUPPORTED_PLATFORM on a Linux system whose glibc is older than the programs' floor, before anything is fetched. */
   private requireGlibc(module: NativeBinary) {
     const reason = belowGlibcFloor(this.options.target, this.options.glibc, module)
-    if (reason) fail("UNSUPPORTED_PLATFORM", { message: `The ${module} program ${reason}.`, hint: "Use a Linux with glibc 2.35 or later, such as Ubuntu 22.04, Debian 12 or RHEL 9." })
+    if (reason) fail("UNSUPPORTED_PLATFORM", { message: `The ${module} program ${reason}.`, hint: "Use a Linux with glibc 2.34 or later, such as Ubuntu 22.04, Debian 12 or RHEL 9." })
   }
 
   /** The release manifest, read once while it works. A failure is not kept, so a fixed checkout answers on the next call. */

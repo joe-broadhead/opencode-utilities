@@ -1,4 +1,5 @@
-// The glibc floors (#1): the time and weather programs run on glibc 2.35 or later, the speech engine on 2.39 or later.
+// The glibc floors (#1): the time and weather programs run on glibc 2.34 or later (Ubuntu 22.04, RHEL 9), the speech
+// engine on 2.39 or later.
 // A Linux below a floor reports UNSUPPORTED_PLATFORM for that module, with the floor, before any prompt or download,
 // instead of failing when the binary starts. A Linux at or above it, and any other platform, behave as before.
 import { afterEach, describe, expect, test, vi } from "vitest"
@@ -31,8 +32,8 @@ async function linux(glibc: string | null) {
 }
 
 describe("the floors", () => {
-  test("are 2.35 for the programs and 2.39 for the speech engine", () => {
-    expect(GLIBC_FLOORS).toEqual({ "time-keep": "2.35", "weather-signal": "2.35", "utilities-speech": "2.39" })
+  test("are 2.34 for the programs and 2.39 for the speech engine", () => {
+    expect(GLIBC_FLOORS).toEqual({ "time-keep": "2.34", "weather-signal": "2.34", "utilities-speech": "2.39" })
   })
   test("compare by number, not as text", () => {
     expect(olderGlibc("2.9", "2.35")).toBe(true)
@@ -43,7 +44,10 @@ describe("the floors", () => {
   })
   test("apply only to Linux, and only when the system's glibc is known", () => {
     expect(belowGlibcFloor("linux-x64-gnu", "2.35", "utilities-speech")).toBe("needs glibc 2.39 or later, and this system has glibc 2.35")
-    expect(belowGlibcFloor("linux-arm64-gnu", "2.31", "time-keep")).toBe("needs glibc 2.35 or later, and this system has glibc 2.31")
+    expect(belowGlibcFloor("linux-arm64-gnu", "2.31", "time-keep")).toBe("needs glibc 2.34 or later, and this system has glibc 2.31")
+    expect(belowGlibcFloor("linux-arm64-gnu", "2.33", "weather-signal")).toBe("needs glibc 2.34 or later, and this system has glibc 2.33")
+    // RHEL 9 and its rebuilds ship glibc 2.34: the programs run there; Ubuntu 22.04's 2.35 runs them too.
+    expect(belowGlibcFloor("linux-x64-gnu", "2.34", "time-keep")).toBeUndefined()
     expect(belowGlibcFloor("linux-x64-gnu", "2.35", "time-keep")).toBeUndefined()
     expect(belowGlibcFloor("linux-x64-gnu", null, "utilities-speech")).toBeUndefined()
     expect(belowGlibcFloor("darwin-arm64", "2.31", "utilities-speech")).toBeUndefined()
@@ -73,19 +77,31 @@ describe("a Linux below the speech engine's floor", () => {
   })
 })
 
+describe("RHEL 9 and its rebuilds (glibc 2.34)", () => {
+  test("run time and weather, and report speech UNSUPPORTED_PLATFORM with its floor", async () => {
+    const f = await linux("2.34")
+    const status = await f.runtime.status()
+    expect(status.platform).toEqual({ target: "linux-x64-gnu", availability: "AVAILABLE" })
+    expect(status.modules.time.availability).toBe("AVAILABLE")
+    expect(status.modules.weather.availability).toBe("AVAILABLE")
+    expect(status.modules.speech).toEqual({ availability: "UNSUPPORTED_PLATFORM", next: "The speech engine needs glibc 2.39 or later, and this system has glibc 2.34." })
+    expect((await f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).output).toBeDefined()
+  })
+})
+
 describe("a Linux below the programs' floor", () => {
   test("reports every module UNSUPPORTED_PLATFORM with its floor, and runs and downloads nothing", async () => {
     const f = await linux("2.31")
     await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toMatchObject({
       code: "UNSUPPORTED_PLATFORM",
-      message: "The time-keep program needs glibc 2.35 or later, and this system has glibc 2.31.",
+      message: "The time-keep program needs glibc 2.34 or later, and this system has glibc 2.31.",
     })
     expect(await f.recorded()).toEqual([])
     await expect(f.runtime.installNatives()).rejects.toMatchObject({ code: "UNSUPPORTED_PLATFORM" })
     const status = await f.runtime.status()
-    expect(status.platform).toEqual({ target: "linux-x64-gnu", availability: "UNSUPPORTED_PLATFORM", next: "The time and weather programs need glibc 2.35 or later, and this system has glibc 2.31." })
-    expect(status.modules.time).toEqual({ availability: "UNSUPPORTED_PLATFORM", next: "The time-keep program needs glibc 2.35 or later, and this system has glibc 2.31." })
-    expect(status.modules.weather).toEqual({ availability: "UNSUPPORTED_PLATFORM", next: "The weather-signal program needs glibc 2.35 or later, and this system has glibc 2.31." })
+    expect(status.platform).toEqual({ target: "linux-x64-gnu", availability: "UNSUPPORTED_PLATFORM", next: "The time and weather programs need glibc 2.34 or later, and this system has glibc 2.31." })
+    expect(status.modules.time).toEqual({ availability: "UNSUPPORTED_PLATFORM", next: "The time-keep program needs glibc 2.34 or later, and this system has glibc 2.31." })
+    expect(status.modules.weather).toEqual({ availability: "UNSUPPORTED_PLATFORM", next: "The weather-signal program needs glibc 2.34 or later, and this system has glibc 2.31." })
     expect(status.modules.speech.availability).toBe("UNSUPPORTED_PLATFORM")
   })
 })
