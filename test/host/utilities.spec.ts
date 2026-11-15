@@ -500,15 +500,15 @@ describe("host compatibility and unload", () => {
       createPlugin({ createRuntime: refused.create, packageRoot }),
       { id: "test.allowed", setup: (ctx: Plugin.Context) => createPlugin({ createRuntime: allowed.create, packageRoot }).setup({ ...ctx, options: { allowUntestedHost: true } }) },
       observer,
-    ], "2.3.0")
+    ], "2.4.0")
     try {
       const location = { directory: project("untested", {}) }
       await untested.sdk.agent.list({ location })
-      expect(untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0, found 2.3.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5 or 2.2.6, or set the plugin option allowUntestedHost: true"))).toBe(true)
+      expect(untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found 2.4.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 or 2.3.0, or set the plugin option allowUntestedHost: true"))).toBe(true)
       expect(refused.created).toHaveLength(0)
       expect(allowed.created).toHaveLength(1)
       const status = await untested.sdk.rpc(Utilities).status({}, { location })
-      expect(status.host).toMatchObject({ version: "2.3.0", range: ">=2.2.3 <2.3.0", tested: false, next: expect.stringContaining("allowUntestedHost is set") })
+      expect(status.host).toMatchObject({ version: "2.4.0", range: ">=2.2.3 <2.4.0", tested: false, next: expect.stringContaining("allowUntestedHost is set") })
       expect(status.state).toBe("ready")
     } finally { await untested.sdk.close() }
   })

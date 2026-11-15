@@ -125,13 +125,13 @@ describe("the tested releases", () => {
 
   test("the words and the range match the list", () => {
     expect(TESTED_TEXT).toBe(`OpenCode ${TESTED_HOSTS.slice(0, -1).join(", ")} or ${TESTED_HOSTS.at(-1)}`)
-    expect(HOST_RANGE).toBe(">=2.2.3 <2.3.0")
-    expect(TESTED_HOSTS).toContain("2.2.6")
+    expect(HOST_RANGE).toBe(">=2.2.3 <2.4.0")
+    expect(TESTED_HOSTS).toContain("2.3.0")
   })
 
   test("the Unreleased section states no tested release it has not run on", () => {
     const unreleased = read("CHANGELOG.md").split(/^## \[/m).find(section => section.startsWith("[Unreleased]")) ?? ""
-    expect(unreleased).not.toMatch(/2\.2\.[0-5]\b(?!.*2\.2\.6)/)
+    expect(unreleased).not.toMatch(/2\.2\.\d+\b(?!.*2\.3\.0)/)
   })
 })
 

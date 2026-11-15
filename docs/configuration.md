@@ -6,7 +6,7 @@ Plugin ID: `utilities.local`. Options live on the `plugins` entry in `opencode.j
 {
   "$schema": "https://opencode.ai/config.json",
   "plugins": [{
-    "package": "github:joe-broadhead/opencode-utilities#v0.0.3",
+    "package": "github:joe-broadhead/opencode-utilities#v0.0.4",
     "options": {
       "modules": { "weather": true, "time": true, "speech": true },
       "stateRoot": "<absolute path>",
@@ -28,7 +28,7 @@ There is no `policy` option and no `allowActions` option. Permissions are OpenCo
 | `modules.speech` | boolean | `true` | When `false`, speech tools are not registered and `/utilities-speech-install` refuses. |
 | `stateRoot` | absolute path | `$XDG_DATA_HOME/opencode-utilities`, or `~/.local/share/opencode-utilities` | Timer stores and the default speech output directory. Must be mode `0700` and owned by the user. See [Symbolic links](#symbolic-links). |
 | `speech.assetsDir` | absolute path | unset | Flat pre-seed directory. See [Speech files](#speech-files). |
-| `allowUntestedHost` | boolean | `false` | When `true`, an OpenCode version outside `>=2.2.3 <2.3.0` loads, and status shows `host untested` with a warning. When `false` or omitted, setup throws for such a version. |
+| `allowUntestedHost` | boolean | `false` | When `true`, an OpenCode version outside `>=2.2.3 <2.4.0` loads, and status shows `host untested` with a warning. When `false` or omitted, setup throws for such a version. |
 
 Unknown keys are rejected. A relative path is rejected.
 
@@ -57,17 +57,17 @@ Inside those roots, the plugin refuses every symbolic link: a timer store, a job
 
 ## Host check
 
-`package.json` states `"opencode": { "host": ">=2.2.3 <2.3.0" }`. Setup compares `ctx.app.version` with that range.
+`package.json` states `"opencode": { "host": ">=2.2.3 <2.4.0" }`. Setup compares `ctx.app.version` with that range.
 
 | Version | Result |
 | --- | --- |
-| 2.2.3, 2.2.4, 2.2.5, 2.2.6 | Load. These are the tested releases: status shows `tested`, and the status RPC `host.tested` is `true`. |
-| 2.2.99 or a later 2.2 release | Load normally, untested. The OpenCode row shows `untested; supported range >=2.2.3 <2.3.0` and `host.tested` is `false`; `state` and the next step are unchanged. |
-| 2.2.2, 2.3.0, 3.0.0, a prerelease, a dev build, `unknown` | Refused: setup fails, so there is no status. With `allowUntestedHost: true` the plugin loads, and the next step is a warning. |
+| 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0 | Load. These are the tested releases: status shows `tested`, and the status RPC `host.tested` is `true`. |
+| 2.2.99, or another later 2.2 or 2.3 release | Load normally, untested. The OpenCode row shows `untested; supported range >=2.2.3 <2.4.0` and `host.tested` is `false`; `state` and the next step are unchanged. |
+| 2.2.2, 2.4.0, 3.0.0, a prerelease, a dev build, `unknown` | Refused: setup fails, so there is no status. With `allowUntestedHost: true` the plugin loads, and the next step is a warning. |
 
 Do not write the range as `^2.2.3`. That would accept 2.3.
 
-The refusal text is: `HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.3.0, found <version>. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5 or 2.2.6, or set the plugin option allowUntestedHost: true to run anyway.`
+The refusal text is: `HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found <version>. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 or 2.3.0, or set the plugin option allowUntestedHost: true to run anyway.`
 
 ## Tools
 
@@ -244,7 +244,7 @@ The status RPC starts with the fields every one of these plugins shares:
 | Field | Meaning |
 | --- | --- |
 | `version` | The plugin's version. |
-| `host` | `{ version, range, tested }`: OpenCode's version, the supported range `>=2.2.3 <2.3.0`, and whether the version is a tested release (2.2.3, 2.2.4, 2.2.5, 2.2.6). `next` is added only for a version outside the range that runs because of `allowUntestedHost`. |
+| `host` | `{ version, range, tested }`: OpenCode's version, the supported range `>=2.2.3 <2.4.0`, and whether the version is a tested release (2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0). `next` is added only for a version outside the range that runs because of `allowUntestedHost`. |
 | `state` | `ready`; `failed` when every module that is on failed; `disabled` when every module is off. Utilities has no status-only mode, so the shared `host_untested` never occurs: an untested host shows only in `host.tested` and the OpenCode row. |
 | `unguardedAgents` | The agents without the default rules whose own rules would run a Utilities side effect without asking. Always present; `[]` when none. |
 | `nextStep` | Exactly the `Next step` row; `Nothing to do.` when nothing is needed. Missing speech files that download on first use, and the free weather tier, never set it. |
@@ -279,7 +279,7 @@ A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next 
 | `OPTIONS_INVALID` | Fix the named option in the Utilities plugin options in `opencode.json`. |
 | `STATUS_UNAVAILABLE` | Run `/utilities-status` in a session to see the error, or check the OpenCode server log. |
 | `SKILLS_INVALID` | A skill file is missing or malformed; setup skips it with this warning. Reinstall the plugin. |
-| `HOST_UNTESTED` | OpenCode is outside `>=2.2.3 <2.3.0`. Use 2.2.3, 2.2.4, 2.2.5 or 2.2.6, or set `allowUntestedHost`. |
+| `HOST_UNTESTED` | OpenCode is outside `>=2.2.3 <2.4.0`. Use 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 or 2.3.0, or set `allowUntestedHost`. |
 | `DISABLED` | Set `modules.<name>` to `true`. |
 | `CLOSED` | The plugin is shutting down. Retry after OpenCode has reloaded it. |
 | `NATIVE_FILES_MISSING` | The time or weather program is not downloaded yet, or this copy of the plugin has no release manifest. Call the tool with permission to download it, or run `/utilities-install`. In a checkout, run `npm run native:ensure`. |

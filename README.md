@@ -6,23 +6,23 @@ Unofficial; not affiliated with Open-Meteo. Weather data is from Open-Meteo.com 
 
 ## Requirements
 
-- OpenCode `>=2.2.3 <2.3.0`, tested on 2.2.3, 2.2.4, 2.2.5 and 2.2.6. Another 2.2 release runs, and status calls it untested. Outside that range the plugin does not start, unless you set `allowUntestedHost`.
+- OpenCode `>=2.2.3 <2.4.0`, tested on 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 and 2.3.0. Another 2.2 or 2.3 release runs, and status calls it untested. Outside that range the plugin does not start, unless you set `allowUntestedHost`.
 - macOS 14 or later (arm64 or x64), or Linux (x64 or arm64) with glibc 2.39 or later, such as Ubuntu 24.04, Debian 13 or Fedora 40. macOS x64 has no speech engine, so it has no speech tools. Windows and musl are not supported.
 
 ## Install
 
 ```sh
-opencode plugin add github:joe-broadhead/opencode-utilities#v0.0.3
+opencode plugin add github:joe-broadhead/opencode-utilities#v0.0.4
 ```
 
 Run `opencode reload`, or restart OpenCode, then run `/utilities-status`.
 
-Each release has its own tag, and a Git install does not update by itself. To move to a newer release, remove the old entry with `opencode plugin remove github:joe-broadhead/opencode-utilities#v0.0.2`, then add the new tag with `opencode plugin add github:joe-broadhead/opencode-utilities#v<version>`.
+Each release has its own tag, and a Git install does not update by itself. To move to a newer release, remove the old entry with `opencode plugin remove github:joe-broadhead/opencode-utilities#v0.0.3`, then add the new tag with `opencode plugin add github:joe-broadhead/opencode-utilities#v<version>`.
 
 Or add the plugin to `opencode.json` instead, with the same spec:
 
 ```json
-{ "plugins": [{ "package": "github:joe-broadhead/opencode-utilities#v0.0.3" }] }
+{ "plugins": [{ "package": "github:joe-broadhead/opencode-utilities#v0.0.4" }] }
 ```
 
 The install takes the GitHub release tag. Its commit carries the built `dist/`, so the install runs no build.
@@ -95,7 +95,7 @@ The engine is `utilities-speech-<platform>`. The models are `ggml-tiny-q5_1.bin`
    | `"read-only"` | the reads | nothing: the changes are **denied** |
 
    ```json
-   { "plugins": [{ "package": "github:joe-broadhead/opencode-utilities#v0.0.3", "options": { "access": "read-only" } }] }
+   { "plugins": [{ "package": "github:joe-broadhead/opencode-utilities#v0.0.4", "options": { "access": "read-only" } }] }
    ```
 
 2. **An agent that is read-only or asks**, with rules of its own, later than the plugin's:
@@ -276,7 +276,7 @@ Options go on the plugin entry in `opencode.json`:
 ```jsonc
 {
   "plugins": [{
-    "package": "github:joe-broadhead/opencode-utilities#v0.0.3",
+    "package": "github:joe-broadhead/opencode-utilities#v0.0.4",
     "options": {
       "modules": { "weather": true, "time": true, "speech": true },
       "speech": { "assetsDir": "/opt/opencode-utilities/speech" }
@@ -294,7 +294,7 @@ A system `opencode.json` (`/Library/Application Support/opencode/opencode.json` 
 ```jsonc
 {
   "plugins": [{
-    "package": "github:joe-broadhead/opencode-utilities#v0.0.3",
+    "package": "github:joe-broadhead/opencode-utilities#v0.0.4",
     "options": {
       "modules": { "weather": true, "time": true, "speech": false }
     }
@@ -312,7 +312,7 @@ Members have nothing to set. To forbid an action everywhere, add a top-level `de
 - **Holidays are offline and cover 2000–2030 only.** A year outside that range is refused with `HOLIDAY_COVERAGE`.
 - **Timers belong to a project and do not wake an agent.** A timer is checked with `utilities_timer_check`; nothing runs when it is due.
 - **Machine time is the server's time zone.** On a remote server, `machine_timezone` is that server's zone, not necessarily the user's.
-- **Tested on OpenCode 2.2.3, 2.2.4, 2.2.5 and 2.2.6 only.** Other releases inside `>=2.2.3 <2.3.0` start, and status reports them as untested.
+- **Tested on OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 and 2.3.0 only.** Other releases inside `>=2.2.3 <2.4.0` start, and status reports them as untested.
 - **Jelly.** The `access` setting declares its choices, which only a Jelly that includes app#1301 reads; an older Jelly refuses the plugin's declaration. In Jelly, **Read only** also denies the first-use downloads, so a time, weather or speech tool fails on its first call until its files are cached ([docs/jelly.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/jelly.md)).
 - **The old RPC ids go in 0.1.0.** `utilities.tools` and `utilities.tools.tools` still answer, and 0.1.0 removes them: use `utilities.local` and `utilities.local.tools`.
 - Updates are not automatic for a Git install, and `opencode plugin update` and `opencode plugin check` do not work on one: to move to a newer release, remove the old entry and add the new tag.
@@ -340,7 +340,7 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 | `FILE_CHANGED` | A file changed while the plugin was reading it. | Retry. |
 | `FILE_REJECTED` | A file the plugin reads is not a regular file, or is too large. | Reinstall the plugin. |
 | `HOLIDAY_COVERAGE` | Holiday data covers 2000–2030, and this call needs a year outside it. | Use dates from 2000 to 2030, or leave out country to count weekends only. |
-| `HOST_UNTESTED` | Utilities supports OpenCode >=2.2.3 <2.3.0. | Use OpenCode 2.2.3, 2.2.4, 2.2.5 or 2.2.6, or set the plugin option allowUntestedHost: true to run anyway. |
+| `HOST_UNTESTED` | Utilities supports OpenCode >=2.2.3 <2.4.0. | Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 or 2.3.0, or set the plugin option allowUntestedHost: true to run anyway. |
 | `INPUT_INVALID` | The tool input is invalid. | Correct the named fields and call the tool again. |
 | `INPUT_LIMIT` | The tool input is too large. | Send less text and call the tool again. |
 | `INTEGRITY_MISMATCH` | A program or model file does not match its pinned SHA-256 hash. | Reinstall the plugin, then restart OpenCode. |
@@ -396,7 +396,7 @@ The full list of codes is in [docs/configuration.md](https://github.com/joe-broa
 2. Remove the plugin:
 
    ```sh
-   opencode plugin remove github:joe-broadhead/opencode-utilities#v0.0.3
+   opencode plugin remove github:joe-broadhead/opencode-utilities#v0.0.4
    ```
 
 3. Removing the plugin keeps your data. To delete it, remove the cache folder with the speech files and the weather cache (`~/.cache/opencode-utilities`, or `$XDG_CACHE_HOME/opencode-utilities`), and the state folder with timers and speech output (`~/.local/share/opencode-utilities`, or `$XDG_DATA_HOME/opencode-utilities`, or your `stateRoot`).
