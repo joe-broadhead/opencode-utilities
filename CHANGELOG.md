@@ -2,6 +2,26 @@
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The time and weather tools run on Linux with glibc 2.35 or later, such as Ubuntu 22.04, Debian 12 and RHEL 9, instead
+  of 2.39 (#1). The release builds `time-keep` and `weather-signal` on Ubuntu 22.04 and 22.04-arm, and only the speech
+  engine on Ubuntu 24.04 and 24.04-arm, whose pinned ONNX Runtime library needs glibc 2.38 and GCC 13's libstdc++; the
+  native workflow merges both and refuses a Linux binary above its floor (2.35 for the programs, 2.39 for the engine).
+- On a Linux whose glibc is older than a module's floor, that module reports `UNSUPPORTED_PLATFORM`, naming the floor
+  and the system's glibc, before any prompt or download, instead of failing when its binary starts: speech below 2.39,
+  as on macOS x64, and time and weather below 2.35.
+
+### Changed
+
+- `scripts/native-build.sh` takes `--speech-only` and `--floors`, and `scripts/native-closure.mjs` takes `--floors` and
+  `--floors-only` and reads each binary's glibc floor with `readelf`.
+- The native workflow runs on any branch: a run off `master` builds and checks everything the same way, and attests and
+  stages nothing a release could read (the release planner already refuses such a run).
+- The README and SECURITY.md state both glibc floors.
+
 ## [0.0.4] - 2026-11-15
 
 ### Changed

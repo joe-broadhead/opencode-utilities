@@ -7,7 +7,11 @@
 # maintainer command `npm run speech:manifest` writes it. All of these are
 # build outputs, never committed.
 #
-# Usage: [NATIVE_BUILD_ROOT=<directory>] scripts/native-build.sh [<platform>] [--no-speech]
+# Usage: [NATIVE_BUILD_ROOT=<directory>] scripts/native-build.sh [<platform>] [--no-speech | --speech-only] [--floors]
+# --no-speech builds the programs only, and --speech-only the speech engine only: the release builds the programs on
+# Ubuntu 22.04 and the engine on Ubuntu 24.04, and its assemble job merges them (GLIBC_FLOORS in src/domain/contract.ts).
+# --speech-only stops after the engine's closure check: the notices, the manifests and the input record need the
+# programs too. --floors refuses a Linux binary that requires a newer glibc than its floor.
 # NATIVE_BUILD_ROOT holds the source checkouts and cargo's target directory, so later builds are incremental. It
 # defaults to a folder in the user cache and must be outside the repository.
 # <platform> defaults to this machine. Building for another platform needs its Rust target and a cross linker,
@@ -21,13 +25,16 @@ platforms() { node --input-type=module -e 'const [root, key, field] = process.ar
 PLATFORM="$(node -p "process.platform === 'linux' ? 'linux-' + process.arch + '-gnu' : process.platform + '-' + process.arch")"
 ALL="$(platforms)"
 KNOWN=" $ALL "
-SPEECH=1
+SPEECH=1 PROGRAMS=1 FLOORS=()
 for arg; do
   case "$arg" in
     --no-speech) SPEECH=0 ;;
-    *) if [[ "$KNOWN" == *" $arg "* ]]; then PLATFORM="$arg"; else echo "usage: native-build.sh [${ALL// /|}] [--no-speech]" >&2; exit 2; fi ;;
+    --speech-only) PROGRAMS=0 ;;
+    --floors) FLOORS=(--floors) ;;
+    *) if [[ "$KNOWN" == *" $arg "* ]]; then PLATFORM="$arg"; else echo "usage: native-build.sh [${ALL// /|}] [--no-speech | --speech-only] [--floors]" >&2; exit 2; fi ;;
   esac
 done
+(( SPEECH || PROGRAMS )) || { echo '--no-speech and --speech-only together build nothing' >&2; exit 2; }
 TARGET="$(platforms "$PLATFORM" triple)"
 [[ -n "$TARGET" ]] || { echo "There is no native build for $(uname -s)-$(uname -m)." >&2; exit 2; }
 if [[ "$(uname -s)" == Linux && "$PLATFORM" == linux-* ]] && ! getconf GNU_LIBC_VERSION >/dev/null 2>&1; then
@@ -66,6 +73,7 @@ cargo_build() { cargo "+$RUST" "$CARGO" --locked --release --target "$TARGET" --
 
 built=()
 for name in time-keep weather-signal; do
+  (( PROGRAMS )) || break
   repo="$(json "$ROOT/native/sources.json" ".binaries['$name'].repo")"
   commit="$(json "$ROOT/native/sources.json" ".binaries['$name'].commit")"
   dir="$NATIVE_BUILD_ROOT/src/$name"
@@ -88,6 +96,7 @@ done
 speech=()
 if (( SPEECH )) && [[ -z "$(json "$ROOT/native/onnx-provenance.json" ".distributions['$TARGET']?.url")" ]]; then
   echo "$PLATFORM has no speech engine: ONNX Runtime has no prebuilt static library for $TARGET."
+  (( PROGRAMS )) || { echo "--speech-only: $PLATFORM has no speech engine to build" >&2; exit 1; }
 elif (( SPEECH )); then
   node "$ROOT/scripts/native-onnx.mjs" "$TARGET" "$NATIVE_BUILD_ROOT/onnx/$TARGET"
   ORT_LIB_PATH="$NATIVE_BUILD_ROOT/onnx/$TARGET" ORT_SKIP_DOWNLOAD=1 cargo_build "$ROOT/native/speech-bridge/Cargo.toml"
@@ -96,11 +105,15 @@ elif (( SPEECH )); then
   speech=(--speech)
   built+=("$ROOT/build/speech-assets/utilities-speech-$PLATFORM")
 fi
+if (( ! PROGRAMS )); then
+  node "$ROOT/scripts/native-closure.mjs" ${FLOORS[@]+"${FLOORS[@]}"} "$PLATFORM" "${built[@]}"
+  exit 0
+fi
 # The models are the same on every platform, and manifest/speech-assets.json lists them, so fetch them even where
 # there is no engine.
 node "$ROOT/scripts/native-models.mjs"
 
-node "$ROOT/scripts/native-closure.mjs" "$PLATFORM" "${built[@]}"
+node "$ROOT/scripts/native-closure.mjs" ${FLOORS[@]+"${FLOORS[@]}"} "$PLATFORM" "${built[@]}"
 node "$ROOT/scripts/native-notices.mjs" "$PLATFORM" "$NATIVE_BUILD_ROOT/src" ${speech[@]+"${speech[@]}"}
 node "$ROOT/scripts/native-files.mjs"
 node "$ROOT/scripts/native-ensure.mjs" --record "$PLATFORM"
