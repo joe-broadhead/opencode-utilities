@@ -229,6 +229,8 @@ export interface RuntimeOptions {
   readonly speechAssetsDir?: string
   /** A PLATFORMS key; anything else is an unsupported platform. Detected from the process by default. */
   readonly target?: string
+  /** The system's glibc version, such as `2.39`, or null without glibc. Detected from the process by default. */
+  readonly glibc?: string | null
   /** The Open-Meteo commercial key, if one is connected. */
   readonly weatherKey?: () => Promise<string | undefined>
   /** The installed package root, which holds manifest/. */
@@ -270,6 +272,15 @@ export const PLATFORMS = {
   "linux-arm64-gnu": { os: "linux", cpu: "arm64", libc: "glibc", triple: "aarch64-unknown-linux-gnu", arch: "elf64-littleaarch64" },
 } as const
 export type Platform = keyof typeof PLATFORMS
+/**
+ * The oldest glibc each Linux binary runs on. The time and weather programs are built on Ubuntu 22.04 (glibc 2.35) and
+ * require nothing newer than GLIBC_2.34, so they run on RHEL 9 and its rebuilds (2.34) too. The
+ * speech engine is built on Ubuntu 24.04 (glibc 2.39), because the ONNX Runtime library it links statically needs glibc
+ * 2.38 and GCC 13's libstdc++. scripts/native-closure.mjs refuses a release binary above its floor, and the runtime
+ * reports UNSUPPORTED_PLATFORM on a system below it.
+ */
+export const GLIBC_FLOORS = { "time-keep": "2.34", "weather-signal": "2.34", "utilities-speech": "2.39" } as const
+export type GlibcBinary = keyof typeof GLIBC_FLOORS
 /** The release's native binaries (manifest/native.json), and the tool module each one serves. */
 export type NativeBinary = "time-keep" | "weather-signal"
 export const NATIVE_OF = { time: "time-keep", weather: "weather-signal" } as const satisfies Readonly<Record<"time" | "weather", NativeBinary>>

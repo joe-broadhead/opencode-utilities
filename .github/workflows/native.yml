@@ -1,10 +1,16 @@
 name: native
 
 # Builds the time-keep and weather-signal programs and the speech engine for each platform, then the release files and
-# the candidate manifest the release commit pins (NATIVE-DESIGN.md, section 4). Runs on master only, so the candidate
-# pins master's commit. Each platform builds on its own runner; one job then gzips the programs, writes
-# manifest/native.json from the same bytes, checks every platform, attests the gzips
-# and uploads them. It publishes nothing: the release job reads this run's artifacts and checks them against the pins.
+# the candidate manifest the release commit pins (NATIVE-DESIGN.md, section 4). Each platform builds on its own runner.
+# On Linux the programs build on Ubuntu 22.04, so they run on glibc 2.34 or later, and the speech engine on Ubuntu
+# 24.04, because the ONNX Runtime library it links needs glibc 2.38 and GCC 13's libstdc++ (GLIBC_FLOORS in
+# src/domain/contract.ts). One job then merges every build, checks each Linux binary against its floor, gzips the
+# programs, writes manifest/native.json from the same bytes, checks every platform, attests the gzips and uploads them.
+# It publishes nothing: the release job reads this run's artifacts and checks them against the pins.
+#
+# Only a run on master makes release files: it attests them and uploads the artifacts the release job reads, and the
+# release planner refuses a run on any other branch. A run on another branch builds and checks everything the same way,
+# to prove a change to the builds before it lands, and attests and stages nothing.
 
 on:
   workflow_dispatch:
@@ -14,29 +20,46 @@ permissions:
 
 jobs:
   build:
-    name: build (${{ matrix.platform }})
+    name: build (${{ matrix.platform }}, ${{ matrix.part }})
     strategy:
       fail-fast: false
       matrix:
+        # `part` is what the runner builds: the programs, the speech engine, or both. `artifact` names its upload; the
+        # merge reads build-* and speech-*.
         include:
           - platform: linux-x64-gnu
+            part: programs
+            runner: ubuntu-22.04
+            flags: --no-speech --floors
+            artifact: build-linux-x64-gnu
+          - platform: linux-x64-gnu
+            part: speech
             runner: ubuntu-24.04
+            flags: --speech-only --floors
+            artifact: speech-linux-x64-gnu
           - platform: linux-arm64-gnu
+            part: programs
+            runner: ubuntu-22.04-arm
+            flags: --no-speech --floors
+            artifact: build-linux-arm64-gnu
+          - platform: linux-arm64-gnu
+            part: speech
             runner: ubuntu-24.04-arm
+            flags: --speech-only --floors
+            artifact: speech-linux-arm64-gnu
           - platform: darwin-arm64
+            part: all
             runner: macos-26
+            flags: ""
+            artifact: build-darwin-arm64
           - platform: darwin-x64
+            part: all
             runner: macos-26-intel
+            flags: ""
+            artifact: build-darwin-x64
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
     steps:
-      - name: Refuse anything but master
-        run: |
-          if [ "$GITHUB_REF" != "refs/heads/master" ]; then
-            echo "::error::native builds run on master only, so the candidate pins master's commit."
-            exit 1
-          fi
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -52,27 +75,34 @@ jobs:
         run: rustup toolchain install 1.96.0 --profile minimal
 
       - name: Native build for this platform
-        run: bash scripts/native-build.sh ${{ matrix.platform }}
+        run: bash scripts/native-build.sh ${{ matrix.platform }} ${{ matrix.flags }}
         env:
           NATIVE_BUILD_ROOT: ${{ runner.temp }}/native-build
 
-      # This platform's programs and its speech engine (where one is built). The models are fetched once, by release.
-      - name: Stage this platform's files
+      # This runner's part: the programs, the speech engine (where one is built), or both. The models are fetched once,
+      # by the merge.
+      - name: Stage this runner's files
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          PART: ${{ matrix.part }}
+          ARTIFACT: ${{ matrix.artifact }}
         run: |
           set -euo pipefail
-          staged="$RUNNER_TEMP/staged/build-${{ matrix.platform }}"
+          staged="$RUNNER_TEMP/staged/$ARTIFACT"
           mkdir -p "$staged/native" "$staged/speech"
-          cp "build/native/${{ matrix.platform }}/time-keep" "build/native/${{ matrix.platform }}/weather-signal" "$staged/native/"
-          if [ -f "build/speech-assets/utilities-speech-${{ matrix.platform }}" ]; then
-            cp "build/speech-assets/utilities-speech-${{ matrix.platform }}" "$staged/speech/"
+          if [ "$PART" != speech ]; then
+            cp "build/native/$PLATFORM/time-keep" "build/native/$PLATFORM/weather-signal" "$staged/native/"
+          fi
+          if [ "$PART" = speech ] || [ -f "build/speech-assets/utilities-speech-$PLATFORM" ]; then
+            cp "build/speech-assets/utilities-speech-$PLATFORM" "$staged/speech/"
           fi
           find "$staged" -type f | sort
 
-      - name: Upload this platform's files
+      - name: Upload this runner's files
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: build-${{ matrix.platform }}
-          path: ${{ runner.temp }}/staged/build-${{ matrix.platform }}
+          name: ${{ matrix.artifact }}
+          path: ${{ runner.temp }}/staged/${{ matrix.artifact }}
           retention-days: 30
           if-no-files-found: error
 
@@ -100,11 +130,12 @@ jobs:
           node-version: 24
           package-manager-cache: false # no caches in release builds
 
-      - name: Download every platform's files from this run
-        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'build-*' --dir "$RUNNER_TEMP/builds"
+      - name: Download every runner's files from this run
+        run: gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'build-*' --pattern 'speech-*' --dir "$RUNNER_TEMP/builds"
 
-      # Places each platform's files where the build puts them, then fetches the four pinned models (checked by size and
-      # sha256 against native/model-sources.json).
+      # Merges the builds: each platform's programs from its build-* upload, and each speech engine from wherever it was
+      # built (speech-* on Linux, build-* on macOS). Then fetches the four pinned models (checked by size and sha256
+      # against native/model-sources.json).
       - name: Place the builds and fetch the speech models
         run: |
           set -euo pipefail
@@ -114,11 +145,23 @@ jobs:
             mkdir -p "build/native/$platform"
             cp "$dir"/native/time-keep "$dir"/native/weather-signal "build/native/$platform/"
             chmod 0755 "build/native/$platform/time-keep" "build/native/$platform/weather-signal"
-            for engine in "$dir"/speech/*; do
-              [ -e "$engine" ] && cp "$engine" build/speech-assets/ && chmod 0755 "build/speech-assets/$(basename "$engine")"
-            done
+          done
+          for engine in "$RUNNER_TEMP"/builds/*/speech/*; do
+            [ -e "$engine" ] || continue
+            name="$(basename "$engine")"
+            [ ! -e "build/speech-assets/$name" ] || { echo "::error::two runners built $name"; exit 1; }
+            cp "$engine" build/speech-assets/ && chmod 0755 "build/speech-assets/$name"
           done
           node scripts/native-models.mjs
+
+      # The merged Linux binaries, each against its glibc floor: the programs 2.34, the speech engine 2.39. readelf
+      # reads both architectures on this runner.
+      - name: Check each Linux binary's glibc floor
+        run: |
+          set -euo pipefail
+          for platform in linux-x64-gnu linux-arm64-gnu; do
+            node scripts/native-closure.mjs --floors-only "$platform" "build/native/$platform/time-keep" "build/native/$platform/weather-signal" "build/speech-assets/utilities-speech-$platform"
+          done
 
       # Writes manifest/native.json, and the gzips it pins, from the same bytes. The speech manifest is committed.
       - name: Write the manifests and the release files
@@ -128,12 +171,16 @@ jobs:
       - name: Check every platform is present
         run: node scripts/native-files.mjs --check --release
 
+      # Release files come from master only. A run on another branch stops here: it checked everything, and attests and
+      # stages nothing a release could read.
       - name: Attest the release files
+        if: github.ref == 'refs/heads/master'
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: ${{ runner.temp }}/release/*.gz
 
       - name: Stage the artifacts the release job reads
+        if: github.ref == 'refs/heads/master'
         run: |
           set -euo pipefail
           staged="$RUNNER_TEMP/staged"
@@ -156,6 +203,7 @@ jobs:
           find "$staged" -type f | sort
 
       - name: Upload the candidate manifest
+        if: github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-manifest
@@ -164,6 +212,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload the speech engines and models
+        if: github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: speech-assets
@@ -172,6 +221,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload the darwin-arm64 files
+        if: github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-darwin-arm64
@@ -180,6 +230,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload the darwin-x64 files
+        if: github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-darwin-x64
@@ -188,6 +239,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload the linux-arm64-gnu files
+        if: github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-linux-arm64-gnu
@@ -196,6 +248,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload the linux-x64-gnu files
+        if: github.ref == 'refs/heads/master'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-linux-x64-gnu

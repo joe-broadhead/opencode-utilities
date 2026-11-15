@@ -283,7 +283,7 @@ A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next 
 | `DISABLED` | Set `modules.<name>` to `true`. |
 | `CLOSED` | The plugin is shutting down. Retry after OpenCode has reloaded it. |
 | `NATIVE_FILES_MISSING` | The time or weather program is not downloaded yet, or this copy of the plugin has no release manifest. Call the tool with permission to download it, or run `/utilities-install`. In a checkout, run `npm run native:ensure`. |
-| `UNSUPPORTED_PLATFORM` | No build for this platform. Time and weather are unaffected when only speech lacks an engine. |
+| `UNSUPPORTED_PLATFORM` | No build for this platform, or a Linux whose glibc is older than the module's floor: 2.34 for time and weather, 2.39 for speech. The message names the floor and this system's glibc. Time and weather are unaffected when only speech is unsupported. |
 | `BINARY_MISSING`, `INTEGRITY_MISMATCH` | A program or speech file is missing or is not the pinned file. Call the tool again: a program is downloaded again after its permission. For speech, delete the cache and run `/utilities-speech-install`. |
 | `CONTRACT_MISMATCH` | The plugin's files, or a program's output, do not match this version. Reinstall; if it persists, report it with the `utilities_status` output. |
 | `SPEECH_ASSETS_MISSING` | Approve the download, run `/utilities-speech-install`, or pre-seed. |

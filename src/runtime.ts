@@ -4,7 +4,7 @@ import { extname, join, resolve } from "node:path"
 import { fileURLToPath } from "node:url"
 import type * as z from "zod"
 import { identifySource, readSource, type OutputTarget } from "./artifacts/audio.js"
-import { NativeBinaries, detectTarget, verifier } from "./domain/backends.js"
+import { NativeBinaries, belowGlibcFloor, detectGlibc, detectTarget, verifier } from "./domain/backends.js"
 import { LIMITS, bounded, deadline, fail, fence, parse, UtilitiesError, abortCode } from "./domain/common.js"
 import { AVAILABILITY, NATIVE_DOWNLOAD_ACTION, NATIVE_OF, SPEECH_MODEL_ROLES, TOOLS, type AdapterResult, type Availability, type Invocation, type Module, type ModuleTool, type PermissionRequest, type NativeBinary, type NativeInstallOutput, type Runtime, type RuntimeOptions, type RuntimeStatus, type SpeechAssetRole, type SpeechInstallOutput, type SynthesisInput, type TranscriptionInput } from "./domain/contract.js"
 import type { ModuleContext } from "./modules/context.js"
@@ -51,13 +51,14 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
   ])
   const options: RuntimeOptions = { ...given, packageRoot, stateRoot, cacheRoot, ...speechAssetsDir === undefined ? {} : { speechAssetsDir } }
   const target = options.target ?? detectTarget(), directory = resolve(options.location.directory)
+  const glibc = options.glibc === undefined ? detectGlibc() : options.glibc
   const location = { directory, projectDirectory: options.location.projectDirectory }
   // Timers and default speech files belong to the project, wherever in it OpenCode runs.
   const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
   const scope = hash([options.location.project])
   const paths = { store: join(options.stateRoot, "projects", scope, "timers"), jobs: join(options.stateRoot, "jobs"), speech: join(options.stateRoot, "speech"), output: join(options.stateRoot, "speech", scope), weatherCache: join(options.cacheRoot, "weather") }
-  const binaries = new NativeBinaries({ packageRoot, cacheRoot: options.cacheRoot, target })
-  const assets = new SpeechAssets({ packageRoot, cacheRoot: options.cacheRoot, target, ...options.speechAssetsDir === undefined ? {} : { assetsDir: options.speechAssetsDir } })
+  const binaries = new NativeBinaries({ packageRoot, cacheRoot: options.cacheRoot, target, glibc })
+  const assets = new SpeechAssets({ packageRoot, cacheRoot: options.cacheRoot, target, glibc, ...options.speechAssetsDir === undefined ? {} : { assetsDir: options.speechAssetsDir } })
   const shutdown = new AbortController(), queue = new Queue(), pending = new Set<Promise<unknown>>(), listeners = new Set<() => void>()
   let closed = false, closing: Promise<void> | undefined
 
@@ -197,7 +198,10 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
       else if ((await speech).some(e => e.state === "missing")) return { availability: "SPEECH_ASSETS_MISSING", next: assets.preseeded ? "Copy the missing speech files into speech.assetsDir." : "Run /utilities-speech-install, or download on the first speech call, subject to permissions." }
       return { availability: "AVAILABLE" }
     } catch (error) {
-      const code = availability(error), hint = new UtilitiesError(code).hint
+      const code = availability(error)
+      // A Linux whose glibc is older than the module's floor says so, with the floor, rather than "no build".
+      const below = code === "UNSUPPORTED_PLATFORM" ? belowGlibcFloor(target, glibc, module === "speech" ? "utilities-speech" : NATIVE_OF[module]) : undefined
+      const hint = below ? `${module === "speech" ? "The speech engine" : `The ${NATIVE_OF[module]} program`} ${below}.` : new UtilitiesError(code).hint
       return { availability: code, ...hint ? { next: hint } : {} }
     }
   }
@@ -220,7 +224,8 @@ export async function createRuntime(given: RuntimeOptions): Promise<Runtime> {
       () => ({ target, availability: "AVAILABLE" as const }),
       error => {
         const code = availability(error)
-        const next = code === "UNSUPPORTED_PLATFORM" ? `Time and weather tools have no build for ${target}.` : new UtilitiesError(code).hint
+        const below = belowGlibcFloor(target, glibc, "time-keep")
+        const next = code !== "UNSUPPORTED_PLATFORM" ? new UtilitiesError(code).hint : below ? `The time and weather programs ${below.replace(/^needs /, "need ")}.` : `Time and weather tools have no build for ${target}.`
         return { target, availability: code, ...next ? { next } : {} }
       })
     // A disabled module's files are not inspected, so its large files are never hashed.

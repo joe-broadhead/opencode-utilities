@@ -2,7 +2,7 @@ import * as z from "zod"
 import { rmdir } from "node:fs/promises"
 import { join } from "node:path"
 import { fail, fence, parse, deadline } from "../domain/common.js"
-import { isPlatform, packageJson, platformKey, sha256, verifier } from "../domain/backends.js"
+import { belowGlibcFloor, isPlatform, packageJson, platformKey, sha256, verifier } from "../domain/backends.js"
 import { privateDirectory } from "../process/files.js"
 import { withLock } from "../process/lock.js"
 import { SPEECH_DOWNLOAD_ACTION, SPEECH_MODEL_ROLES, type PermissionRequest, type SpeechAsset, type SpeechAssetManifest, type SpeechAssetRole, type StatusView } from "../domain/contract.js"
@@ -44,15 +44,20 @@ export interface Entry { readonly role: SpeechAssetRole; readonly asset: SpeechA
  */
 export class SpeechAssets {
   private manifest: Promise<SpeechAssetManifest> | undefined
-  constructor(private readonly options: { packageRoot: string; cacheRoot: string; assetsDir?: string; target: string }) {}
+  constructor(private readonly options: { packageRoot: string; cacheRoot: string; assetsDir?: string; target: string; glibc?: string | null }) {}
   get cacheRoot() { return this.options.cacheRoot }
   get preseeded() { return this.options.assetsDir !== undefined }
-  /** The assets for this platform, by role. Fails with UNSUPPORTED_PLATFORM when no engine is built for it. */
+  /**
+   * The assets for this platform, by role. Fails with UNSUPPORTED_PLATFORM when no engine is built for it, or on a Linux
+   * whose glibc is older than the engine's floor, before anything is downloaded.
+   */
   async assets(): Promise<ReadonlyMap<SpeechAssetRole, SpeechAsset>> {
     this.manifest ??= packageJson(join(this.options.packageRoot, "manifest/speech-assets.json")).then(raw => parse(manifestSchema, raw))
     const manifest = await this.manifest, { target } = this.options
     const engine = isPlatform(target) ? manifest.engines[target] : undefined
     if (!engine) fail("UNSUPPORTED_PLATFORM", { message: "The speech engine has no build for this platform.", hint: "Time and weather tools are unaffected. Call utilities_status for details." })
+    const below = belowGlibcFloor(target, this.options.glibc, "utilities-speech")
+    if (below) fail("UNSUPPORTED_PLATFORM", { message: `The speech engine ${below}.`, hint: "Time and weather tools are unaffected. Speech needs a Linux such as Ubuntu 24.04, Debian 13 or Fedora 40." })
     return new Map<SpeechAssetRole, SpeechAsset>([["engine", engine], ...SPEECH_MODEL_ROLES.map(role => [role, manifest.models[role]] as const)])
   }
   private cached(a: SpeechAsset) { return join(this.options.cacheRoot, a.sha256, a.name) }

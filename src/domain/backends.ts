@@ -3,7 +3,7 @@ import { lstat } from "node:fs/promises"
 import { hashRegular, identity, noSymlinks, readRegular, sameIdentity, type Identity } from "../process/files.js"
 import { cachePath, installNative, NativeError, readNativeManifest, type NativeCode, type NativeManifest } from "../process/install.js"
 import { fail, UtilitiesError } from "./common.js"
-import { PLATFORMS, type FailureCode, type NativeBinary, type Platform } from "./contract.js"
+import { GLIBC_FLOORS, PLATFORMS, type FailureCode, type GlibcBinary, type NativeBinary, type Platform } from "./contract.js"
 
 export const sha256 = z.string().regex(/^[a-f0-9]{64}$/)
 export const platformKey = z.enum(Object.keys(PLATFORMS) as [Platform, ...Platform[]])
@@ -13,6 +13,30 @@ export function detectTarget() {
   return process.platform === "linux" ? `linux-${process.arch}-gnu` : `${process.platform}-${process.arch}`
 }
 export const isPlatform = (target: string): target is Platform => Object.hasOwn(PLATFORMS, target)
+
+/** The glibc this process runs on, such as `2.35`; null on another libc or operating system. */
+export function detectGlibc(): string | null {
+  if (process.platform !== "linux") return null
+  const header = (process.report.getReport() as { header?: { glibcVersionRuntime?: unknown } }).header
+  return typeof header?.glibcVersionRuntime === "string" && /^\d+\.\d+(?:\.\d+)?$/.test(header.glibcVersionRuntime) ? header.glibcVersionRuntime : null
+}
+
+/** Whether glibc version `a` is older than `b`, by number: 2.9 is older than 2.35. */
+export function olderGlibc(a: string, b: string): boolean {
+  const x = a.split(".").map(Number), y = b.split(".").map(Number)
+  for (let i = 0; i < Math.max(x.length, y.length); i++) if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) < (y[i] ?? 0)
+  return false
+}
+
+/**
+ * Why a Linux binary cannot run on this system: its glibc is older than the binary's floor. Undefined when it can, and
+ * on a system whose glibc is unknown, which keeps its old behaviour: the binary reports its own failure.
+ */
+export function belowGlibcFloor(target: string, glibc: string | null | undefined, binary: GlibcBinary): string | undefined {
+  const floor = GLIBC_FLOORS[binary]
+  if (!target.startsWith("linux-") || !glibc || !olderGlibc(glibc, floor)) return undefined
+  return `needs glibc ${floor} or later, and this system has glibc ${glibc}`
+}
 
 /**
  * Reads a JSON file that ships in the installed package. A file that is not there is NATIVE_FILES_MISSING, not a
@@ -96,7 +120,13 @@ export interface NativeExecutable { readonly path: string; readonly sha256: stri
  */
 export class NativeBinaries {
   private manifest: Promise<NativeManifest> | undefined
-  constructor(private readonly options: { readonly packageRoot: string; readonly cacheRoot: string; readonly target: string }) {}
+  constructor(private readonly options: { readonly packageRoot: string; readonly cacheRoot: string; readonly target: string; readonly glibc?: string | null }) {}
+
+  /** UNSUPPORTED_PLATFORM on a Linux system whose glibc is older than the programs' floor, before anything is fetched. */
+  private requireGlibc(module: NativeBinary) {
+    const reason = belowGlibcFloor(this.options.target, this.options.glibc, module)
+    if (reason) fail("UNSUPPORTED_PLATFORM", { message: `The ${module} program ${reason}.`, hint: "Use a Linux with glibc 2.34 or later, such as Ubuntu 22.04, Debian 12 or RHEL 9." })
+  }
 
   /** The release manifest, read once while it works. A failure is not kept, so a fixed checkout answers on the next call. */
   private release(): Promise<NativeManifest> {
@@ -119,6 +149,7 @@ export class NativeBinaries {
     if (!isPlatform(this.options.target)) fail("UNSUPPORTED_PLATFORM")
     const release = await this.release()
     if (!release.modules["time-keep"]?.[this.options.target]) fail("UNSUPPORTED_PLATFORM")
+    this.requireGlibc("time-keep")
   }
 
   /**
@@ -130,6 +161,7 @@ export class NativeBinaries {
     const release = await this.release()
     const sha256 = release.modules[module]?.[this.options.target]?.executable.sha256
     if (sha256 === undefined) fail("UNSUPPORTED_PLATFORM")
+    this.requireGlibc(module)
     const path = cachePath(this.optionsFor(release, module))
     const state = await verifier.check(path, sha256, true)
     if (state === "unsafe") fail("UNSAFE_PATH")
@@ -139,6 +171,7 @@ export class NativeBinaries {
   /** The verified program, downloaded now if it is not cached. Only after the caller's permission check. */
   async install(module: NativeBinary, signal?: AbortSignal): Promise<NativeExecutable> {
     const release = await this.release()
+    this.requireGlibc(module)
     const { path } = await installNative({ ...this.optionsFor(release, module), signal }).catch(refuse)
     return { path, sha256: release.modules[module]![this.options.target]!.executable.sha256 }
   }

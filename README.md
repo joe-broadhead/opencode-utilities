@@ -7,7 +7,7 @@ Unofficial; not affiliated with Open-Meteo. Weather data is from Open-Meteo.com 
 ## Requirements
 
 - OpenCode `>=2.2.3 <2.4.0`, tested on 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 and 2.3.0. Another 2.2 or 2.3 release runs, and status calls it untested. Outside that range the plugin does not start, unless you set `allowUntestedHost`.
-- macOS 14 or later (arm64 or x64), or Linux (x64 or arm64) with glibc 2.39 or later, such as Ubuntu 24.04, Debian 13 or Fedora 40. macOS x64 has no speech engine, so it has no speech tools. Windows and musl are not supported.
+- macOS 14 or later (arm64 or x64), or Linux (x64 or arm64) with glibc. The time and weather tools need glibc 2.34 or later, such as Ubuntu 22.04, Debian 12 or RHEL 9. The speech tools need glibc 2.39 or later, such as Ubuntu 24.04, Debian 13 or Fedora 40, because the speech engine links a prebuilt ONNX Runtime library built for it; on an older glibc, speech reports `UNSUPPORTED_PLATFORM` and time and weather still work. macOS x64 has no speech engine, so it has no speech tools. Windows and musl are not supported.
 
 ## Install
 
