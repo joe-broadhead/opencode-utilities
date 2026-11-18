@@ -115,7 +115,8 @@ describe("the README's generated blocks", () => {
 describe("the tested releases", () => {
   test("every tested-host mention is TESTED_HOSTS, in the same order", () => {
     for (const file of [...README_FILES, ...DOCS]) {
-      const text = read(file)
+      // A released CHANGELOG section states the list as it was then; only the Unreleased section states today's.
+      const text = file === "CHANGELOG.md" ? read(file).split(/^## \[/m).find(section => section.startsWith("[Unreleased]")) ?? "" : read(file)
       for (const match of text.matchAll(/tested on ([0-9][0-9.,\s]*(?:and\s+[0-9][0-9.]*)?)/g)) {
         const said = match[1]!.replace(/[.,\s]+$/u, "").split(/,\s*|\s+and\s+/).map(part => part.trim()).filter(Boolean)
         expect({ file, said }).toEqual({ file, said: TESTED_HOSTS })
@@ -126,12 +127,14 @@ describe("the tested releases", () => {
   test("the words and the range match the list", () => {
     expect(TESTED_TEXT).toBe(`OpenCode ${TESTED_HOSTS.slice(0, -1).join(", ")} or ${TESTED_HOSTS.at(-1)}`)
     expect(HOST_RANGE).toBe(">=2.2.3 <2.4.0")
-    expect(TESTED_HOSTS).toContain("2.3.0")
+    expect(TESTED_HOSTS).toContain("2.3.2")
   })
 
   test("the Unreleased section states no tested release it has not run on", () => {
     const unreleased = read("CHANGELOG.md").split(/^## \[/m).find(section => section.startsWith("[Unreleased]")) ?? ""
-    expect(unreleased).not.toMatch(/2\.2\.\d+\b(?!.*2\.3\.0)/)
+    // A 2.2 release may be named only on a line that also names the newest tested release.
+    const newest = TESTED_HOSTS.at(-1)!
+    for (const line of unreleased.split("\n")) if (/2\.2\.\d+\b/u.test(line)) expect({ line, newest: line.includes(newest) }).toEqual({ line, newest: true })
   })
 })
 

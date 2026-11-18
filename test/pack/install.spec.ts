@@ -1,6 +1,6 @@
 // Packs the package as npm would publish it, installs the tarball into an empty project with scripts disabled,
-// imports its entries, and loads it on each tested stock OpenCode release (TESTED_HOSTS: 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 and 2.3.0).
-// Run `npm run build` first. OPENCODE_BIN_<version> (OPENCODE_BIN_2_2_3 to OPENCODE_BIN_2_3_0) name the stock
+// imports its entries, and loads it on each tested stock OpenCode release (TESTED_HOSTS: 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 and 2.3.2).
+// Run `npm run build` first. OPENCODE_BIN_<version> (OPENCODE_BIN_2_2_3 to OPENCODE_BIN_2_3_2) name the stock
 // `opencode` binaries when set. When unset, each release is installed into this test's temp project with
 // --ignore-scripts, once per version.
 // PACKED_DIR names a folder with the main tarball already packed, as release.yml does: the test then checks the exact

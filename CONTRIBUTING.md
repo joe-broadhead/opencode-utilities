@@ -2,7 +2,7 @@
 
 ## Setup
 
-You need Node.js 24 or later, npm, [Bun](https://bun.sh) 1.4.4 (the Bun inside stock OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 and 2.3.0) and [Rust](https://rustup.rs) 1.96.0 (`rustup toolchain install 1.96.0`).
+You need Node.js 24 or later, npm, [Bun](https://bun.sh) 1.4.4 (the Bun inside stock OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 and 2.3.2) and [Rust](https://rustup.rs) 1.96.0 (`rustup toolchain install 1.96.0`).
 
 ```sh
 git clone https://github.com/joe-broadhead/opencode-utilities.git
@@ -23,10 +23,10 @@ To try a checkout in OpenCode, point a `plugins` entry's `package` at the reposi
 
 ## Checks
 
-`npm run check` runs, in order: the native ensure step, the typecheck of `src` and `test`, the unit tests, the JS build, the host tests on the embedded `@opencode/sdk` for each tested release (`scripts/host-tests.mjs`; `HOST_SDK_DIR` runs one), the TUI test, the forbidden-API scan (`npm run lint`) and the pack test, which runs every tested release. The pack test packs the plugin and this platform's package, installs them into an empty project with scripts off, and loads them in each tested stock OpenCode release. The tested releases are one list, `TESTED_HOSTS` in `src/host/versions.ts` (2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 and 2.3.0); the status, the tests and CI all read it.
+`npm run check` runs, in order: the native ensure step, the typecheck of `src` and `test`, the unit tests, the JS build, the host tests on the embedded `@opencode/sdk` for each tested release (`scripts/host-tests.mjs`; `HOST_SDK_DIR` runs one), the TUI test, the forbidden-API scan (`npm run lint`) and the pack test, which runs every tested release. The pack test packs the plugin and this platform's package, installs them into an empty project with scripts off, and loads them in each tested stock OpenCode release. The tested releases are one list, `TESTED_HOSTS` in `src/host/versions.ts` (2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 and 2.3.2); the status, the tests and CI all read it.
 
 - The pack test needs no program and no `build/native`: it checks the tarball, and that status reports each program as not installed, with its next step. The tool runs that need a program are in the host tests, which `npm run check` runs after `native:ensure`.
-- Set `OPENCODE_BIN_2_2_3`, `OPENCODE_BIN_2_2_4`, `OPENCODE_BIN_2_2_5`, `OPENCODE_BIN_2_2_6`, `OPENCODE_BIN_2_2_7` and `OPENCODE_BIN_2_3_0` to stock `opencode` binaries to skip installing them. Unset, the pack test installs each release into its own temp folder, as CI and the release do.
+- Set `OPENCODE_BIN_2_2_3`, `OPENCODE_BIN_2_2_4`, `OPENCODE_BIN_2_2_5`, `OPENCODE_BIN_2_2_6`, `OPENCODE_BIN_2_2_7`, `OPENCODE_BIN_2_3_0`, `OPENCODE_BIN_2_3_1` and `OPENCODE_BIN_2_3_2` to stock `opencode` binaries to skip installing them. Unset, the pack test installs each release into its own temp folder, as CI and the release do.
 - Host and pack tests put their temp roots under `/private/tmp` on macOS (the system temp folder elsewhere), never under your home, because OpenCode searches upward for `.opencode/` folders. Each stock server gets its own free port.
 - The unit tests in `test/unit/time-keep.test.ts` run this platform's real `time-keep`, which `npm run check` builds first.
 - The README's default-rules and code tables are generated from the source: run `UPDATE_DOCS=1 npm test` after changing `DEFAULT_ASK` or a failure code, and `test/unit/docs.test.ts` fails while they differ.
@@ -108,7 +108,7 @@ Before the approval, the workflow:
 - **verifies** on a fresh runner: the commit's identity, one parent on `master`, `package.json` exactly the parent's
   without the lifecycle scripts, only regular files in the allowed paths, no `package.json` under `dist/`, and a second,
   independent build of the parent (its own job) equal to the committed `dist/` byte for byte;
-- **installs** the release commit with `plugin add` on each stock OpenCode host (2.2.3 to 2.2.7, and 2.3.0);
+- **installs** the release commit with `plugin add` on each stock OpenCode host (2.2.3 to 2.2.7, and 2.3.0 to 2.3.2);
 - **packs** the commit before installing anything, keeps that tarball and records its sha256, then runs the pack stage
   against a copy;
 - **runs the conformance kit** on the parent, for a plugin that declares sources (above), and uploads only its report;
