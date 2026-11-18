@@ -22,18 +22,19 @@ const SDK = process.env.HOST_SDK_DIR
 export const HOST_VERSION = (JSON.parse(readFileSync(join(SDK, "package.json"), "utf8")) as { version: string }).version
 
 /**
- * True from OpenCode 2.2.4. Up to 2.2.3 the host stage runs the locked `@opencode/plugin`, the same copy the plugin
- * compiles against, so the host's `error instanceof Tool.Error` matches the plugin's `Tool.Error` and it is returned as
- * thrown, with `metadata` on it. From 2.2.4 the release is installed under `HOST_SDK_DIR` with its own
- * `@opencode/plugin` and `@opencode/schema`; the plugin's `Tool.Error` (built against 2.2.3) no longer matches, and
- * `toolError` in `@opencode/plugin/dist/promise/adapter.js` wraps it as `new Tool.Error({ message, error })`, so the
- * plugin's metadata is on `error.error.metadata`. The wrapper itself is the same in 2.2.3 and 2.2.4.
+ * A harness artefact, not a host property. The embedded SDK does not install OpenCode's plugin runtime, so a plugin's
+ * own `@opencode/plugin` (here the locked 2.2.3 dev dependency) is a second copy next to the versioned SDK's from 2.2.4
+ * on. `toolError` in `@opencode/plugin/dist/promise/adapter.js` compares with `instanceof`, which fails across the two
+ * copies, and wraps the error as `new Tool.Error({ message, error })`, so the plugin's metadata lands on
+ * `error.error.metadata`. A stock binary serves every plugin the host's own `@opencode/plugin`, so real installs keep
+ * `error.metadata` on every release; the review's tool-error-copies finding proves that on stock 2.2.3, 2.3.0 and 2.3.2.
+ * The accessor only adapts to the copy the harness produced.
  */
 export const NESTED_TOOL_ERROR = ((major, minor, patch) => major > 2 || (major === 2 && (minor > 2 || (minor === 2 && patch >= 4))))(
   ...(HOST_VERSION.split(".").map(Number) as [number, number, number]),
 )
 
-/** A tool failure's metadata, wherever this host puts it: on the error up to 2.2.3, one level down from 2.2.4. */
+/** A tool failure's metadata, read from the copy the harness produced: on the error up to 2.2.3, one level down from 2.2.4. */
 export const toolErrorMetadata = (error: unknown) => {
   const failure = error as { metadata?: unknown; error?: { metadata?: unknown } } | undefined
   return NESTED_TOOL_ERROR ? failure?.error?.metadata : failure?.metadata
@@ -140,8 +141,8 @@ interface Automations {
 const asCheck = (code: string) =>
   `const checked = await (async () => {\n${code}\n})()\nif (typeof checked !== "boolean" && !(typeof checked === "object" && checked !== null && typeof checked.wake === "boolean")) throw new Error("A code check must return a boolean or { wake, state?, message? }")`
 
-/** How long the poll waits for an automation's run; the suite's own deadline is longer. */
-const RUN_DEADLINE_MS = 120_000
+/** How long the poll waits for an automation's run: shorter than the suite's 60 s test timeout, so the message below is what fails. */
+const RUN_DEADLINE_MS = 45_000
 
 /**
  * Runs a Code Mode program once with nobody present to answer a prompt, as the session's agent and under its rules,

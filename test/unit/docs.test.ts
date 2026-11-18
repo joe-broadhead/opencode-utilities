@@ -115,8 +115,14 @@ describe("the README's generated blocks", () => {
 describe("the tested releases", () => {
   test("every tested-host mention is TESTED_HOSTS, in the same order", () => {
     for (const file of [...README_FILES, ...DOCS]) {
-      // A released CHANGELOG section states the list as it was then; only the top section states today's.
-      const text = file === "CHANGELOG.md" ? (/\n## \[[^\]]+\][^\n]*([\s\S]*?)(?=\n## |$)/.exec(read(file))?.[1] ?? "") : read(file)
+      // While a release is prepared, its Unreleased section; otherwise the newest released one. Older released
+      // sections are history and keep their own list.
+      const sections = read(file).split(/\n(?=## \[)/)
+      const unreleased = sections.find(section => section.startsWith("## [Unreleased]"))
+      const newest = sections.find(section => /^## \[\d+\.\d+\.\d+\]/.test(section))
+      const text = file === "CHANGELOG.md" ? [sections[0], unreleased ?? newest].join("\n") : read(file)
+      // The CHANGELOG section this reads must state a list, or the test would pass with nothing checked.
+      if (file === "CHANGELOG.md") expect(text).toContain("tested on ")
       for (const match of text.matchAll(/tested on ([0-9][0-9.,\s]*(?:and\s+[0-9][0-9.]*)?)/g)) {
         const said = match[1]!.replace(/[.,\s]+$/u, "").split(/,\s*|\s+and\s+/).map(part => part.trim()).filter(Boolean)
         expect({ file, said }).toEqual({ file, said: TESTED_HOSTS })
@@ -130,11 +136,15 @@ describe("the tested releases", () => {
     expect(TESTED_HOSTS).toContain("2.3.2")
   })
 
-  test("the Unreleased section states no tested release it has not run on", () => {
-    const unreleased = read("CHANGELOG.md").split(/^## \[/m).find(section => section.startsWith("[Unreleased]")) ?? ""
+  test("the Unreleased or newest section states no tested release it has not run on", () => {
+    // While a release is prepared, its Unreleased section; otherwise the newest released one.
+    const sections = read("CHANGELOG.md").split(/\n(?=## \[)/)
+    const unreleased = sections.find(section => section.startsWith("## [Unreleased]"))
+    const newest = sections.find(section => /^## \[\d+\.\d+\.\d+\]/.test(section))
+    const section = unreleased ?? newest ?? ""
     // A 2.2 release may be named only on a line that also names the newest tested release.
-    const newest = TESTED_HOSTS.at(-1)!
-    for (const line of unreleased.split("\n")) if (/2\.2\.\d+\b/u.test(line)) expect({ line, newest: line.includes(newest) }).toEqual({ line, newest: true })
+    const latest = TESTED_HOSTS.at(-1)!
+    for (const line of section.split("\n")) if (/2\.2\.\d+\b/u.test(line)) expect({ line, newest: line.includes(latest) }).toEqual({ line, newest: true })
   })
 })
 

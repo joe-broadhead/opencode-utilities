@@ -49,12 +49,12 @@ const runtime = (directory: string) => runtimes.created.find(r => r.options.loca
 async function boot(directory: string, agent = "build") {
   const session = await host.sdk.session.create({ agent, location: { directory } })
   // Plugins set up on the location's first listing, which fails while they are still activating.
-  await waitFor(() => host.sdk.agent.list({ location: { directory } }).then(() => contexts.has(directory), () => false), 30_000)
+  await waitFor(() => host.sdk.agent.list({ location: { directory } }).then(() => contexts.has(directory), () => false), 30_000, `the plugin's context in ${directory}`)
   // From 2.2.7 a location's plugins load in the background, so the context can exist before the plugin has registered
   // its RPC. The status RPC is the readiness probe: it answers only once setup has registered it.
   await waitFor(async () => {
     try { await host.sdk.rpc(Utilities).status({}, { location: { directory } }); return true } catch { return false }
-  }, 30_000)
+  }, 30_000, `the status RPC in ${directory}`)
   return session.id
 }
 async function tools(directory: string) {
@@ -135,7 +135,7 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     const listed = async () => (await host.sdk.agent.list({ location: { directory: dirs.main } })).data as { id: string; permissions: Rule[] }[]
     let agents = await listed()
     // 2.3.2 can list a config-only agent a moment after the location is ready; the assertion below is unchanged.
-    await waitFor(async () => { agents = await listed(); return agents.some(a => a.id === "reviewer") }, 30_000)
+    await waitFor(async () => { agents = await listed(); return agents.some(a => a.id === "reviewer") }, 30_000, "the config-only agent reviewer")
     const rules = (id: string) => agents.find(a => a.id === id)!.permissions.map(r => `${r.effect} ${r.action} ${r.resource}`)
     const block = defaultRules("ask-changes").map(r => `${r.effect} ${r.action} ${r.resource}`)
     for (const id of ["build", "plan", "general", "explore"]) expect(rules(id).slice(0, block.length + 1)).toEqual(["allow * *", ...block])
@@ -156,7 +156,7 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     await boot(dirs.shadow)
     expect((await host.sdk.rpc(Utilities).status({}, { location: { directory: dirs.main } })).shadowedSkills).toEqual([])
     // A location's skills are listed as it settles; wait, bounded, until the user's own skill is the one listed.
-    await waitFor(async () => (await host.sdk.skill.list({ location: { directory: dirs.shadow } })).data.some((s: { id: string; path: string }) => s.id === "utilities-time" && s.path === shadowSkill), 30_000)
+    await waitFor(async () => (await host.sdk.skill.list({ location: { directory: dirs.shadow } })).data.some((s: { id: string; path: string }) => s.id === "utilities-time" && s.path === shadowSkill), 30_000, "the user's own utilities-time skill")
     const status = await host.sdk.rpc(Utilities).status({}, { location: { directory: dirs.shadow } })
     const all = (await host.sdk.skill.list({ location: { directory: dirs.shadow } })).data
     const listed = all.find((s: { id: string }) => s.id === "utilities-time") as { path: string } | undefined
@@ -518,11 +518,13 @@ describe("host compatibility and unload", () => {
     ], "2.4.0")
     try {
       const location = { directory: project("untested", {}) }
-      // From 2.2.7 a location's plugins load in the background, so the refusal is logged after the first listing.
+      // From 2.2.7 a location's plugins load in the background: wait until the refusing plugin has logged and the
+      // allowing plugin answers its status RPC, then run the unchanged assertions below.
       await waitFor(async () => {
         await untested.sdk.agent.list({ location }).catch(() => undefined)
-        return untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found 2.4.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 or 2.3.2, or set the plugin option allowUntestedHost: true"))
-      }, 30_000)
+        if (!untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found 2.4.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 or 2.3.2, or set the plugin option allowUntestedHost: true"))) return false
+        try { await untested.sdk.rpc(Utilities).status({}, { location }); return true } catch { return false }
+      }, 30_000, "the untested host's refusal and its allowing plugin's status RPC")
       expect(untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found 2.4.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 or 2.3.2, or set the plugin option allowUntestedHost: true"))).toBe(true)
       expect(refused.created).toHaveLength(0)
       expect(allowed.created).toHaveLength(1)
@@ -540,10 +542,10 @@ describe("host compatibility and unload", () => {
   })
 })
 
-async function waitFor(check: () => Promise<boolean>, timeout = 10_000) {
+async function waitFor(check: () => Promise<boolean>, timeout = 10_000, what = "the host") {
   const deadline = Date.now() + timeout
   while (!(await check())) {
-    if (Date.now() > deadline) throw new Error("timed out waiting for the host")
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`)
     await Bun.sleep(50)
   }
 }
