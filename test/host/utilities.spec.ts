@@ -1,7 +1,7 @@
 // Utilities on the public @opencode/sdk host (no private host imports), with a fake runtime that makes
 // the real runtime's permission requests. This is where V3 is recorded: the shipped permission mechanism
 // is the default-ask agent rules, and user rules and saved approvals win over them.
-import { AUTOMATIONS, HOST_VERSION, project, removeRoot, startHost, unattended } from "./harness.js"
+import { AUTOMATIONS, HOST_VERSION, project, removeRoot, startHost, toolErrorMetadata, unattended } from "./harness.js"
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -50,6 +50,11 @@ async function boot(directory: string, agent = "build") {
   const session = await host.sdk.session.create({ agent, location: { directory } })
   // Plugins set up on the location's first listing, which fails while they are still activating.
   await waitFor(() => host.sdk.agent.list({ location: { directory } }).then(() => contexts.has(directory), () => false), 30_000)
+  // From 2.2.7 a location's plugins load in the background, so the context can exist before the plugin has registered
+  // its RPC. The status RPC is the readiness probe: it answers only once setup has registered it.
+  await waitFor(async () => {
+    try { await host.sdk.rpc(Utilities).status({}, { location: { directory } }); return true } catch { return false }
+  }, 30_000)
   return session.id
 }
 async function tools(directory: string) {
@@ -127,8 +132,11 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
   })
 
   test("inserts the ask rules right after each agent's base allow; config-only agents are named with the fix", async () => {
-    const { data: agents } = await host.sdk.agent.list({ location: { directory: dirs.main } })
-    const rules = (id: string) => (agents as { id: string; permissions: Rule[] }[]).find(a => a.id === id)!.permissions.map(r => `${r.effect} ${r.action} ${r.resource}`)
+    const listed = async () => (await host.sdk.agent.list({ location: { directory: dirs.main } })).data as { id: string; permissions: Rule[] }[]
+    let agents = await listed()
+    // 2.3.2 can list a config-only agent a moment after the location is ready; the assertion below is unchanged.
+    await waitFor(async () => { agents = await listed(); return agents.some(a => a.id === "reviewer") }, 30_000)
+    const rules = (id: string) => agents.find(a => a.id === id)!.permissions.map(r => `${r.effect} ${r.action} ${r.resource}`)
     const block = defaultRules("ask-changes").map(r => `${r.effect} ${r.action} ${r.resource}`)
     for (const id of ["build", "plan", "general", "explore"]) expect(rules(id).slice(0, block.length + 1)).toEqual(["allow * *", ...block])
     expect(rules("plan").filter(r => r.startsWith("deny")).length).toBeGreaterThan(0)
@@ -144,7 +152,11 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
   })
 
   test("status names a user's skill that takes the place of the plugin's own, read through the public skill list", async () => {
+    await boot(dirs.main)
+    await boot(dirs.shadow)
     expect((await host.sdk.rpc(Utilities).status({}, { location: { directory: dirs.main } })).shadowedSkills).toEqual([])
+    // A location's skills are listed as it settles; wait, bounded, until the user's own skill is the one listed.
+    await waitFor(async () => (await host.sdk.skill.list({ location: { directory: dirs.shadow } })).data.some((s: { id: string; path: string }) => s.id === "utilities-time" && s.path === shadowSkill), 30_000)
     const status = await host.sdk.rpc(Utilities).status({}, { location: { directory: dirs.shadow } })
     const all = (await host.sdk.skill.list({ location: { directory: dirs.shadow } })).data
     const listed = all.find((s: { id: string }) => s.id === "utilities-time") as { path: string } | undefined
@@ -251,7 +263,7 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     runtime(dirs.main).failures.clear()
     expect(failed.error?._tag).toBe("Tool.Error")
     expect(failed.error?.message).toBe("TIMER_EXISTS: A timer named 'review' already exists. Next step: Call utilities_timer_set with replace: true to overwrite it.")
-    expect(failed.error?.metadata).toEqual({ code: "TIMER_EXISTS", hint: "Call utilities_timer_set with replace: true to overwrite it." })
+    expect(toolErrorMetadata(failed.error)).toEqual({ code: "TIMER_EXISTS", hint: "Call utilities_timer_set with replace: true to overwrite it." })
   })
 
   test("commands: status posts to the session; the speech install asks as the session's agent first", async () => {
@@ -506,7 +518,11 @@ describe("host compatibility and unload", () => {
     ], "2.4.0")
     try {
       const location = { directory: project("untested", {}) }
-      await untested.sdk.agent.list({ location })
+      // From 2.2.7 a location's plugins load in the background, so the refusal is logged after the first listing.
+      await waitFor(async () => {
+        await untested.sdk.agent.list({ location }).catch(() => undefined)
+        return untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found 2.4.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 or 2.3.2, or set the plugin option allowUntestedHost: true"))
+      }, 30_000)
       expect(untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found 2.4.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 or 2.3.2, or set the plugin option allowUntestedHost: true"))).toBe(true)
       expect(refused.created).toHaveLength(0)
       expect(allowed.created).toHaveLength(1)

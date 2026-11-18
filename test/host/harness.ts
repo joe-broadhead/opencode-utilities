@@ -22,6 +22,24 @@ const SDK = process.env.HOST_SDK_DIR
 export const HOST_VERSION = (JSON.parse(readFileSync(join(SDK, "package.json"), "utf8")) as { version: string }).version
 
 /**
+ * True from OpenCode 2.2.4. Up to 2.2.3 the host stage runs the locked `@opencode/plugin`, the same copy the plugin
+ * compiles against, so the host's `error instanceof Tool.Error` matches the plugin's `Tool.Error` and it is returned as
+ * thrown, with `metadata` on it. From 2.2.4 the release is installed under `HOST_SDK_DIR` with its own
+ * `@opencode/plugin` and `@opencode/schema`; the plugin's `Tool.Error` (built against 2.2.3) no longer matches, and
+ * `toolError` in `@opencode/plugin/dist/promise/adapter.js` wraps it as `new Tool.Error({ message, error })`, so the
+ * plugin's metadata is on `error.error.metadata`. The wrapper itself is the same in 2.2.3 and 2.2.4.
+ */
+export const NESTED_TOOL_ERROR = ((major, minor, patch) => major > 2 || (major === 2 && (minor > 2 || (minor === 2 && patch >= 4))))(
+  ...(HOST_VERSION.split(".").map(Number) as [number, number, number]),
+)
+
+/** A tool failure's metadata, wherever this host puts it: on the error up to 2.2.3, one level down from 2.2.4. */
+export const toolErrorMetadata = (error: unknown) => {
+  const failure = error as { metadata?: unknown; error?: { metadata?: unknown } } | undefined
+  return NESTED_TOOL_ERROR ? failure?.error?.metadata : failure?.metadata
+}
+
+/**
  * From OpenCode 2.3.1, `experimental.automation` replaces `experimental.schedule`, and a code action no longer runs when
  * it is created: it runs when the scheduler finds it due.
  */
