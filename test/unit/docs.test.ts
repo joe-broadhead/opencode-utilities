@@ -115,8 +115,8 @@ describe("the README's generated blocks", () => {
 describe("the tested releases", () => {
   test("every tested-host mention is TESTED_HOSTS, in the same order", () => {
     for (const file of [...README_FILES, ...DOCS]) {
-      // A released CHANGELOG section states the list as it was then; only the Unreleased section states today's.
-      const text = file === "CHANGELOG.md" ? read(file).split(/^## \[/m).find(section => section.startsWith("[Unreleased]")) ?? "" : read(file)
+      // A released CHANGELOG section states the list as it was then; only the top section states today's.
+      const text = file === "CHANGELOG.md" ? (/\n## \[[^\]]+\][^\n]*([\s\S]*?)(?=\n## |$)/.exec(read(file))?.[1] ?? "") : read(file)
       for (const match of text.matchAll(/tested on ([0-9][0-9.,\s]*(?:and\s+[0-9][0-9.]*)?)/g)) {
         const said = match[1]!.replace(/[.,\s]+$/u, "").split(/,\s*|\s+and\s+/).map(part => part.trim()).filter(Boolean)
         expect({ file, said }).toEqual({ file, said: TESTED_HOSTS })

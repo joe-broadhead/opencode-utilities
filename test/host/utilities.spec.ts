@@ -1,7 +1,7 @@
 // Utilities on the public @opencode/sdk host (no private host imports), with a fake runtime that makes
 // the real runtime's permission requests. This is where V3 is recorded: the shipped permission mechanism
 // is the default-ask agent rules, and user rules and saved approvals win over them.
-import { HOST_VERSION, project, removeRoot, startHost } from "./harness.js"
+import { AUTOMATIONS, HOST_VERSION, project, removeRoot, startHost, unattended } from "./harness.js"
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -28,10 +28,13 @@ type Rule = { action: string; resource: string; effect: string }
 const contexts = new Map<string, Pick<Plugin.Context, "tool">>()
 const observer: Plugin.Plugin = { id: "test.observer", setup(ctx) { contexts.set(ctx.location.directory, ctx) } }
 const runtimes = fakeRuntimes({ speech: "SPEECH_ASSETS_MISSING" })
+// A schedule's check program, or on 2.3.1 and later an automation's code action, is how a host test runs Code Mode
+// with nobody present to answer a prompt.
+const CODE_MODE_FLAG = AUTOMATIONS ? { automations: true } : { schedules: true }
 const dirs = {
-  main: project("main", { experimental: { schedules: true }, agents: { reviewer: { mode: "primary", description: "Defined only in config" } } }),
-  allowed: project("allowed", { experimental: { schedules: true }, permissions: ["utilities_weather_*", "utilities_timer_*", "utilities_speech_*"].map(allow) }),
-  denied: project("denied", { experimental: { schedules: true }, permissions: [{ action: "utilities_speech_*", resource: "*", effect: "deny" }] }),
+  main: project("main", { experimental: CODE_MODE_FLAG, agents: { reviewer: { mode: "primary", description: "Defined only in config" } } }),
+  allowed: project("allowed", { experimental: CODE_MODE_FLAG, permissions: ["utilities_weather_*", "utilities_timer_*", "utilities_speech_*"].map(allow) }),
+  denied: project("denied", { experimental: CODE_MODE_FLAG, permissions: [{ action: "utilities_speech_*", resource: "*", effect: "deny" }] }),
   install: project("install", {}),
   shadow: project("shadow", {}),
 }
@@ -74,8 +77,8 @@ async function call(directory: string, sessionID: string, tool: ToolName, replie
 /** Runs a Code Mode program through the host's own tool path, unattended, as a schedule condition does. */
 async function codemode(sessionID: string, body: string) {
   const code = `const seen = {}\n${body}\nthrow new Error("SEEN " + JSON.stringify(seen))`
-  const message = await host.sdk.experimental.schedule.create({ sessionID, name: "utilities-check", when: { in: "6 hours" }, if: { code }, prompt: "never wakes" } as never)
-    .then(() => "created", (error: Error) => error.message)
+  const outcome = await unattended(host, sessionID, code)
+  const message = outcome.ok ? "created" : outcome.error
   const seen = /SEEN (\{.*\})/s.exec(message)
   if (!seen) throw new Error(`the program did not finish: ${message}`)
   return JSON.parse(seen[1]!) as Record<string, unknown>
@@ -83,8 +86,8 @@ async function codemode(sessionID: string, body: string) {
 /** Runs a Code Mode program through the host's own tool path unattended, and returns the message the run ended with. */
 async function codemodeMessage(sessionID: string, body: string): Promise<string> {
   const code = `const seen = {}\n${body}\nthrow new Error("SEEN " + JSON.stringify(seen))`
-  return host.sdk.experimental.schedule.create({ sessionID, name: "utilities-g4", when: { in: "6 hours" }, if: { code }, prompt: "never wakes" } as never)
-    .then(() => "", (error: Error) => error.message)
+  const outcome = await unattended(host, sessionID, code)
+  return outcome.ok ? "" : outcome.error
 }
 
 /** Calls each tool once; `seen[name]` is the output's key count, or the error the program caught. */

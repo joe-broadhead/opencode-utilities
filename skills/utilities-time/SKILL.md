@@ -46,6 +46,6 @@ Timers belong to the current project and never alert on their own: they are chec
 3. `utilities_timer_check` shows what is due or overdue. Call it when the user asks about reminders. `utilities_timer_get`, `utilities_timer_list` (optionally by `tag`) and `utilities_timer_delete` manage them.
 4. If the timer state is unknown (`TIMER_STATE_UNKNOWN`), read the timer before you retry.
 
-For an alert that fires by itself, suggest OpenCode's `schedule_*` tools, which need `"experimental": { "schedules": true }` in `opencode.json`.
+For an alert that fires by itself, suggest OpenCode's automations (`automation_*` tools, OpenCode 2.3.1 and later), which need `"experimental": { "automations": true }` in `opencode.json`. On OpenCode 2.2.3 to 2.3.0 they are the `schedule_*` tools, which need `"experimental": { "schedules": true }`.
 
 A cron job can call the read tools (not timer writes) with no model, through the RPC `utilities.local.tools`. It uses a session created for it (`opencode api post /api/session …`, keep `data.id`), and so does a test of a script. Never borrow a session found through history or a session list: the script would run as that session's agent, under its rules. Details: https://raw.githubusercontent.com/joe-broadhead/opencode-utilities/HEAD/docs/scripting.md.
