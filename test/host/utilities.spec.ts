@@ -1,7 +1,7 @@
 // Utilities on the public @opencode/sdk host (no private host imports), with a fake runtime that makes
 // the real runtime's permission requests. This is where V3 is recorded: the shipped permission mechanism
 // is the default-ask agent rules, and user rules and saved approvals win over them.
-import { HOST_VERSION, project, removeRoot, startHost } from "./harness.js"
+import { AUTOMATIONS, HOST_VERSION, project, removeRoot, startHost, toolErrorMetadata, unattended } from "./harness.js"
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -28,10 +28,13 @@ type Rule = { action: string; resource: string; effect: string }
 const contexts = new Map<string, Pick<Plugin.Context, "tool">>()
 const observer: Plugin.Plugin = { id: "test.observer", setup(ctx) { contexts.set(ctx.location.directory, ctx) } }
 const runtimes = fakeRuntimes({ speech: "SPEECH_ASSETS_MISSING" })
+// A schedule's check program, or on 2.3.1 and later an automation's code action, is how a host test runs Code Mode
+// with nobody present to answer a prompt.
+const CODE_MODE_FLAG = AUTOMATIONS ? { automations: true } : { schedules: true }
 const dirs = {
-  main: project("main", { experimental: { schedules: true }, agents: { reviewer: { mode: "primary", description: "Defined only in config" } } }),
-  allowed: project("allowed", { experimental: { schedules: true }, permissions: ["utilities_weather_*", "utilities_timer_*", "utilities_speech_*"].map(allow) }),
-  denied: project("denied", { experimental: { schedules: true }, permissions: [{ action: "utilities_speech_*", resource: "*", effect: "deny" }] }),
+  main: project("main", { experimental: CODE_MODE_FLAG, agents: { reviewer: { mode: "primary", description: "Defined only in config" } } }),
+  allowed: project("allowed", { experimental: CODE_MODE_FLAG, permissions: ["utilities_weather_*", "utilities_timer_*", "utilities_speech_*"].map(allow) }),
+  denied: project("denied", { experimental: CODE_MODE_FLAG, permissions: [{ action: "utilities_speech_*", resource: "*", effect: "deny" }] }),
   install: project("install", {}),
   shadow: project("shadow", {}),
 }
@@ -46,7 +49,12 @@ const runtime = (directory: string) => runtimes.created.find(r => r.options.loca
 async function boot(directory: string, agent = "build") {
   const session = await host.sdk.session.create({ agent, location: { directory } })
   // Plugins set up on the location's first listing, which fails while they are still activating.
-  await waitFor(() => host.sdk.agent.list({ location: { directory } }).then(() => contexts.has(directory), () => false), 30_000)
+  await waitFor(() => host.sdk.agent.list({ location: { directory } }).then(() => contexts.has(directory), () => false), 30_000, `the plugin's context in ${directory}`)
+  // From 2.2.7 a location's plugins load in the background, so the context can exist before the plugin has registered
+  // its RPC. The status RPC is the readiness probe: it answers only once setup has registered it.
+  await waitFor(async () => {
+    try { await host.sdk.rpc(Utilities).status({}, { location: { directory } }); return true } catch { return false }
+  }, 30_000, `the status RPC in ${directory}`)
   return session.id
 }
 async function tools(directory: string) {
@@ -74,8 +82,8 @@ async function call(directory: string, sessionID: string, tool: ToolName, replie
 /** Runs a Code Mode program through the host's own tool path, unattended, as a schedule condition does. */
 async function codemode(sessionID: string, body: string) {
   const code = `const seen = {}\n${body}\nthrow new Error("SEEN " + JSON.stringify(seen))`
-  const message = await host.sdk.experimental.schedule.create({ sessionID, name: "utilities-check", when: { in: "6 hours" }, if: { code }, prompt: "never wakes" } as never)
-    .then(() => "created", (error: Error) => error.message)
+  const outcome = await unattended(host, sessionID, code)
+  const message = outcome.ok ? "created" : outcome.error
   const seen = /SEEN (\{.*\})/s.exec(message)
   if (!seen) throw new Error(`the program did not finish: ${message}`)
   return JSON.parse(seen[1]!) as Record<string, unknown>
@@ -83,8 +91,8 @@ async function codemode(sessionID: string, body: string) {
 /** Runs a Code Mode program through the host's own tool path unattended, and returns the message the run ended with. */
 async function codemodeMessage(sessionID: string, body: string): Promise<string> {
   const code = `const seen = {}\n${body}\nthrow new Error("SEEN " + JSON.stringify(seen))`
-  return host.sdk.experimental.schedule.create({ sessionID, name: "utilities-g4", when: { in: "6 hours" }, if: { code }, prompt: "never wakes" } as never)
-    .then(() => "", (error: Error) => error.message)
+  const outcome = await unattended(host, sessionID, code)
+  return outcome.ok ? "" : outcome.error
 }
 
 /** Calls each tool once; `seen[name]` is the output's key count, or the error the program caught. */
@@ -124,8 +132,11 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
   })
 
   test("inserts the ask rules right after each agent's base allow; config-only agents are named with the fix", async () => {
-    const { data: agents } = await host.sdk.agent.list({ location: { directory: dirs.main } })
-    const rules = (id: string) => (agents as { id: string; permissions: Rule[] }[]).find(a => a.id === id)!.permissions.map(r => `${r.effect} ${r.action} ${r.resource}`)
+    const listed = async () => (await host.sdk.agent.list({ location: { directory: dirs.main } })).data as { id: string; permissions: Rule[] }[]
+    let agents = await listed()
+    // 2.3.2 can list a config-only agent a moment after the location is ready; the assertion below is unchanged.
+    await waitFor(async () => { agents = await listed(); return agents.some(a => a.id === "reviewer") }, 30_000, "the config-only agent reviewer")
+    const rules = (id: string) => agents.find(a => a.id === id)!.permissions.map(r => `${r.effect} ${r.action} ${r.resource}`)
     const block = defaultRules("ask-changes").map(r => `${r.effect} ${r.action} ${r.resource}`)
     for (const id of ["build", "plan", "general", "explore"]) expect(rules(id).slice(0, block.length + 1)).toEqual(["allow * *", ...block])
     expect(rules("plan").filter(r => r.startsWith("deny")).length).toBeGreaterThan(0)
@@ -141,7 +152,11 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
   })
 
   test("status names a user's skill that takes the place of the plugin's own, read through the public skill list", async () => {
+    await boot(dirs.main)
+    await boot(dirs.shadow)
     expect((await host.sdk.rpc(Utilities).status({}, { location: { directory: dirs.main } })).shadowedSkills).toEqual([])
+    // A location's skills are listed as it settles; wait, bounded, until the user's own skill is the one listed.
+    await waitFor(async () => (await host.sdk.skill.list({ location: { directory: dirs.shadow } })).data.some((s: { id: string; path: string }) => s.id === "utilities-time" && s.path === shadowSkill), 30_000, "the user's own utilities-time skill")
     const status = await host.sdk.rpc(Utilities).status({}, { location: { directory: dirs.shadow } })
     const all = (await host.sdk.skill.list({ location: { directory: dirs.shadow } })).data
     const listed = all.find((s: { id: string }) => s.id === "utilities-time") as { path: string } | undefined
@@ -248,7 +263,7 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     runtime(dirs.main).failures.clear()
     expect(failed.error?._tag).toBe("Tool.Error")
     expect(failed.error?.message).toBe("TIMER_EXISTS: A timer named 'review' already exists. Next step: Call utilities_timer_set with replace: true to overwrite it.")
-    expect(failed.error?.metadata).toEqual({ code: "TIMER_EXISTS", hint: "Call utilities_timer_set with replace: true to overwrite it." })
+    expect(toolErrorMetadata(failed.error)).toEqual({ code: "TIMER_EXISTS", hint: "Call utilities_timer_set with replace: true to overwrite it." })
   })
 
   test("commands: status posts to the session; the speech install asks as the session's agent first", async () => {
@@ -503,8 +518,14 @@ describe("host compatibility and unload", () => {
     ], "2.4.0")
     try {
       const location = { directory: project("untested", {}) }
-      await untested.sdk.agent.list({ location })
-      expect(untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found 2.4.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7 or 2.3.0, or set the plugin option allowUntestedHost: true"))).toBe(true)
+      // From 2.2.7 a location's plugins load in the background: wait until the refusing plugin has logged and the
+      // allowing plugin answers its status RPC, then run the unchanged assertions below.
+      await waitFor(async () => {
+        await untested.sdk.agent.list({ location }).catch(() => undefined)
+        if (!untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found 2.4.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 or 2.3.2, or set the plugin option allowUntestedHost: true"))) return false
+        try { await untested.sdk.rpc(Utilities).status({}, { location }); return true } catch { return false }
+      }, 30_000, "the untested host's refusal and its allowing plugin's status RPC")
+      expect(untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found 2.4.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 or 2.3.2, or set the plugin option allowUntestedHost: true"))).toBe(true)
       expect(refused.created).toHaveLength(0)
       expect(allowed.created).toHaveLength(1)
       const status = await untested.sdk.rpc(Utilities).status({}, { location })
@@ -521,10 +542,10 @@ describe("host compatibility and unload", () => {
   })
 })
 
-async function waitFor(check: () => Promise<boolean>, timeout = 10_000) {
+async function waitFor(check: () => Promise<boolean>, timeout = 10_000, what = "the host") {
   const deadline = Date.now() + timeout
   while (!(await check())) {
-    if (Date.now() > deadline) throw new Error("timed out waiting for the host")
+    if (Date.now() > deadline) throw new Error(`timed out waiting for ${what}`)
     await Bun.sleep(50)
   }
 }

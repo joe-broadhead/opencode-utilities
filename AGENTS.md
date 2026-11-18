@@ -43,7 +43,7 @@ This repository builds `@joe-broadhead/opencode-utilities`, an unofficial OpenCo
 
 - `npm run check` is the one command. Host and pack runs set `HOME`, the XDG variables, `OPENCODE_TEST_HOME` and `TMPDIR` inside a temp root that is never under the real home, and assert that OpenCode's paths stay there.
 - The tested OpenCode releases are `TESTED_HOSTS` in `src/host/versions.ts`. The host, pack and stock stages, CI and the status's `tested` flag read that list; change it there only. The host stage runs the suite on each release's `@opencode/sdk` (`scripts/host-tests.mjs`, which installs the others into `/tmp` and sets `HOST_SDK_DIR`), and the pack stage loads each stock release. A release that fails or cannot be installed fails the run, so a subset is never a green run.
-- Host tests pass `OpenCode.create({ app: { version } })`. Test doubles are narrow `Pick` types that typecheck against 2.2.3 and 2.2.4.
+- Host tests pass `OpenCode.create({ app: { version } })`, and the harness imports the SDK from `HOST_SDK_DIR` by path, so each host run really loads that release's SDK. On 2.3.1 and later the harness builds that host through `PromiseSdk.create`, which `OpenCode.create` calls, with the SDK's `overrides` so that its Automation service also runs the scheduler, as `opencode serve` does: Code Mode with nobody present runs there as an automation's code action (`unattended` in `test/host/harness.ts`). Test doubles are narrow `Pick` types that typecheck against 2.2.3 and 2.2.4.
 - The default checks call no network service. Live weather is behind `UTILITIES_LIVE_WEATHER=1`.
 - Do not skip, weaken or delete a test to get green.
 
