@@ -2,12 +2,13 @@ import * as z from "zod"
 import { parse } from "../domain/common.js"
 import { DEPRECATED_IDS, NAMESPACE, methodClass, toolRegistrable, type ToolName } from "../domain/contract.js"
 import { TOOL_DEFINITIONS } from "../domain/registry.js"
-import { registerToolsRpc, type JsonSchema, type PluginMethod, type ToolsRpcContext } from "./tools-rpc.js"
+import { registerToolsRpc, type JsonSchema, type PluginMethod, type ToolsRpcContext } from "@we-the-rebel-alliance/source-contract/tools-rpc"
+import { PLUGIN } from "../tools-rpc.js"
 import { runTool, type ToolSources } from "./tools.js"
 
 /**
  * The tools RPC `utilities.local.tools`: every tool as an RPC method of the same name, so a script can call it with no
- * model, as a session and the agent it names (src/host/tools-rpc.ts, docs/scripting.md).
+ * model, as a session and the agent it names (src/tools-rpc.ts, docs/scripting.md).
  *
  * Each method runs the tool's own path: the same input schema, the same runtime call and the same asserts as the
  * model's tool, with the script's call as the invocation. Every tool is allowed by default; the `access` option and a
@@ -85,5 +86,5 @@ export function registerScripting(ctx: ToolsRpcContext, sources: ToolSources, on
     }
   }
   const aliasing = { ...ctx, rpc: { ...ctx.rpc, register: both } } as unknown as ToolsRpcContext
-  return registerToolsRpc(aliasing, { methods: scriptMethods(sources) })
+  return registerToolsRpc(aliasing, { plugin: PLUGIN, methods: scriptMethods(sources) })
 }

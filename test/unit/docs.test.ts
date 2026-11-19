@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url"
 import { defaultRules } from "../../src/host/permissions.js"
 import { FAILURES } from "../../src/domain/common.js"
 import { ACCESS_VALUES, DEFAULT_ASK, TOOLS } from "../../src/domain/contract.js"
-import { NEXT_STEPS, TOOLS_RPC_ID } from "../../src/host/tools-rpc.js"
+import { NEXT_STEPS, TOOLS_RPC_ID } from "../../src/tools-rpc.js"
 import { HOST_RANGE, TESTED_HOSTS, TESTED_TEXT } from "../../src/host/versions.js"
 
 const ROOT = fileURLToPath(new URL("../../", import.meta.url))

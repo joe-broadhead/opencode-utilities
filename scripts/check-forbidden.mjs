@@ -31,17 +31,16 @@ const RULES = [
   { pattern: /["']@opencode-ai\//, message: "V1 @opencode-ai packages" },
   { pattern: /["'`]@opencode\/ai(?:\/[^"'`]*)?["'`]/, message: "@opencode/ai changes incompatibly between patches; do not import it" },
   { pattern: /\bpackages\/(?:ai|client|core|opencode|plugin|protocol|schema|sdk|server|util)\/src\b/, message: "private host source import" },
-  { pattern: /\bhook\(\s*["']evaluate["']/, evaluate: true, message: "permission evaluate hook (only the tools RPC's own, in src/host/tools-rpc.ts)" },
+  { pattern: /\bhook\(\s*["']evaluate["']/, evaluate: true, message: "permission evaluate hook (only the tools RPC's own, in the bundled source contract)" },
   { pattern: /\bevent\.effect\s*=(?!=)/, message: "a hook that changes a permission effect" },
   { pattern: /\b(?:config|options)\.policy\b|(?:^|[\s{,])policy\s*\??\s*:/, scope: ["src/", "dist/"], message: "plugin permission policy option" },
   { pattern: /\bexperimental\s*\??\.\s*artifact\b|\bexperimental\s*\??\.?\[\s*["'`]artifact["'`]\s*\]|\{[^}]*\bartifact\b[^}]*\}\s*=\s*[\w$.?]*\bexperimental\b/, message: "ctx.experimental.artifact is experimental (new in 2.2.4); do not use it" },
   { pattern: /^import\s+\{[^}]*\bz\b[^}]*\}\s+from\s+["']zod["']/, scope: ["src/"], message: "import zod as `import * as z from \"zod\"`; a named import bundles every locale" },
 ]
-// The one exception to the evaluate-hook rule: the tools RPC (src/host/tools-rpc.ts) turns an ask on its own script
-// calls in flight into a deny, because no one is there to answer a script's prompt. It only tightens, and matches only
-// its own live call ids. It is allowed exactly once, in that file and in that file's section of dist/index.js.
-const SCRIPT_HOOK = "src/host/tools-rpc.ts"
-const scriptHooks = new Map([[SCRIPT_HOOK, 0], ["dist/index.js", 0]])
+// The one exception to the evaluate-hook rule: the bundled tools RPC turns an ask on its own script calls in flight
+// into a deny, because no one is there to answer a script's prompt. It only tightens. It is allowed exactly once, in
+// dist/index.js, including the inlined source-contract module.
+const scriptHooks = new Map([["dist/index.js", 0]])
 const vendored = file => file.startsWith("dist/")
 for (const file of [...source, ...built]) {
   const content = readFileSync(join(root, file), "utf8")
@@ -49,11 +48,12 @@ for (const file of [...source, ...built]) {
   let firstParty = true, section = file
   content.split("\n").forEach((line, index) => {
     if (vendored(file) && /^\/\/ (?:src|node_modules)\//.test(line)) { firstParty = line.startsWith("// src/"); section = line.slice(3) }
+    if (file === "dist/index.js" && /\bhook\(\s*["']evaluate["']/.test(line)) { scriptHooks.set(file, scriptHooks.get(file) + 1); return }
     if (!firstParty) return
     for (const rule of RULES) {
       if (rule.scope && !rule.scope.some(prefix => file.startsWith(prefix))) continue
       if (!rule.pattern.test(line)) continue
-      if (rule.evaluate && section === SCRIPT_HOOK && scriptHooks.has(file)) { scriptHooks.set(file, scriptHooks.get(file) + 1); continue }
+      if (rule.evaluate && scriptHooks.has(file)) { scriptHooks.set(file, scriptHooks.get(file) + 1); continue }
       report(file, index + 1, rule.message)
     }
   })
@@ -99,7 +99,7 @@ for (const file of [...tracked, ...dist]) {
 }
 
 // dist/ ships prebuilt JavaScript only, and inlines no host-provided or build-time package.
-const INLINED = new Set(["zod"])
+const INLINED = new Set(["zod", "@we-the-rebel-alliance/source-contract"])
 if (built.length === 0) report("dist", 0, "missing; run npm run build first")
 for (const file of dist) if (!file.endsWith(".js")) report(file, 0, "dist/ ships only .js; the licences of inlined packages are in the root NOTICE")
 for (const file of built) {

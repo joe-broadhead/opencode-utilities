@@ -93,4 +93,4 @@ and each declared value against the options parser.
 Jelly's curated catalogue pins an exact version. Each release is published under a new version, so a review in
 Jelly can tell the two apart.
 
-The declaration test runs the shared kit, `test/support/jelly-kit.ts`, which checks the declaration and this page against Jelly's plugin authors' standard. `scripts/check-copies.mjs` holds the kit, Jelly's setting rules (`test/support/jelly-settings.ts`) and the shared part of the tools RPC (`src/host/tools-rpc.ts`), equal to the copies every plugin carries.
+The declaration test runs the shared kit, `test/support/jelly-kit.ts`, which checks the declaration and this page against Jelly's plugin authors' standard. `scripts/check-copies.mjs` holds the kit and Jelly's setting rules (`test/support/jelly-settings.ts`), equal to the copies every plugin carries. The tools RPC's transport is the source contract package, pinned in `package-lock.json` and bundled into `dist/index.js`.
