@@ -6,8 +6,8 @@ This repository builds `@joe-broadhead/opencode-utilities`, an unofficial OpenCo
 
 - **Host.** Public `@opencode/plugin` APIs only. The host range is exactly `>=2.2.3 <2.4.0`, in `package.json` `opencode.host` and in the startup check; never `^2.2.3`.
 - **Stable IDs.** Plugin `utilities.local`, TUI `utilities.local.tui`, namespace `utilities`, the status RPC `utilities.local` and the tools RPC `utilities.local.tools`.
-- **Scripts.** The tools RPC (`src/host/scripting.ts`, on the shared `src/host/tools-rpc.ts`) makes a method of every tool, with its class: `compute`, `read-state`, `network` and `read-file` are reads, `write-state` is a write, `write-file` is an export. A call resolves the rule before dispatch: only an `allow` runs; an `ask` is refused with no tool call, and so is a `deny`. Each method runs the tool's own path (`runTool`), checks its own input, and keeps `available()` in step with the model's tool list.
-- `src/host/tools-rpc.ts` is a copy of a module shared by several plugins: change only its block between the `PLUGIN-SPECIFIC` markers here, and the rest in the shared copy first.
+- **Scripts.** The tools RPC (`src/host/scripting.ts`, on `src/tools-rpc.ts` and the source contract's transport) makes a method of every tool, with its class: `compute`, `read-state`, `network` and `read-file` are reads, `write-state` is a write, `write-file` is an export. A call resolves the rule before dispatch: only an `allow` runs; an `ask` is refused with no tool call, and so is a `deny`. Each method runs the tool's own path (`runTool`), checks its own input, and keeps `available()` in step with the model's tool list.
+- The tools RPC transport is `@we-the-rebel-alliance/source-contract/tools-rpc`, pinned to a tag and bundled into `dist/index.js`. Utilities' part is `src/tools-rpc.ts`.
 - **Permissions.** The default rules go in through `ctx.agent.transform`, directly after each agent's base `* * allow`: allow at `access: "all"` (the default), ask or deny at the restricting values. Leave agents with no base allow alone, never change a deny, and add no policy layer or allow-list option. An agent is guarded when the whole block appears anywhere after its base allow, because other plugins insert at the same index. Agents without the block are named with the fix only when their own rules would run one of the block's actions without asking (the last matching rule is an allow): the block **first** in that agent's own `permissions`, followed by the user's top-level `utilities_*` rules. Never recommend the block at the top level.
 - **Plain assert.** `ctx.permission.assert(input)` with one argument, raced locally against the tool signal and fenced after it settles. Host permission errors propagate unchanged.
 - **One status model.** `/utilities-status`, the RPC `status` method and the TUI dialog render the same view. Its shared fields come first, with the names every plugin uses: `version`, `host` `{ version, range, tested }`, `state`, `unguardedAgents` and `nextStep`. The view has the S9 rows (Connection, Account, Access, the modules, Tools, Agents without default rules, OpenCode) and exactly one `Next step` line, `Nothing to do.` when nothing is needed. Status text is plain text. The dialog subscribes to events only while open. `utilities_status` renders it compactly, with the unguarded agents as a count. No `ctx.ui.slot` calls: the TUI has one palette command, "Utilities: Status" (`/utilities`), and its dialog.
@@ -25,11 +25,11 @@ This repository builds `@joe-broadhead/opencode-utilities`, an unofficial OpenCo
 - a second argument, or a signal option, to `permission.assert`;
 - `ctx.experimental.artifact`;
 - imports of `@opencode/ai`, `@opencode-ai/*` or OpenCode host source;
-- a permission `evaluate` hook, a hook that changes a permission effect, or a `policy` option. The one exception is the tools RPC's hook in `src/host/tools-rpc.ts`, allowed exactly once there and once in `dist/index.js`: it turns an `ask` on one of the RPC's own script calls in flight into a deny, because no one can answer it, and touches nothing else;
+- a permission `evaluate` hook, a hook that changes a permission effect, or a `policy` option. The one exception is the tools RPC's hook, allowed exactly once in `dist/index.js` (the bundle that inlines the source contract): it turns an `ask` on one of the RPC's own script calls in flight into a deny, because no one can answer it, and touches nothing else;
 - a named `import { z } from "zod"` in `src/` (use `import * as z from "zod"`);
 - install or pack scripts, and peer or bundled dependencies, in any `package.json`;
 - absolute local paths in any tracked file;
-- bundling anything into `dist/` except `zod`.
+- bundling anything into `dist/` except `zod` and `@we-the-rebel-alliance/source-contract`.
 
 ## Package
 

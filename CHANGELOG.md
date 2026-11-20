@@ -1,6 +1,18 @@
 # Changelog
 
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## [Unreleased]
+
+### Changed
+
+- The tools RPC transport is source-contract's `tools-rpc` module, pinned at
+  `github:we-the-rebel-alliance/source-contract#v0.3.0` and bundled into `dist/index.js`. The vendored copy of the module
+  and its `check-copies` entry are gone; every method, its class and its permission action, and every refusal are
+  unchanged, so a script sees the same methods and the same answers. source-contract's MIT notice is in `NOTICE`, and
+  the forbidden scan allows the transport's one evaluate hook in the bundle it is inlined into.
+- CI: a run by hand no longer shares a concurrency group with a push on the same ref, so it cannot cancel the run a
+  release stands on.
+- No host-support change: still tested on 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 and 2.3.2, with the supported range unchanged (`>=2.2.3 <2.4.0`).
 
 ## [0.0.6] - 2026-11-18
 

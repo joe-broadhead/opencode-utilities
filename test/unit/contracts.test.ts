@@ -15,7 +15,7 @@ import { speechInputs, speechOutputs } from "../../src/modules/speech/contracts.
 import { validateWav } from "../../src/artifacts/wav.js"
 import { weatherBase, wav } from "../fixtures.js"
 import { INPUTS, SAMPLES } from "../host/samples.js"
-import { NEXT_STEPS } from "../../src/host/tools-rpc.js"
+import { NEXT_STEPS } from "../../src/tools-rpc.js"
 
 type Shape = { properties?: Record<string, { description?: string }>; oneOf?: Shape[]; anyOf?: Shape[] }
 const fields = (schema: Shape): [string, string | undefined][] => [

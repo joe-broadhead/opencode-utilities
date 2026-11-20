@@ -4,7 +4,7 @@ import { describe, expect, test, vi } from "vitest"
 import { MODULES, TOOLS, type Availability, type StatusView, type ToolName } from "../../src/domain/contract.js"
 import { UtilitiesError } from "../../src/domain/common.js"
 import { SCRIPT_TOOLS, scriptMethods } from "../../src/host/scripting.js"
-import { NEXT_STEPS, pluginError, TOOLS_RPC_ID } from "../../src/host/tools-rpc.js"
+import { NEXT_STEPS, pluginError, TOOLS_RPC_ID } from "../../src/tools-rpc.js"
 import { failure } from "../host/runtime.js"
 import { INPUTS, SAMPLES } from "../host/samples.js"
 

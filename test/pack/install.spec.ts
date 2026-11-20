@@ -18,7 +18,7 @@ import { DEFAULT_ASK, READ_ACTIONS, MODULES, PLATFORMS, PLUGIN_ID } from "../../
 import { detectTarget, isPlatform } from "../../src/domain/backends.js"
 import { HOST_RANGE, TESTED_HOSTS } from "../../src/host/versions.js"
 import { SCRIPT_TOOLS } from "../../src/host/scripting.js"
-import { TOOLS_RPC_ID } from "../../src/host/tools-rpc.js"
+import { TOOLS_RPC_ID } from "../../src/tools-rpc.js"
 import { wav } from "../fixtures.js"
 
 setDefaultTimeout(300_000)
