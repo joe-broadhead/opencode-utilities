@@ -12,17 +12,17 @@ Unofficial; not affiliated with Open-Meteo. Weather data is from Open-Meteo.com 
 ## Install
 
 ```sh
-opencode plugin add github:joe-broadhead/opencode-utilities#v0.0.6
+opencode plugin add github:joe-broadhead/opencode-utilities#v0.0.7
 ```
 
 Run `opencode reload`, or restart OpenCode, then run `/utilities-status`.
 
-Each release has its own tag, and a Git install does not update by itself. To move to a newer release, remove the old entry with `opencode plugin remove github:joe-broadhead/opencode-utilities#v0.0.5`, then add the new tag with `opencode plugin add github:joe-broadhead/opencode-utilities#v<version>`.
+Each release has its own tag, and a Git install does not update by itself. To move to a newer release, remove the old entry with `opencode plugin remove github:joe-broadhead/opencode-utilities#v0.0.6`, then add the new tag with `opencode plugin add github:joe-broadhead/opencode-utilities#v<version>`.
 
 Or add the plugin to `opencode.json` instead, with the same spec:
 
 ```json
-{ "plugins": [{ "package": "github:joe-broadhead/opencode-utilities#v0.0.6" }] }
+{ "plugins": [{ "package": "github:joe-broadhead/opencode-utilities#v0.0.7" }] }
 ```
 
 The install takes the GitHub release tag. Its commit carries the built `dist/`, so the install runs no build.
@@ -95,7 +95,7 @@ The engine is `utilities-speech-<platform>`. The models are `ggml-tiny-q5_1.bin`
    | `"read-only"` | the reads | nothing: the changes are **denied** |
 
    ```json
-   { "plugins": [{ "package": "github:joe-broadhead/opencode-utilities#v0.0.6", "options": { "access": "read-only" } }] }
+   { "plugins": [{ "package": "github:joe-broadhead/opencode-utilities#v0.0.7", "options": { "access": "read-only" } }] }
    ```
 
 2. **An agent that is read-only or asks**, with rules of its own, later than the plugin's:
@@ -276,7 +276,7 @@ Options go on the plugin entry in `opencode.json`:
 ```jsonc
 {
   "plugins": [{
-    "package": "github:joe-broadhead/opencode-utilities#v0.0.6",
+    "package": "github:joe-broadhead/opencode-utilities#v0.0.7",
     "options": {
       "modules": { "weather": true, "time": true, "speech": true },
       "speech": { "assetsDir": "/opt/opencode-utilities/speech" }
@@ -294,7 +294,7 @@ A system `opencode.json` (`/Library/Application Support/opencode/opencode.json` 
 ```jsonc
 {
   "plugins": [{
-    "package": "github:joe-broadhead/opencode-utilities#v0.0.6",
+    "package": "github:joe-broadhead/opencode-utilities#v0.0.7",
     "options": {
       "modules": { "weather": true, "time": true, "speech": false }
     }
@@ -397,7 +397,7 @@ The full list of codes is in [docs/configuration.md](https://github.com/joe-broa
 2. Remove the plugin:
 
    ```sh
-   opencode plugin remove github:joe-broadhead/opencode-utilities#v0.0.6
+   opencode plugin remove github:joe-broadhead/opencode-utilities#v0.0.7
    ```
 
 3. Removing the plugin keeps your data. To delete it, remove the cache folder with the speech files and the weather cache (`~/.cache/opencode-utilities`, or `$XDG_CACHE_HOME/opencode-utilities`), and the state folder with timers and speech output (`~/.local/share/opencode-utilities`, or `$XDG_DATA_HOME/opencode-utilities`, or your `stateRoot`).
