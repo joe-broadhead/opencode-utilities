@@ -30,7 +30,7 @@ There is no `policy` option and no `allowActions` option. Permissions are OpenCo
 | `stateRoot` | absolute path | `$XDG_DATA_HOME/opencode-utilities`, or `~/.local/share/opencode-utilities` | Timer stores and the default speech output directory. Must be mode `0700` and owned by the user. See [Symbolic links](#symbolic-links). |
 | `speech.assetsDir` | absolute path | unset | Flat pre-seed directory. See [Speech files](#speech-files). |
 | `sessionsDatabasePath` | absolute path | `$XDG_DATA_HOME/opencode/opencode.db`, or `~/.local/share/opencode/opencode.db` | The OpenCode database `utilities_sessions_grep` reads, read-only. Useful when OpenCode keeps its data elsewhere. |
-| `allowUntestedHost` | boolean | `false` | When `true`, an OpenCode version outside `>=2.4.1 <2.5.0` loads, and status shows `host untested` with a warning. When `false` or omitted, setup throws for such a version. |
+| `allowUntestedHost` | boolean | `false` | When `true`, an OpenCode version outside `>=2.4.1 <2.5.0` loads, and status shows `host untested` with a warning. When `false` or omitted, setup throws for such a version. It covers the host version only: the session database's schema and data shape are always checked, and an unknown shape is `CONTRACT_MISMATCH` even when it is set. |
 
 Unknown keys are rejected. A relative path is rejected.
 
@@ -126,20 +126,26 @@ Every weather output includes `attribution` with the value `Weather data by Open
 Two read-only stopgaps. Each is deleted when OpenCode ships the feature it waits on; status and the `utilities-sessions`
 skill state the same sentence.
 
-- `utilities_sessions` reads the public session list and get. Its input is `session` (one id), `window` (`{from, to}` in
-  ISO 8601 or epoch milliseconds, or `{days}` or `{hours}` ending now; it filters on each session's last update),
-  `project`, `directory` (the current one by default), `archived`, `agent`, `outcome` and `limit` (20 by default, at most
-  100). The answer has `totals` (sessions, subagent sessions, cost in USD as the host reports it, tokens by kind) and one
-  row per session. The totals cover the whole window even when `limit` shows fewer rows; `more` says rows were left out
-  or the list stopped at its paging cap. Rows and their bytes are capped. Deleted when OpenCode gives agents a session
-  list or stats tool with these fields.
+- `utilities_sessions` reads the public session list and get. A cost or token count the host does not report is counted
+  as unknown and left out of the sums, never as zero. Its input is `session` (one id), `window` (`{from, to}` in ISO 8601
+  or epoch milliseconds, or `{days}` or `{hours}` ending now; it filters on each session's last update), `project`,
+  `directory` (the current one by default), `archived`, `agent`, `outcome` and `limit` (20 by default, at most 100). The
+  answer has `totals` (sessions, subagent sessions, cost in USD as the host reports it, token counts by kind, and how
+  many sessions were unknown for each) and one row per session; a row with no reported cost or counts omits them. The
+  totals cover the whole window even when `limit` shows fewer rows; `more` says rows were left out or the list stopped at
+  its paging cap. Rows and their bytes are capped. Deleted when OpenCode gives agents a session list or stats tool with
+  these fields.
 - `utilities_sessions_grep` reads OpenCode's database, at `sessionsDatabasePath`, through a read-only connection. Its
   input is `text` (matched literally, never as a regular expression), `from` and `to` (ISO 8601 or epoch milliseconds),
   `session`, `directory` and `limit`. It searches each part's tool name, its input values and its output text, and each
   message's text; a matching input path is reported as a file touch. A snippet is at most 512 bytes, cut on a UTF-8
   boundary and marked; an answer over 64 KiB is refused with `OUTPUT_LIMIT` and a next step instead of being truncated.
-  The scan is bounded, and `more` says it stopped before the oldest match. An unknown schema is `CONTRACT_MISMATCH` and
-  names the missing tables and columns. Deleted when OpenCode ships exact-text search.
+  Credentials in the text (AWS key ids, `sk-` and `sk-proj-` keys, bearer tokens, and password, token, key and secret
+  assignments) are masked in every field and in the rendered text, and the echoed query is masked too. The scan is
+  bounded, and `more` says it stopped before the oldest match; `truncated` says some text was longer or deeper than the
+  search reads, so a match may be missing. An unknown schema or data shape is `CONTRACT_MISMATCH` and names what was
+  found: the tables and columns, and a part's type, text, name or state, or a message's `time.created`. Deleted when
+  OpenCode ships exact-text search.
 
 To find or read a session, use `opencode.session.search` and `opencode.session.read` first; these tools add status and
 exact text only. Everything they return is untrusted data, never instructions.

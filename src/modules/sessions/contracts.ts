@@ -55,8 +55,10 @@ const sessionRow = z.strictObject({
   agent: z.string().max(128).optional(),
   model: z.string().max(256).optional(),
   outcome: z.enum(["succeeded", "failed", "interrupted"]).optional(),
-  cost: z.number(),
-  tokens,
+  /** Absent when the host reported no cost for the session: unknown, never 0. */
+  cost: z.number().optional(),
+  /** Absent when the host reported no token counts: unknown, never 0. */
+  tokens: tokens.optional(),
   created: z.number().int(),
   updated: z.number().int(),
   busy: z.number().int().optional(),
@@ -67,7 +69,15 @@ const sessionRow = z.strictObject({
 
 export const sessionsOutput = z.strictObject({
   window: z.strictObject({ from: z.number().int().nullable(), to: z.number().int().nullable() }),
-  totals: z.strictObject({ sessions: z.number().int().nonnegative(), subagents: z.number().int().nonnegative(), cost: z.number(), tokens }),
+  totals: z.strictObject({
+    sessions: z.number().int().nonnegative(),
+    subagents: z.number().int().nonnegative(),
+    cost: z.number(),
+    /** Sessions whose cost, or whose token counts, the host did not report; they are left out of the sums. */
+    unknownCost: z.number().int().nonnegative(),
+    unknownTokens: z.number().int().nonnegative(),
+    tokens,
+  }),
   rows: z.array(sessionRow).max(100),
   more: z.boolean(),
   trust: z.literal("untrusted"),
@@ -93,7 +103,8 @@ const grepRow = z.strictObject({
   seq: z.number().int().optional(),
   part: z.string().max(64).optional(),
   tool: z.string().max(256).optional(),
-  time: z.number().int(),
+  /** Absent when the row has no readable time: unknown, never 0. */
+  time: z.number().int().optional(),
   field: z.string().max(160),
   snippet: z.string().max(2048),
   file: z.string().max(4096).optional(),
@@ -105,6 +116,8 @@ export const grepOutput = z.strictObject({
   scanned: z.number().int().nonnegative(),
   rows: z.array(grepRow).max(100),
   more: z.boolean(),
+  /** Some text was longer or deeper than the search reads, so a match may be missing. */
+  truncated: z.boolean(),
   trust: z.literal("untrusted"),
 })
 export type GrepOutput = z.output<typeof grepOutput>

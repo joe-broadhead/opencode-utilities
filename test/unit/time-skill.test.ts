@@ -1,5 +1,5 @@
-// The time skill's description decides whether the model loads it. A reminder for a day of the week must reach the
-// memory skill, so the description carries no day-name trigger.
+// The time skill's description decides whether the model loads it. A reminder for a day of the week must reach another
+// app's notes, so the description carries no day-name trigger.
 import { describe, expect, test } from "vitest"
 import { readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"

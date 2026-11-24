@@ -91,7 +91,7 @@ describe("the tarball", () => {
     for (const field of ["workspaces", "dependencies", "peerDependencies", "peerDependenciesMeta", "bundleDependencies", "bundledDependencies", "overrides", "engines"]) expect(manifest[field]).toBeUndefined()
     expect(manifest.optionalDependencies).toBeUndefined()
     // The server part at "." and "./tui" (the TUI imports the RPC contract from its own bundle), plus the three icons
-    // the host and Jelly read. Nothing else, and no ./rpc.
+    // the host and the legacy declaration read. Nothing else, and no ./rpc.
     expect(manifest.exports).toEqual({
       ".": "./dist/index.js",
       "./tui": "./dist/tui.js",

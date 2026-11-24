@@ -1,5 +1,5 @@
-// Size caps are counted in BYTES, not characters (history#45): a 512-byte snippet of multi-byte text is shorter than
-// 512 characters, and cutting at a character index would either split a UTF-8 sequence or exceed the cap.
+// Size caps are counted in BYTES, not characters: a 512-byte snippet of multi-byte text is shorter than 512 characters,
+// and cutting at a character index would either split a UTF-8 sequence or exceed the cap.
 
 export const byteLength = (text: string) => Buffer.byteLength(text, "utf8")
 

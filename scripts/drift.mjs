@@ -1,4 +1,4 @@
-// `npm run drift`: the Jelly declaration's tool list against the tools the code registers. The unit suite checks the same
+// `npm run drift`: the legacy declaration's tool list against the tools the code registers. The unit suite checks the same
 // lists; this prints each difference by name and exits 1 when there is one, so a maintainer can see what moved.
 import { readFileSync } from "node:fs";
 import { NAMESPACE, SPEECH_DOWNLOAD_ACTION, TOOLS } from "../src/domain/contract.js";

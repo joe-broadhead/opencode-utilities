@@ -46,8 +46,8 @@ export const INPUTS: { readonly [K in ToolName]: object } = {
 const tokens = { input: 10, output: 5, reasoning: 0, cache: { read: 0, write: 0 } }
 
 export const SAMPLES: { readonly [K in Exclude<ToolName, "status">]: { readonly output: unknown; readonly text: string } } = {
-  sessions: { output: { window: { from: null, to: null }, totals: { sessions: 1, subagents: 0, cost: 0.25, tokens }, rows: [{ id: "ses_1", title: "Review", project: "project-a", agent: "build", model: "openai/gpt-6", outcome: "succeeded", cost: 0.25, tokens, created: 1, updated: 2, directory: "/project" }], more: false, trust: "untrusted" }, text: "Sessions: 1 (0 subagents)." },
-  sessions_grep: { output: { query: "review", window: { from: null, to: null }, scanned: 2, rows: [{ session: "ses_1", title: "Review", message: "msg_1", seq: 1, part: "tool", tool: "bash", time: 2, field: "input.command", snippet: "review", file: "/project/a.md" }], more: false, trust: "untrusted" }, text: "1 row." },
+  sessions: { output: { window: { from: null, to: null }, totals: { sessions: 1, subagents: 0, cost: 0.25, unknownCost: 0, unknownTokens: 0, tokens }, rows: [{ id: "ses_1", title: "Review", project: "project-a", agent: "build", model: "openai/gpt-6", outcome: "succeeded", cost: 0.25, tokens, created: 1, updated: 2, directory: "/project" }], more: false, trust: "untrusted" }, text: "Sessions: 1 (0 subagents)." },
+  sessions_grep: { output: { query: "review", window: { from: null, to: null }, scanned: 2, rows: [{ session: "ses_1", title: "Review", message: "msg_1", seq: 1, part: "tool", tool: "bash", time: 2, field: "input.command", snippet: "review", file: "/project/a.md" }], more: false, truncated: false, trust: "untrusted" }, text: "1 row." },
   time_now: { output: { generated_at_utc: "2026-10-30T12:00:00Z", format: "rfc3339", times: [snapshot], machine_timezone: "Europe/London" }, text: "It is 21:00 in Asia/Tokyo." },
   time_zones: { output: { region: "Asia", count: 1, timezones: ["Asia/Tokyo"] }, text: "1 zone." },
   time_zone_info: { output: { timezone: "Asia/Tokyo", current: snapshot, next_transition: null }, text: "Asia/Tokyo is UTC+09:00." },

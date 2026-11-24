@@ -1,16 +1,20 @@
 // The two session stopgaps' logic: the schemas and dates, the public-session totals, and the read-only search's SQL,
-// schema refusal and byte caps. The real `bun:sqlite` path is a host test (test/host/utilities.spec.ts); here the
-// opener is injected with `node:sqlite`, so the same SQL runs against a synthetic database under vitest's Node.
+// schema and data-shape refusal, masking and byte caps. The real `bun:sqlite` path is a host test
+// (test/host/utilities.spec.ts); here the opener is injected with `node:sqlite`, so the same SQL runs against a synthetic
+// database under vitest's Node. Every fixture builds from the recorded 2.4.1 schema in test/fixtures/, never from the
+// production column list, so a fixture cannot silently drift from the host's own DDL.
 import { afterEach, describe, expect, test } from "vitest"
-import { mkdtempSync, rmSync } from "node:fs"
+import { mkdtempSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { DatabaseSync } from "node:sqlite"
 import { grep, sessions, type SessionInfo, type SessionSource } from "../../src/modules/sessions/adapter.js"
 import { cutBytes, byteLength } from "../../src/modules/sessions/bytes.js"
 import { grepInput, sessionsInput } from "../../src/modules/sessions/contracts.js"
-import { SCHEMA, type SqliteDatabase } from "../../src/modules/sessions/sqlite.js"
+import type { SqliteDatabase } from "../../src/modules/sessions/sqlite.js"
 
+const SCHEMA_SQL = readFileSync(fileURLToPath(new URL("../fixtures/opencode-2.4.1-schema.sql", import.meta.url)), "utf8")
 const roots: string[] = []
 afterEach(() => { for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 const temp = () => { const root = mkdtempSync(join(tmpdir(), "utilities-sessions-unit-")); roots.push(root); return root }
@@ -59,15 +63,14 @@ describe("the session inputs", () => {
     expect(grepInput.safeParse({}).success).toBe(false)
   })
 
-  test("a date-time without an offset is read as UTC, and a byte cap cuts on a UTF-8 boundary", () => {
+  test("a date-time without an offset is read as UTC, and a byte cap cuts on a UTF-8 boundary", async () => {
     const { read } = source([[sessionInfo("ses_a")]])
-    return Promise.all([
+    const [naive, utc] = await Promise.all([
       sessions({ window: { from: "2026-01-01T00:00:00" } }, read),
       sessions({ window: { from: "2026-01-01T00:00:00Z" } }, read),
-    ]).then(([naive, utc]) => {
-      expect(naive.output.window).toEqual(utc.output.window)
-      expect(naive.output.window.from).toBe(Date.parse("2026-01-01T00:00:00Z"))
-    })
+    ])
+    expect(naive.output.window).toEqual(utc.output.window)
+    expect(naive.output.window.from).toBe(Date.parse("2026-01-01T00:00:00Z"))
   })
 
   test("cutBytes keeps at most the byte cap, marks a cut, and never splits a character", () => {
@@ -89,7 +92,7 @@ describe("utilities_sessions", () => {
     expect(calls[0]).toMatchObject({ order: "desc", directory: "/project", limit: 100 })
     expect(calls[1]).toMatchObject({ cursor: "cursor-0" })
     expect(output.totals).toEqual({
-      sessions: 3, subagents: 1, cost: 2.25,
+      sessions: 3, subagents: 1, cost: 2.25, unknownCost: 0, unknownTokens: 0,
       tokens: { input: 300, output: 150, reasoning: 15, cache: { read: 30, write: 0 } },
     })
     expect(output.rows.map(row => row.id)).toEqual(["ses_a"])
@@ -115,6 +118,23 @@ describe("utilities_sessions", () => {
     await expect(sessions({ session: "ses_missing" }, read)).rejects.toMatchObject({ code: "INPUT_INVALID", hint: expect.stringContaining("opencode.session.search") })
   })
 
+  test("a cost or token count the host did not report is unknown, never zero", async () => {
+    const { cost: _cost, tokens: _tokens, ...bare } = sessionInfo("ses_bare")
+    const partial = sessionInfo("ses_partial", { tokens: { input: 1, output: 2, reasoning: 3 } })
+    const { output } = await sessions({}, source([[bare as SessionInfo, partial]]).read)
+    expect(output.totals).toMatchObject({ sessions: 2, cost: 0.5, unknownCost: 1, unknownTokens: 2 })
+    expect(output.totals.tokens).toEqual({ input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } })
+    for (const row of output.rows) {
+      expect("cost" in row).toBe(row.id !== "ses_bare")
+      expect("tokens" in row).toBe(false)
+    }
+    const text = (await sessions({}, source([[bare as SessionInfo, partial]]).read)).text
+    expect(text).toContain("without a reported cost")
+    expect(text).toContain("without reported counts")
+    expect(text).toContain("cost unknown")
+    expect(text).toContain("tokens unknown")
+  })
+
   test("rows are capped in bytes, with more true, never the totals", async () => {
     const long = sessionInfo("ses_long", { title: "😀".repeat(300), location: { directory: `/${"d".repeat(2000)}` } })
     const many = Array.from({ length: 100 }, (_, index) => ({ ...long, id: `ses_${index}` }))
@@ -126,42 +146,90 @@ describe("utilities_sessions", () => {
   })
 })
 
-/** A synthetic database with the 2.4.1 tables. `omit` removes one table or column, for the refusal. */
-function fixture(options: { readonly omit?: string; readonly rows?: number } = {}) {
+interface FixtureOptions {
+  /** Remove one table or one column (`table.column`), for the schema refusal. */
+  readonly omit?: string
+  /** Extra bulk parts whose text matches `needle-bulk`. */
+  readonly rows?: number
+  /** A text part whose data is not the 2.4.1 envelope. */
+  readonly badPart?: boolean
+  /** A message whose data is not the 2.4.1 envelope. */
+  readonly badMessage?: boolean
+  /** A tool part with credentials in its input. */
+  readonly secrets?: boolean
+  /** A tool part whose input has more strings than the search reads. */
+  readonly manyInputs?: boolean
+  /** A tool part whose time_created is not a number. */
+  readonly unknownTime?: boolean
+}
+
+/** A synthetic database built from the recorded 2.4.1 DDL, with rows written here. */
+function fixture(options: FixtureOptions = {}) {
   const path = join(temp(), "opencode.db")
-  const database = new DatabaseSync(path)
-  for (const [table, columns] of Object.entries(SCHEMA)) {
-    if (options.omit === table) continue
-    const kept = columns.filter(column => options.omit !== `${table}.${column}`)
-    database.exec(`create table "${table}" (${kept.map(column => `"${column}"`).join(", ")})`)
+  const database = new DatabaseSync(path, { enableForeignKeyConstraints: false })
+  database.exec(SCHEMA_SQL)
+  if (options.omit !== undefined) {
+    const [table, column] = options.omit.split(".") as [string, string]
+    database.exec(`alter table "${table}" drop column "${column}"`)
+    database.close()
+    return path
   }
   const insert = (table: string, row: Record<string, unknown>) => {
     const keys = Object.keys(row)
     database.prepare(`insert into "${table}" (${keys.map(key => `"${key}"`).join(", ")}) values (${keys.map(() => "?").join(", ")})`).run(...keys.map(key => row[key] as string | number | null))
   }
   const now = Date.UTC(2026, 10, 20, 12, 0, 0)
-  // A refused schema is checked before any row is read, so the refused fixture needs no rows.
-  if (options.omit !== undefined) { database.close(); return path }
-  if (options.omit !== "session_v2") insert("session_v2", {
-    id: "ses_fixture", project_id: "project-a", parent_id: null, title: "Fixture", cost: 1, tokens_input: 1, tokens_output: 1,
-    tokens_reasoning: 0, tokens_cache_read: 0, tokens_cache_write: 0, time_created: now, time_updated: now + 1_000,
-    time_busy: null, time_idle: null, time_archived: null, directory: "/project", agent: "build", model: "{}",
+  insert("project", { id: "project-fixture", worktree: "/project", time_created: now, time_updated: now, sandboxes: "[]" })
+  insert("session_v2", {
+    id: "ses_fixture", project_id: "project-fixture", parent_id: null, slug: "fixture", title: "Fixture",
+    cost: 1, tokens_input: 1, tokens_output: 1, tokens_reasoning: 0, tokens_cache_read: 0, tokens_cache_write: 0,
+    time_created: now, time_updated: now + 1_000, time_busy: null, time_idle: null, time_archived: null,
+    directory: "/project", version: "2.4.1", agent: "build", model: "{}",
   })
-  if (options.omit !== "session_message") insert("session_message", {
-    id: "msg_1", session_id: "ses_fixture", type: "user", seq: 1, time_created: now, data: JSON.stringify({ text: "please review needle-1" }),
+  const messageData = options.badMessage ? { body: "x" } : { type: "user", time: { created: now }, text: "please review needle-1" }
+  insert("session_message", { id: "msg_1", session_id: "ses_fixture", type: "user", seq: 1, time_created: now, time_updated: now, data: JSON.stringify(messageData) })
+  if (options.badPart) {
+    insert("session_part", {
+      message_id: "msg_1", session_id: "ses_fixture", ordinal: 0, type: "text", call_id: null, time_created: now + 100, time_updated: now + 100,
+      data: JSON.stringify({ body: "x" }),
+    })
+    database.close()
+    return path
+  }
+  insert("session_part", {
+    message_id: "msg_1", session_id: "ses_fixture", ordinal: 0, type: "tool", call_id: "call_1", time_created: now + 500, time_updated: now + 500,
+    data: JSON.stringify({ type: "tool", name: "bash", state: { input: { command: "grep needle-2 notes.md" }, content: [{ type: "text", text: "needle-3" }] } }),
   })
-  if (options.omit !== "session_part") {
+  insert("session_part", {
+    message_id: "msg_1", session_id: "ses_fixture", ordinal: 1, type: "tool", call_id: "call_2", time_created: now + 600, time_updated: now + 600,
+    data: JSON.stringify({ type: "tool", name: "read", state: { input: { filePath: "/project/needle-4.md" }, content: [] } }),
+  })
+  for (let index = 0; index < (options.rows ?? 0); index++) insert("session_part", {
+    message_id: "msg_1", session_id: "ses_fixture", ordinal: 10 + index, type: "tool", call_id: `call_bulk_${index}`, time_created: now + 700 + index, time_updated: now + 700 + index,
+    data: JSON.stringify({ type: "tool", name: "bash", state: { input: { command: `needle-bulk ${"x".repeat(700)}` }, content: [] } }),
+  })
+  if (options.secrets) {
+    const command = 'echo needle AKIAIOSFODNN7EXAMPLE password=hunter2 sk-proj-abcdefghijklmnop "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload" token=abc123 access_token=def456 api_key=ghi789 secret=jkl012'
     insert("session_part", {
-      message_id: "msg_1", session_id: "ses_fixture", ordinal: 0, type: "tool", call_id: "call_1", time_created: now + 500,
-      data: JSON.stringify({ type: "tool", name: "bash", state: { input: { command: "grep needle-2 notes.md" }, content: [{ type: "text", text: "needle-3" }] } }),
+      message_id: "msg_1", session_id: "ses_fixture", ordinal: 20, type: "tool", call_id: "call_secret", time_created: now + 800, time_updated: now + 800,
+      data: JSON.stringify({ type: "tool", name: "bash", state: { input: { command }, content: [] } }),
     })
+    insert("session_message", {
+      id: "msg_secret", session_id: "ses_fixture", type: "user", seq: 2, time_created: now + 900, time_updated: now + 900,
+      data: JSON.stringify({ type: "user", time: { created: now + 900 }, text: "needle passwd=letmein" }),
+    })
+  }
+  if (options.manyInputs) {
+    const input = Object.fromEntries(Array.from({ length: 250 }, (_, index) => [`key${index}`, index === 249 ? "needle-deep" : "plain"]))
     insert("session_part", {
-      message_id: "msg_1", session_id: "ses_fixture", ordinal: 1, type: "tool", call_id: "call_2", time_created: now + 600,
-      data: JSON.stringify({ type: "tool", name: "read", state: { input: { filePath: "/project/needle-4.md" }, content: [] } }),
+      message_id: "msg_1", session_id: "ses_fixture", ordinal: 21, type: "tool", call_id: "call_deep", time_created: now + 1_000, time_updated: now + 1_000,
+      data: JSON.stringify({ type: "tool", name: "bash", state: { input, content: [] } }),
     })
-    for (let index = 0; index < (options.rows ?? 0); index++) insert("session_part", {
-      message_id: "msg_1", session_id: "ses_fixture", ordinal: 10 + index, type: "tool", call_id: `call_bulk_${index}`, time_created: now + 700 + index,
-      data: JSON.stringify({ type: "tool", name: "bash", state: { input: { command: `needle-bulk ${"x".repeat(700)}` }, content: [] } }),
+  }
+  if (options.unknownTime) {
+    insert("session_part", {
+      message_id: "msg_1", session_id: "ses_fixture", ordinal: 22, type: "tool", call_id: "call_time", time_created: "later", time_updated: now,
+      data: JSON.stringify({ type: "tool", name: "bash", state: { input: { command: "needle-time" }, content: [] } }),
     })
   }
   database.close()
@@ -169,27 +237,52 @@ function fixture(options: { readonly omit?: string; readonly rows?: number } = {
 }
 
 const open = async (path: string) => new DatabaseSync(path, { readOnly: true }) as unknown as SqliteDatabase
+const at = Date.UTC(2026, 10, 20, 12, 0, 0)
 
 describe("utilities_sessions_grep", () => {
   test("searches tool names, inputs, outputs and messages, and marks a matching input path as a file touch", async () => {
-    const { output } = await grep({ text: "needle-4" }, { databasePath: fixture(), open, now: () => Date.UTC(2026, 10, 21) })
+    const { output } = await grep({ text: "needle-4" }, { databasePath: fixture(), open, now: () => at })
     expect(output.trust).toBe("untrusted")
+    expect(output.truncated).toBe(false)
     expect(output.rows).toHaveLength(1)
-    expect(output.rows[0]).toMatchObject({ session: "ses_fixture", message: "msg_1", part: "tool", tool: "read", field: "input.filePath", file: "/project/needle-4.md" })
-    const each = async (text: string) => (await grep({ text }, { databasePath: fixture(), open, now: () => Date.UTC(2026, 10, 21) })).output.rows.map(row => row.field)
+    expect(output.rows[0]).toMatchObject({ session: "ses_fixture", message: "msg_1", part: "tool", tool: "read", field: "input.filePath", file: "/project/needle-4.md", time: at + 600 })
+    const each = async (text: string) => (await grep({ text }, { databasePath: fixture(), open, now: () => at })).output.rows.map(row => row.field)
     expect(await each("needle-2")).toEqual(["input.command"])
     expect(await each("needle-3")).toEqual(["content[0].text"])
     expect(await each("needle-1")).toEqual(["message.text"])
   })
 
   test("matches literal text only: a regular expression is a string", async () => {
-    const { output } = await grep({ text: "(a+)+$" }, { databasePath: fixture(), open, now: () => 0 })
+    const { output } = await grep({ text: "(a+)+$" }, { databasePath: fixture(), open, now: () => at })
     expect(output.rows).toEqual([])
     expect(output.scanned).toBeGreaterThan(0)
   })
 
+  test("masks credentials in every field and in the rendered text, and in the echoed query", async () => {
+    const result = await grep({ text: "needle" }, { databasePath: fixture({ secrets: true }), open, now: () => at })
+    const json = JSON.stringify(result.output)
+    const text = result.text
+    for (const secret of ["AKIAIOSFODNN7EXAMPLE", "hunter2", "sk-proj-abcdefghijklmnop", "eyJhbGciOiJIUzI1NiJ9", "abc123", "def456", "ghi789", "jkl012", "letmein"]) {
+      expect(json, secret).not.toContain(secret)
+      expect(text, secret).not.toContain(secret)
+    }
+    expect(json).toContain("AKIA****************")
+    expect(json).toContain("password=[redacted]")
+    expect(json).toContain("passwd=[redacted]")
+    expect(json).toContain("sk-proj-[redacted]")
+    expect(json).toContain("Bearer [redacted]")
+    expect(text).toContain("token=[redacted]")
+    expect(text).toContain("access_token=[redacted]")
+    expect(text).toContain("api_key=[redacted]")
+    expect(text).toContain("secret=[redacted]")
+    // The query is echoed masked, and a search for a secret still finds the row without echoing it.
+    const secret = await grep({ text: "AKIAIOSFODNN7EXAMPLE" }, { databasePath: fixture({ secrets: true }), open, now: () => at })
+    expect(secret.output.query).toBe("AKIA****************")
+    expect(secret.output.rows.length).toBeGreaterThan(0)
+    expect(JSON.stringify(secret.output) + secret.text).not.toContain("AKIAIOSFODNN7EXAMPLE")
+  })
+
   test("filters by the window, the session and the directory, and caps rows at limit", async () => {
-    const at = Date.UTC(2026, 10, 20, 12, 0, 0)
     const later = await grep({ text: "needle", from: at + 10_000 }, { databasePath: fixture(), open, now: () => at })
     expect(later.output.rows).toEqual([])
     const inside = await grep({ text: "needle", from: at, to: at + 5_000, session: "ses_fixture", directory: "/project" }, { databasePath: fixture(), open, now: () => at })
@@ -202,19 +295,44 @@ describe("utilities_sessions_grep", () => {
   })
 
   test("refuses an answer over 64 KiB with a next step, and cuts each snippet in bytes", async () => {
-    await expect(grep({ text: "needle-bulk", limit: 100 }, { databasePath: fixture({ rows: 150 }), open, now: () => 0 }))
+    await expect(grep({ text: "needle-bulk", limit: 100 }, { databasePath: fixture({ rows: 150 }), open, now: () => at }))
       .rejects.toMatchObject({ code: "OUTPUT_LIMIT", hint: expect.stringContaining("Lower limit") })
-    const one = await grep({ text: "needle-bulk", limit: 1 }, { databasePath: fixture({ rows: 1 }), open, now: () => 0 })
+    const one = await grep({ text: "needle-bulk", limit: 1 }, { databasePath: fixture({ rows: 1 }), open, now: () => at })
     expect(byteLength(one.output.rows[0]!.snippet)).toBeLessThanOrEqual(512)
     expect(one.output.rows[0]!.snippet.endsWith(" …")).toBe(true)
   })
 
+  test("reports a row time it could not read as unknown, never as zero", async () => {
+    const { output, text } = await grep({ text: "needle-time" }, { databasePath: fixture({ unknownTime: true }), open, now: () => at })
+    expect(output.rows).toHaveLength(1)
+    expect("time" in output.rows[0]!).toBe(false)
+    expect(text).not.toContain("1970")
+  })
+
+  test("a walk that stops at its cap is truncated, never a clean no-match", async () => {
+    const { output } = await grep({ text: "needle-deep" }, { databasePath: fixture({ manyInputs: true }), open, now: () => at })
+    expect(output.rows).toEqual([])
+    expect(output.truncated).toBe(true)
+    expect(output.more).toBe(true)
+  })
+
   test("refuses an unknown schema with the schema it found, and an unreadable database without a stack trace", async () => {
-    const missing = await grep({ text: "needle" }, { databasePath: fixture({ omit: "session_message.data" }), open, now: () => 0 }).catch(error => error)
+    const missing = await grep({ text: "needle" }, { databasePath: fixture({ omit: "session_message.data" }), open, now: () => at }).catch(error => error)
     expect(missing).toMatchObject({ code: "CONTRACT_MISMATCH" })
     expect(missing.message).toContain("session_message.data")
     expect(missing.message).toContain("Found")
-    await expect(grep({ text: "needle" }, { databasePath: join(temp(), "absent.db"), open, now: () => 0 }))
+    await expect(grep({ text: "needle" }, { databasePath: join(temp(), "absent.db"), open, now: () => at }))
       .rejects.toMatchObject({ code: "OPERATION_FAILED", hint: expect.stringContaining("sessionsDatabasePath") })
+  })
+
+  test("refuses a changed data shape, not only changed columns", async () => {
+    const part = await grep({ text: "needle" }, { databasePath: fixture({ badPart: true }), open, now: () => at }).catch(error => error)
+    expect(part).toMatchObject({ code: "CONTRACT_MISMATCH" })
+    expect(part.message).toContain("session_part.data")
+    expect(part.message).toContain("text")
+    const message = await grep({ text: "needle" }, { databasePath: fixture({ badMessage: true }), open, now: () => at }).catch(error => error)
+    expect(message).toMatchObject({ code: "CONTRACT_MISMATCH" })
+    expect(message.message).toContain("session_message.data")
+    expect(message.message).toContain("time.created")
   })
 })

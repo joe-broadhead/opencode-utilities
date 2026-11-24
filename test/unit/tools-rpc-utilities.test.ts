@@ -79,8 +79,7 @@ describe("Utilities' tools RPC", () => {
     expect(off.timer_check).toBe("INTEGRITY_MISMATCH")
     expect(off.weather_current).toBe("DISABLED")
     expect(off.speech_transcribe).toBe("UNSUPPORTED_PLATFORM")
-    // Cleanup needs no engine; transcription stays available while only its files are missing, as the tool stays registered.
-    expect(off.speech_cleanup).toBeUndefined()
+    // Transcription stays available while only its files are missing, as the tool stays registered.
     expect(reasons(modulesWith({ speech: "SPEECH_ASSETS_MISSING" })).speech_transcribe).toBeUndefined()
   })
 

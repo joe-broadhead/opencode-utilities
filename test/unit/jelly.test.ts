@@ -1,11 +1,12 @@
-// The `jelly` section of package.json, which Jelly reads without loading the plugin. Jelly's agents have no base
-// "allow everything" rule, so this plugin's own default rules never reach them; Jelly writes each declared "ask" or
-// "deny" as that tool's default instead. The `jelly` key stays until the plugin kit replaces it, so the declaration
-// stays tested: four skills and 26 tools.
+// The legacy declaration key in package.json (`jelly`), which an app reads without loading the plugin. That app's
+// agents have no base "allow everything" rule, so this plugin's own default rules never reach them; it writes each
+// declared "ask" or "deny" as that tool's default instead. The key stays until the plugin kit replaces it, so the
+// declaration stays tested: four skills and 26 tools.
 //
-// Two checks of the shared kit are not run here. `declarationProblems` asserts the pre-rename
-// `@joe-broadhead/opencode-<name>` package name, which the pinned test/support/jelly-kit.ts cannot drop here, and
-// `docProblems` asserts docs/jelly.md, which the rebuild deletes.
+// Two checks of the shared kit are not run here. `declarationProblems` asserted the pre-rename
+// `@joe-broadhead/opencode-<name>` package name, which the pinned test/support/jelly-kit.ts cannot drop here, and it also
+// checked the declaration's unknown keys, title, summary, icons and files; `docProblems` asserted docs/jelly.md, which the
+// rebuild deletes. Those fields are unchecked until 4b. Do not restore the old package-name rule.
 import { describe, expect, it } from "vitest"
 import { loadConfig } from "../../src/domain/config.js"
 import { ACCESS_VALUES, NAMESPACE, TOOLS, WEATHER_INTEGRATION } from "../../src/domain/contract.js"
@@ -14,26 +15,26 @@ import { ACCESS_CHOICES, type PluginSetting, settingChoices, settingsProblems, s
 
 const ROOT = new URL("../../", import.meta.url)
 const pkg = readPackage(ROOT)
-const jelly = pkg.jelly as Declaration & { rpc: unknown[]; views: unknown[]; contributes: Record<string, unknown[]> & { settings: PluginSetting[] }; tools: DeclaredTool[] }
+const declaration = pkg.jelly as Declaration & { rpc: unknown[]; views: unknown[]; contributes: Record<string, unknown[]> & { settings: PluginSetting[] }; tools: DeclaredTool[] }
 const known = new Map<string, boolean>(
   Object.entries(TOOLS).map(([name, tool]): [string, boolean] => [`${NAMESPACE}_${name}`, tool.effect !== "write-state" && tool.effect !== "write-file"]),
 )
 
-describe("the jelly declaration", () => {
+describe("the legacy declaration", () => {
   it("declares exactly the tools the plugin registers, no more and no fewer, each permission equal to its action name", () => {
-    const declared = jelly.tools.map(tool => tool.name).sort()
+    const declared = declaration.tools.map(tool => tool.name).sort()
     const registered = Object.keys(TOOLS).map(name => `${NAMESPACE}.${name}`).sort()
     expect(declared).toEqual(registered)
-    for (const tool of jelly.tools) expect(tool.permission, tool.name).toBe(tool.name.replaceAll(".", "_"))
-    expect(jelly.tools.map(tool => tool.permission).sort()).toEqual([...known.keys()].sort())
+    for (const tool of declaration.tools) expect(tool.permission, tool.name).toBe(tool.name.replaceAll(".", "_"))
+    expect(declaration.tools.map(tool => tool.permission).sort()).toEqual([...known.keys()].sort())
   })
 
   it("marks read-only exactly the tools that write no state or file", () => {
-    for (const tool of jelly.tools) expect(tool.readOnly, tool.permission).toBe(known.get(tool.permission))
+    for (const tool of declaration.tools) expect(tool.readOnly, tool.permission).toBe(known.get(tool.permission))
   })
 
   it("declares the optional Open-Meteo key, with a link to where it comes from", () => {
-    expect(jelly.signIns).toEqual([
+    expect(declaration.signIns).toEqual([
       {
         id: "open-meteo",
         label: "Open-Meteo",
@@ -44,10 +45,10 @@ describe("the jelly declaration", () => {
     ])
   })
 
-  it("declares the flat access option, with Jelly's own words for its three values, and no RPC methods, views or other contributions", () => {
-    expect(jelly.rpc).toEqual([])
-    expect(jelly.views).toEqual([])
-    expect(jelly.contributes).toEqual({
+  it("declares the flat access option, with the declaration's own words for its three values, and no RPC methods, views or other contributions", () => {
+    expect(declaration.rpc).toEqual([])
+    expect(declaration.views).toEqual([])
+    expect(declaration.contributes).toEqual({
       homeFeeds: [],
       homeWidgets: [],
       workKinds: [],
@@ -64,12 +65,12 @@ describe("the jelly declaration", () => {
     })
   })
 
-  it("the settings follow Jelly's rules for a declared setting", () => {
-    expect(settingsProblems(jelly.contributes.settings)).toEqual([])
+  it("the settings follow the declaration schema's rules for a declared setting", () => {
+    expect(settingsProblems(declaration.contributes.settings)).toEqual([])
   })
 
   it("the options parser takes every declared access choice, its default included, and refuses a value outside them", () => {
-    const access = jelly.contributes.settings.find(setting => setting.key === "access")!
+    const access = declaration.contributes.settings.find(setting => setting.key === "access")!
     const values = (settingChoices(access) ?? []).map(choice => choice.value)
     expect(values).toEqual([...ACCESS_VALUES])
     for (const value of values) expect<string>(loadConfig({ access: value }).access).toBe(value)

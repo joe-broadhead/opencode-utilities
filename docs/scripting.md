@@ -50,8 +50,8 @@ Create a session for the script once, with the agent it runs as and the project 
 opencode api post /api/session -d '{"title":"morning check","agent":"build","location":{"directory":"/path/to/project"}}'
 ```
 
-A test of a script creates its own session in the same way. Never borrow an existing session found through history or a
-session list: the script would run as that session's agent, under that session's rules.
+A test of a script creates its own session in the same way. Never borrow an existing session found by searching past
+sessions or a session list: the script would run as that session's agent, under that session's rules.
 
 Session rules come after the agent's, so a session can open or narrow what its script may do. This one may call
 `weather_current` and `weather_daily`, and nothing else from Utilities that asks:

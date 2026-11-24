@@ -61,7 +61,54 @@ export const openDatabase: OpenDatabase = async path => {
   }
 }
 
-/** Reads the schema this stopgap needs, and refuses with what it found instead of guessing. */
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value)
+
+/** A parsed data column, or undefined when the text is not a JSON object. `data` columns are JSON text in 2.4.1. */
+const object = (value: unknown): Readonly<Record<string, unknown>> | undefined => {
+  if (typeof value !== "string") return undefined
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : undefined
+  } catch {
+    return undefined
+  }
+}
+
+const refuse = (what: string): never => fail("CONTRACT_MISMATCH", {
+  message: `OpenCode's session database is not the shape this stopgap reads: ${what}.`,
+  hint: "Update the plugin, or find the session with opencode.session.search instead.",
+})
+
+/** A sampled type, named without echoing its content: a data column may hold secrets. */
+const kind = (value: unknown) => typeof value === "string" ? JSON.stringify(value.slice(0, 40)) : value === undefined ? "no type" : "a non-string type"
+
+/**
+ * Beyond the columns: the data envelope this stopgap reads. A `session_part.data` is a JSON object whose `type` is the
+ * row's type; text and reasoning parts carry a string `text`, tool parts a string `name` and an object `state`; a
+ * `session_message.data` carries a numeric `time.created`. Each table's newest rows are sampled (an empty one has
+ * nothing to check), so a database with the same columns and a changed shape is refused instead of silently returning no
+ * rows.
+ */
+export function checkShape(database: SqliteDatabase): void {
+  for (const row of database.prepare("select type, data from session_part order by time_created desc, rowid desc limit 10").all()) {
+    const type = String(row["type"]), data = object(row["data"]), where = `session_part.data for a ${type} row`
+    if (data === undefined) refuse(`${where} is not a JSON object`)
+    if (data!["type"] !== type) refuse(`${where} has ${kind(data!["type"])}, not the row's type ${JSON.stringify(type)}`)
+    if (type === "text" || type === "reasoning") if (typeof data!["text"] !== "string") refuse(`${where} has no string text`)
+    if (type === "tool") {
+      if (typeof data!["name"] !== "string") refuse(`${where} has no string name`)
+      if (!isObject(data!["state"])) refuse(`${where} has no object state`)
+    }
+  }
+  for (const row of database.prepare("select data from session_message order by time_created desc, rowid desc limit 5").all()) {
+    const data = object(row["data"])
+    if (data === undefined) refuse("session_message.data is not a JSON object")
+    const time = data!["time"]
+    if (!isObject(time) || typeof time["created"] !== "number" || !Number.isFinite(time["created"])) refuse("session_message.data has no numeric time.created")
+  }
+}
+
+/** Reads the schema and the sampled data shape this stopgap needs, and refuses with what it found instead of guessing. */
 export function checkSchema(database: SqliteDatabase): void {
   const tables = new Set(database.prepare("select name from sqlite_master where type = 'table'").all().map(row => String(row["name"])))
   const found: string[] = []
@@ -75,9 +122,9 @@ export function checkSchema(database: SqliteDatabase): void {
     found.push(`${table}(${names.slice(0, 24).join(", ")})`)
     for (const column of columns) if (!names.includes(column)) missing.push(`${table}.${column}`)
   }
-  if (missing.length === 0) return
-  fail("CONTRACT_MISMATCH", {
+  if (missing.length > 0) fail("CONTRACT_MISMATCH", {
     message: `OpenCode's session database is not the schema this stopgap reads: missing ${missing.slice(0, 8).join(", ")}. Found ${found.join("; ") || "no such tables"}.`,
     hint: "Update the plugin, or find the session with opencode.session.search instead.",
   })
+  checkShape(database)
 }

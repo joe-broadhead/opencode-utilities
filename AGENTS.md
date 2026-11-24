@@ -90,6 +90,8 @@ errors; [docs/architecture.md](docs/architecture.md) is the design. The family s
   so its Automation service also runs the scheduler, as `opencode serve` does: Code Mode with nobody present runs there
   as an automation's code action (`unattended` in `test/host/harness.ts`).
 - The default checks call no network service. Live weather is behind `UTILITIES_LIVE_WEATHER=1`.
+- Session fixtures build from `test/fixtures/opencode-2.4.1-schema.sql`, the recorded 2.4.1 DDL, never from the production
+  column list; a changed schema or data shape is refused with `CONTRACT_MISMATCH` at run time.
 - Do not skip, weaken or delete a test to get green.
 
 ## Writing

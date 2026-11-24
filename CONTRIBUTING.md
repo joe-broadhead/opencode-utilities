@@ -18,10 +18,6 @@ Node 24, npm 11 and Bun 1.4 or later. The native tools need the Rust 1.96.0 tool
 The committed speech manifest (`manifest/speech-assets.json`) is written only by
 `npm run speech:manifest -- --from <folder of the release files>`; no build or release step writes it.
 
-To try a checkout in OpenCode, point a `plugins` entry's `package` at the repository directory. Until a release has
-them, the time and weather tools cannot download their programs in a checkout: copy `build/native/<platform>/<program>`
-into the plugin cache (`$XDG_CACHE_HOME/opencode-utilities/native/v<version>/<program>/<platform>/`) to try them.
-
 ## Checks
 
 `npm run check` is the one command, and CI runs exactly it:

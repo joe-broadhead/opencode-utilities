@@ -46,9 +46,11 @@ writeFileSync(shadowSkill, "---\nname: utilities-time\ndescription: A user's own
 let host: Awaited<ReturnType<typeof startHost>>
 let calls = 0, closed = false
 
-// A synthetic OpenCode database for utilities_sessions_grep: built at test time, never a real one.
+// Synthetic OpenCode databases for utilities_sessions_grep: built at test time from the recorded 2.4.1 schema, never a
+// real one. The second has the same columns and a changed data shape, for the allowUntestedHost assertion.
 const fixtures = realpathSync(mkdtempSync(join(tmpdir(), "utilities-sessions-")))
 const sessionsDatabasePath = fixtureDatabase(join(fixtures, "opencode.db"))
+const badShapePath = fixtureDatabase(join(fixtures, "bad-shape.db"), { badPart: true })
 const runtime = (directory: string) => runtimes.created.find(r => r.options.location.directory === directory) as FakeRuntime
 async function boot(directory: string, agent = "build") {
   const session = await host.sdk.session.create({ agent, location: { directory } })
@@ -535,7 +537,7 @@ describe("host compatibility and unload", () => {
     const refused = fakeRuntimes(), allowed = fakeRuntimes()
     const untested = await startHost([
       createPlugin({ createRuntime: refused.create, packageRoot }),
-      { id: "test.allowed", setup: (ctx: Plugin.Context) => createPlugin({ createRuntime: allowed.create, packageRoot }).setup({ ...ctx, options: { allowUntestedHost: true } }) },
+      { id: "test.allowed", setup: (ctx: Plugin.Context) => createPlugin({ createRuntime: allowed.create, packageRoot }).setup({ ...ctx, options: { allowUntestedHost: true, sessionsDatabasePath: badShapePath } }) },
       observer,
     ], "2.5.0")
     try {
@@ -553,6 +555,13 @@ describe("host compatibility and unload", () => {
       const status = await untested.sdk.rpc(Utilities).status({}, { location })
       expect(status.host).toMatchObject({ version: "2.5.0", range: ">=2.4.1 <2.5.0", tested: false, next: expect.stringContaining("allowUntestedHost is set") })
       expect(status.state).toBe("ready")
+      // allowUntestedHost covers the host version only: the session database's data shape is still checked.
+      await waitFor(async () => contexts.has(location.directory), 30_000, "the untested location's plugin context")
+      const session = await untested.sdk.session.create({ agent: "build", location })
+      const grepTool = (await contexts.get(location.directory)!.tool.list()).find(tool => tool.id === "utilities_sessions_grep")
+      expect(grepTool).toBeDefined()
+      const failure = await grepTool!.execute({ text: NEEDLE }, { sessionID: session.id, agent: "build", messageID: "msg_untested", id: "call_untested", signal: new AbortController().signal } as never).catch(error => error)
+      expect(toolErrorMetadata(failure)).toMatchObject({ code: "CONTRACT_MISMATCH" })
     } finally { await untested.sdk.close() }
   })
 

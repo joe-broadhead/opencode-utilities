@@ -66,7 +66,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=2",
-    "test:kit": "node --test \"--test-skip-pattern=this repository.s ci\\\\.yml|pass with GITHUB_REPOSITORY unset\" scripts/release-kit.test.mjs",
+    "test:kit": "node --test scripts/release-kit.test.mjs",
     "build": "node scripts/build.mjs",
     "test:host": "node scripts/host-tests.mjs",
     "test:tui": "bun test test/tui",

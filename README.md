@@ -19,12 +19,7 @@ Unofficial; not affiliated with Open-Meteo. Weather data is from Open-Meteo.com 
 
 ## Install
 
-```sh
-opencode plugin add github:we-the-rebel-alliance/utilities-plugin#v0.0.0
-```
-
-`v0.0.0` is the first release of the rebuilt plugin. Until it is tagged, install a local checkout instead:
-`npm ci && npm run build`, then `opencode plugin add /path/to/utilities-plugin`.
+Install from a release: `opencode plugin add github:we-the-rebel-alliance/utilities-plugin#v<version>`. The first release on plugin-contract is v0.0.0 (phase 4b).
 
 Run `opencode reload`, or restart OpenCode, then run `/utilities-status`.
 
@@ -64,11 +59,12 @@ await tools.utilities.sessions_grep({ text: "invoice", from: "2026-11-01" })
 - **Speech.** `speech_transcribe` reads a PCM16 WAV (mono or stereo, 8–48 kHz, up to 20 MiB and ten minutes);
   `speech_synthesize` writes a WAV and returns its path. Nothing is sent to a speech service.
 - **Sessions.** Two read-only stopgaps, deleted when OpenCode ships the feature each waits on: `utilities_sessions`
-  (status, outcome, cost, tokens and time windows, over the public session API) ends when OpenCode gives agents a session
-  list or stats tool with those fields; `utilities_sessions_grep` (exact text in tool calls, outputs and file touches,
-  over OpenCode's database, read-only) ends when OpenCode ships exact-text search. To find or read a session, use
-  `opencode.session.search` and `opencode.session.read` first. The search matches literal text only, never a regular
-  expression.
+  (status, outcome, cost, tokens and time windows, over the public session API; a cost or token count the host does not
+  report is shown as unknown, never as zero) ends when OpenCode gives agents a session list or stats tool with those
+  fields; `utilities_sessions_grep` (exact text in tool calls, outputs and file touches, over OpenCode's database,
+  read-only) ends when OpenCode ships exact-text search. To find or read a session, use `opencode.session.search` and
+  `opencode.session.read` first. The search matches literal text only, never a regular expression, and masks the
+  credentials it recognizes in snippets, titles, paths and the echoed query.
 
 No Utilities tool is pinned in the Code Mode catalogue. Four skills cover the tools: `utilities-time`,
 `utilities-weather`, `utilities-speech` and `utilities-sessions`. Each module's skills are offered only while its tools
@@ -282,7 +278,8 @@ Options go on the plugin entry in `opencode.json`:
 `modules.<name>` turns a module off. `stateRoot` moves timer stores and default speech files. `speech.assetsDir`
 pre-seeds the speech files. `sessionsDatabasePath` points `utilities_sessions_grep` at OpenCode's database; the default
 is `${XDG_DATA_HOME:-$HOME/.local/share}/opencode/opencode.db`. `allowUntestedHost` loads on an OpenCode version outside
-the supported range, with a warning in status. An invalid option fails setup and names the key, never the value. The
+the supported range, with a warning in status. It covers the host version only: the session database's schema and data
+shape are always checked, and an unknown shape is `CONTRACT_MISMATCH` even with it set. An invalid option fails setup and names the key, never the value. The
 full reference is [docs/configuration.md](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/docs/configuration.md).
 
 ## Known limits
