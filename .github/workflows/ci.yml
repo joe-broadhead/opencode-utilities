@@ -39,7 +39,16 @@ jobs:
             echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           fi
       - name: Native prerequisites
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libclang-dev cmake pkg-config
+        run: |
+          missing=""
+          command -v cmake >/dev/null || missing="$missing cmake"
+          command -v pkg-config >/dev/null || missing="$missing pkg-config"
+          ls /usr/lib/llvm-*/lib/libclang.so* >/dev/null 2>&1 || missing="$missing libclang-dev"
+          if [ -z "$missing" ]; then
+            echo "The native prerequisites are already installed."
+            exit 0
+          fi
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends $missing
       # The workflows are tools too: `npm run lint` lints them with actionlint when it is installed, and this puts it on
       # PATH so a workflow GitHub would refuse fails the run.
       - name: actionlint
