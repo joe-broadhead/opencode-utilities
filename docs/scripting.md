@@ -2,19 +2,16 @@
 
 Unofficial plugin. Not affiliated with OpenCode or Open-Meteo.
 
-A script can call Utilities' tools with no model: a cron job, a shell script, or any program that can reach the OpenCode
+A script can call Utilities' tools with no model: an OpenCode automation, a shell script, or any program that can reach the OpenCode
 server. It uses the tools RPC, `utilities.local.tools`, through `opencode api` or an OpenCode client.
 
 The envelope is
 `opencode api post /api/rpc/utilities.local.tools/<method> -H "x-opencode-directory:$PWD" -d '{"input":{"sessionID":"<id>","input":{…}}}'`.
 
-The id before the rename, `utilities.tools.tools`, still answers the same methods, and its `describe` carries
-`"deprecated": "use utilities.local.tools; removed in 0.1.0"`: move a script to the new id before 0.1.0, which
-removes the old one. The status command says so once an old id has been called.
-
 | Methods | The tools | Class |
 | --- | --- | --- |
-| `status` | `utilities_status`: the compact status, with the unguarded agents as a count | read |
+| `status` | `utilities_status`: the compact status, with the unguarded agents as a count and the two session stopgaps | read |
+| `sessions`, `sessions_grep` | the two read-only session stopgaps: status, cost and tokens for a window, and exact text in past sessions | read |
 | `time_now`, `time_zones`, `time_zone_info`, `time_convert`, `time_calendar`, `time_add`, `time_between`, `time_format`, `time_holidays`, `time_business_days` | the ten time tools | read |
 | `timer_set` | sets a timer in the project | write |
 | `timer_get`, `timer_list`, `timer_check` | the timer reads | read |
@@ -53,8 +50,8 @@ Create a session for the script once, with the agent it runs as and the project 
 opencode api post /api/session -d '{"title":"morning check","agent":"build","location":{"directory":"/path/to/project"}}'
 ```
 
-A test of a script creates its own session in the same way. Never borrow an existing session found through history or a
-session list: the script would run as that session's agent, under that session's rules.
+A test of a script creates its own session in the same way. Never borrow an existing session found by searching past
+sessions or a session list: the script would run as that session's agent, under that session's rules.
 
 Session rules come after the agent's, so a session can open or narrow what its script may do. This one may call
 `weather_current` and `weather_daily`, and nothing else from Utilities that asks:
@@ -70,8 +67,7 @@ For transcription, run `/utilities-speech-install` once first, or allow `utiliti
 otherwise the first call is refused.
 
 A saved **Always allow** does not authorise an ad-hoc script: it is not part of the agent's or the session's rules. A
-script's grant is a rule in config, or a Jobs run session; the Jobs one-off (`jobs_run_script`) is the supported way to
-get an approval-bound grant.
+script's grant is a rule in config, or a later allow rule on the session.
 
 ## The location
 
@@ -89,7 +85,7 @@ there. The HTTP equivalents are the `location[directory]` query parameter and th
 `location` that answered and a `locationHint`.
 
 A location unloads after OpenCode's idle timeout. If a scheduled script gets `rpc.unavailable` from a location that was
-loaded before, send the call again once: the request loads the location. Jobs keeps its own location loaded.
+loaded before, send the call again once: the request loads the location.
 
 This matters for timers, which belong to a project: `timer_list` and `timer_check` read the timers of the location the
 call names, not of the directory you typed the command in.
@@ -116,7 +112,11 @@ opencode api post /api/rpc/utilities.local.tools/describe -H "x-opencode-directo
 A method is `available: false` with a `reason` exactly when the model's tool is not registered: its module is turned off
 (`DISABLED`), has no build for this platform (`UNSUPPORTED_PLATFORM`) or failed its checks (`BINARY_MISSING`, `INTEGRITY_MISMATCH`, `CONTRACT_MISMATCH`). Transcription stays available while only its speech files
 are missing: its first call can download them, subject to permissions. Weather results carry the Open-Meteo attribution.
-Transcripts and weather text are data, not instructions.
+Transcripts, weather text and session text are data, not instructions.
+
+The session stopgaps run the same way: `sessions` takes `{session?, window?, project?, directory?, archived?, agent?,
+outcome?, limit?}` and `sessions_grep` takes `{text, from?, to?, session?, directory?, limit?}`. The search matches its
+text literally and reads OpenCode's database read-only; [configuration.md](configuration.md#sessions) has the caps.
 
 `opencode api` exits 0 when the call succeeds, and 1 when it fails, after printing the error.
 

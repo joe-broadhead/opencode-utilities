@@ -1,38 +1,35 @@
 # Utilities for OpenCode
 
-An [OpenCode](https://opencode.ai) plugin for time zones, dates and holidays, polled project timers, Open-Meteo weather, and on-device speech.
+An [OpenCode](https://opencode.ai) plugin for exact time and dates, holidays and working days, polled project timers,
+Open-Meteo weather and on-device speech — plus two read-only session stopgaps, for past-session status and for exact text
+in past tool calls, outputs and file touches.
 
-Unofficial; not affiliated with Open-Meteo. Weather data is from Open-Meteo.com under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+Unofficial; not affiliated with Open-Meteo. Weather data is from Open-Meteo.com under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
 
 ## Requirements
 
-- OpenCode `>=2.2.3 <2.4.0`, tested on 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 and 2.3.2. Another 2.2 or 2.3 release runs, and status calls it untested. Outside that range the plugin does not start, unless you set `allowUntestedHost`.
-- macOS 14 or later (arm64 or x64), or Linux (x64 or arm64) with glibc. The time and weather tools need glibc 2.34 or later, such as Ubuntu 22.04, Debian 12 or RHEL 9. The speech tools need glibc 2.39 or later, such as Ubuntu 24.04, Debian 13 or Fedora 40, because the speech engine links a prebuilt ONNX Runtime library built for it; on an older glibc, speech reports `UNSUPPORTED_PLATFORM` and time and weather still work. macOS x64 has no speech engine, so it has no speech tools. Windows and musl are not supported.
+- OpenCode `>=2.4.1 <2.5.0`, tested on 2.4.1 only. Another 2.4 release runs, and status calls it untested. Outside that
+  range the plugin does not start, unless you set `allowUntestedHost`.
+- macOS 14 or later (arm64 or x64), or Linux (x64 or arm64) with glibc. Time and weather need glibc 2.34 or later, such
+  as Ubuntu 22.04, Debian 12 or RHEL 9. Speech needs glibc 2.39 or later, such as Ubuntu 24.04, Debian 13 or Fedora 40:
+  the speech engine links a prebuilt ONNX Runtime library. On an older glibc, speech reports `UNSUPPORTED_PLATFORM` and
+  the other tools still work. macOS x64 has no speech engine, so it has no speech tools. Windows and musl are not
+  supported.
 
 ## Install
 
-```sh
-opencode plugin add github:joe-broadhead/opencode-utilities#v0.0.7
-```
+Install from a release: `opencode plugin add github:we-the-rebel-alliance/utilities-plugin#v<version>`. The first release on plugin-contract is v0.0.0 (phase 4b).
 
 Run `opencode reload`, or restart OpenCode, then run `/utilities-status`.
 
-Each release has its own tag, and a Git install does not update by itself. To move to a newer release, remove the old entry with `opencode plugin remove github:joe-broadhead/opencode-utilities#v0.0.6`, then add the new tag with `opencode plugin add github:joe-broadhead/opencode-utilities#v<version>`.
-
-Or add the plugin to `opencode.json` instead, with the same spec:
+Each release has its own tag, and a Git install does not update by itself: remove the old entry with
+`opencode plugin remove github:we-the-rebel-alliance/utilities-plugin#v<old>`, then add the new tag. Or add the plugin to
+`opencode.json`:
 
 ```json
-{ "plugins": [{ "package": "github:joe-broadhead/opencode-utilities#v0.0.7" }] }
+{ "plugins": [{ "package": "github:we-the-rebel-alliance/utilities-plugin#v0.0.0" }] }
 ```
-
-The install takes the GitHub release tag. Its commit carries the built `dist/`, so the install runs no build.
-A new release is a new tag: install it with its own `#v<version>` spec.
-
-## Sign in
-
-None is required. Time, timers, speech and the free Open-Meteo tier work without an account.
-
-The free weather tier is for non-commercial use only and is rate-limited (10,000 calls a day). For commercial use, add an Open-Meteo API key. Run `/connect` and choose Open-Meteo: in the TUI, press `o` or Enter on it, then paste the key. On the CLI, `opencode auth login open-meteo` prompts for the key. The key is an OpenCode credential. It reaches the weather program as `OPEN_METEO_API_KEY`, never on the command line, and calls then use the customer endpoints. If Open-Meteo rejects the key, `/connect` shows Open-Meteo as "Sign in required". To return to the free tier, run `opencode auth logout open-meteo`.
 
 ## Use
 
@@ -41,31 +38,55 @@ In Code Mode the tools are `tools.utilities.<name>`. The permission action is `u
 ```js
 await tools.utilities.time_now({ timezones: ["Asia/Tokyo"] })
 await tools.utilities.time_convert({ datetime: "2026-10-30T12:00:00", from_timezone: "UTC", to_timezone: "Asia/Tokyo" })
-await tools.utilities.time_holidays({ mode: "list", year: 2026, country: "GB" })
-await tools.utilities.time_business_days({ mode: "between", from: "2026-12-21", to: "2026-12-31", country: "GB" })
+await tools.utilities.time_business_days({ mode: "between", from: "2026-12-21", to: "2026-12-31", country: "GB", region: "England" })
 await tools.utilities.weather_current({ location: "Amsterdam" })
 await tools.utilities.speech_transcribe({ path: "clip.wav" })
-await tools.utilities.speech_synthesize({ text: "hello", path: "out.wav" })
+await tools.utilities.sessions({ window: { days: 7 } })
+await tools.utilities.sessions_grep({ text: "invoice", from: "2026-11-01" })
 ```
 
-- **Time.** Ten tools for the current time, zones, conversion, calendar facts, date maths, formatting, public holidays (offline, 2000–2030) and business days. With `country`, business days skip that country's nationwide public holidays as well as weekends. Holiday lists also show regional holidays, such as Scotland's in the UK, marked with `nationwide` and `regions`; with `country: "GB"`, pass `region` (England, Wales, Scotland or Northern Ireland) to count that nation's holidays as well.
-- **Timers.** `timer_set`, `timer_get`, `timer_list`, `timer_check` and `timer_delete`. Timers belong to the current project, the same in every folder of it, and never fire on their own: the model calls `utilities_timer_check`, or you look at `/utilities`. The deadline needs a zone offset. An existing name is an error unless you pass `replace: true`. For an alert that fires by itself, use OpenCode's `schedule_*` tools instead, which need `"experimental": { "schedules": true }` in `opencode.json`.
-- **Weather.** Six tools: geocode, current, daily, hourly, a demand signal and a summary. Every result carries `Weather data by Open-Meteo.com (CC BY 4.0)`. Show it when you present the data. Responses are cached under `~/.cache/opencode-utilities/weather`: a forecast for 30 minutes, a place search for 30 days.
-- **Speech.** `speech_transcribe` reads a PCM16 WAV, mono or stereo, 8–48 kHz, up to 20 MiB and ten minutes. `speech_synthesize` writes a WAV file and returns its path; without `path` it goes under the plugin's state directory and is removed after 7 days.
+- **Time.** Ten tools: the current time, zones, conversion, calendar facts, date maths, formatting, public holidays
+  (offline, 2000–2030) and business days. A local time skipped or repeated by a daylight-saving change is refused with
+  both offsets, never guessed. With `country`, business days skip that country's nationwide holidays as well as
+  weekends; in the UK pass `region` (`England`, `Wales`, `Scotland` or `Northern Ireland`), because some bank holidays
+  are regional.
+- **Timers.** `timer_set`, `timer_get`, `timer_list`, `timer_check` and `timer_delete`. Timers belong to the current
+  project and never fire on their own: the model calls `utilities_timer_check`, or you run `/utilities`. For an alert
+  that fires by itself, use OpenCode's `automation_*` tools.
+- **Weather.** Six tools: geocode, current, daily, hourly, a demand signal and a summary. Every result carries
+  `Weather data by Open-Meteo.com (CC BY 4.0)`; show it when you present the data. Responses are cached under
+  `~/.cache/opencode-utilities/weather`. The free tier is for non-commercial use only.
+- **Speech.** `speech_transcribe` reads a PCM16 WAV (mono or stereo, 8–48 kHz, up to 20 MiB and ten minutes);
+  `speech_synthesize` writes a WAV and returns its path. Nothing is sent to a speech service.
+- **Sessions.** Two read-only stopgaps, deleted when OpenCode ships the feature each waits on: `utilities_sessions`
+  (status, outcome, cost, tokens and time windows, over the public session API; a cost or token count the host does not
+  report is shown as unknown, never as zero) ends when OpenCode gives agents a session list or stats tool with those
+  fields; `utilities_sessions_grep` (exact text in tool calls, outputs and file touches, over OpenCode's database,
+  read-only) ends when OpenCode ships exact-text search. To find or read a session, use `opencode.session.search` and
+  `opencode.session.read` first. The search matches literal text only, never a regular expression, and masks the
+  credentials it recognizes (`AKIA…` access key ids, `sk-`/`sk-proj-` keys, `ghp_`/`github_pat_` tokens, bearer tokens,
+  and password/token/key/secret assignments in `key=value` or quoted JSON form) in snippets, titles, paths and the echoed
+  query.
 
-No Utilities tool is pinned in the Code Mode catalogue. The `utilities` namespace text says what the tools are for and names the skill to load; the skills hold the call shapes. Three skills cover the tools: `utilities-time`, `utilities-weather` and `utilities-speech`. Each is offered only while its module is available, so macOS x64, which has no speech engine, has no `utilities-speech`.
+No Utilities tool is pinned in the Code Mode catalogue. Four skills cover the tools: `utilities-time`,
+`utilities-weather`, `utilities-speech` and `utilities-sessions`. Each module's skills are offered only while its tools
+are available, so macOS x64 has no `utilities-speech`.
 
 ### Status
 
-- `/utilities` (palette: **Utilities: Status**) opens the Utilities status dialog. Its rows are Connection (the optional Open-Meteo key), Account, Access, the platform and each module, speech files, due timers, the actions that ask, Skills, Tools, Agents without default rules, OpenCode, and one Next step. Press `r` to refresh and `Esc` to close.
+- `/utilities` (palette: **Utilities: Status**) opens the status dialog: Connection, Account, Access, the platform and
+  each module, speech files, due timers, the actions that ask, Skills, Tools, the session stopgaps, the agents without
+  default rules, OpenCode, and one Next step. Press `r` to refresh and `Esc` to close.
 - `/utilities-status` posts the same status into the session, with the block for any agents without default rules.
 - `utilities_status` gives the model the same view, with those agents as a count.
-- `/utilities-speech-install` downloads the speech files subject to the download permission; the default allows it.
-- `/utilities-install` downloads the time and weather programs subject to the download permission; the default allows it.
+- `/utilities-speech-install` and `/utilities-install` download the speech files, and the time and weather programs,
+  subject to the download permission.
 
 ### Scripts
 
-A script or a cron job can call the tools with no model, through `opencode api`. It runs as a session and its agent, with the same default: every tool is allowed unless the `access` option or the agent's rules restrict it, and an `ask` is refused when no one can answer it. The id before the rename, `utilities.tools.tools`, still answers until 0.1.0, which removes it, with `"deprecated": "use utilities.local.tools; removed in 0.1.0"` in its `describe`.
+A script can call the tools with no model through the tools RPC, `utilities.local.tools`, as a session and its agent.
+Every tool is allowed unless the `access` option or the agent's rules restrict it, and an `ask` is refused because no
+one is there to answer it.
 
 ```sh
 opencode api post /api/rpc/utilities.local.tools/time_now \
@@ -73,50 +94,24 @@ opencode api post /api/rpc/utilities.local.tools/time_now \
   -d '{"input":{"sessionID":"ses_…","input":{"timezones":["Asia/Tokyo"]}}}'
 ```
 
-The header names the location whose plugin and session you mean; without it the call goes to your home directory's project, so a script's timer reads would see the wrong project's timers. See [Scripting](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md).
-
-### Speech files
-
-The engine is `utilities-speech-<platform>`. The models are `ggml-tiny-q5_1.bin` (Whisper tiny, for transcription) and `kitten_tts_nano_v0_8.onnx`, `kitten_tts_nano_v0_8-voices.npz` and `kitten_tts_nano_v0_8-config.json` (Kitten TTS, for synthesis). Every file is checked against a SHA-256 shipped in the package. A download goes to a temporary file and is renamed into place only when its size and hash match, so a failed or tampered file never runs.
-
-- **Cache:** `$XDG_CACHE_HOME/opencode-utilities/<sha256>/<name>`, or `~/.cache/opencode-utilities/...` when `XDG_CACHE_HOME` is unset.
-- **Pre-seed:** set the `speech.assetsDir` option to an absolute directory that holds the five files directly, under the names above, with the engine executable. Nothing is downloaded. A missing or altered file fails with `SPEECH_ASSETS_MISSING`, unless a verified copy is already in the cache. Use this for offline and CI machines. The files are on the [GitHub Release](https://github.com/joe-broadhead/opencode-utilities/releases) for this version.
+See [Scripting](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/docs/scripting.md).
 
 ## Permissions
 
-**Every tool is allowed by default.** An agent can set and delete timers, write a WAV file, download the speech files, and send a place to Open-Meteo, without asking. Restrict it in any of these three ways:
+**Every tool is allowed by default.** An agent can set and delete timers, write a WAV file, download the speech files,
+send a place to Open-Meteo and read past sessions without asking. Restrict it with the `access` option, which drives the
+rules the plugin inserts directly after each agent's base `{ "action": "*", "resource": "*", "effect": "allow" }` rule,
+or with a rule of your own. Agents without that base rule are left alone, and a later rule still wins.
 
-1. **The `access` option**, which drives the rules the plugin inserts directly after each agent's base `{ "action": "*", "resource": "*", "effect": "allow" }` rule. Agents without that base rule are left alone, and a later rule still wins.
+| Value | What runs | What asks |
+| --- | --- | --- |
+| `"all"` (the default) | every tool, and any tool a later release adds | nothing |
+| `"ask-changes"` | the reads: every time tool, every timer read, weather, transcription and the session stopgaps | the timer writes, synthesis and the speech download |
+| `"read-only"` | the reads | nothing: the changes are **denied** |
 
-   | Value | What runs | What asks |
-   | --- | --- | --- |
-   | `"all"` (the default) | every tool, and any tool a later release adds | nothing |
-   | `"ask-changes"` | the reads: every time tool, every timer read, weather and transcription | the timer writes, synthesis and the speech download |
-   | `"read-only"` | the reads | nothing: the changes are **denied** |
-
-   ```json
-   { "plugins": [{ "package": "github:joe-broadhead/opencode-utilities#v0.0.7", "options": { "access": "read-only" } }] }
-   ```
-
-2. **An agent that is read-only or asks**, with rules of its own, later than the plugin's:
-
-   ```json
-   { "agents": { "reader": { "permissions": [
-     { "action": "utilities_*", "resource": "*", "effect": "ask" },
-     { "action": "utilities_time_now", "resource": "*", "effect": "allow" }
-   ] } } }
-   ```
-
-3. **A rule per tool**, with the exact names in `src/domain/contract.ts`. To make one tool ask, or stop it:
-
-   ```json
-   { "permissions": [
-     { "action": "utilities_timer_set", "resource": "*", "effect": "deny" },
-     { "action": "utilities_weather_current", "resource": "*", "effect": "ask" }
-   ] }
-   ```
-
-   Weather is a read that sends a place to Open-Meteo; to stop that egress, deny `utilities_weather_*`.
+```json
+{ "plugins": [{ "package": "github:we-the-rebel-alliance/utilities-plugin#v0.0.0", "options": { "access": "read-only" } }] }
+```
 
 The block for each value, generated from `defaultRules(access)` in `src/host/permissions.ts`:
 
@@ -128,6 +123,8 @@ The block for each value, generated from `defaultRules(access)` in `src/host/per
 | --- | --- | --- |
 | `utilities_*` | `*` | `allow` |
 | `utilities_status` | `*` | `allow` |
+| `utilities_sessions` | `*` | `allow` |
+| `utilities_sessions_grep` | `*` | `allow` |
 | `utilities_time_now` | `*` | `allow` |
 | `utilities_time_zones` | `*` | `allow` |
 | `utilities_time_zone_info` | `*` | `allow` |
@@ -164,6 +161,8 @@ The block for each value, generated from `defaultRules(access)` in `src/host/per
 | --- | --- | --- |
 | `utilities_*` | `*` | `ask` |
 | `utilities_status` | `*` | `allow` |
+| `utilities_sessions` | `*` | `allow` |
+| `utilities_sessions_grep` | `*` | `allow` |
 | `utilities_time_now` | `*` | `allow` |
 | `utilities_time_zones` | `*` | `allow` |
 | `utilities_time_zone_info` | `*` | `allow` |
@@ -200,6 +199,8 @@ The block for each value, generated from `defaultRules(access)` in `src/host/per
 | --- | --- | --- |
 | `utilities_*` | `*` | `deny` |
 | `utilities_status` | `*` | `allow` |
+| `utilities_sessions` | `*` | `allow` |
+| `utilities_sessions_grep` | `*` | `allow` |
 | `utilities_time_now` | `*` | `allow` |
 | `utilities_time_zones` | `*` | `allow` |
 | `utilities_time_zone_info` | `*` | `allow` |
@@ -232,42 +233,33 @@ What each call asserts:
 
 | Call | Asks? | What is asserted |
 | --- | --- | --- |
-| `utilities_status` and the ten `utilities_time_*` tools | No | Nothing. |
+| `utilities_status`, the ten `utilities_time_*` tools and the two `utilities_sessions*` tools | No | Nothing. |
 | `utilities_timer_get`, `utilities_timer_list`, `utilities_timer_check` | No | Nothing. Timer data is project-scoped plugin state. |
 | `utilities_timer_set`, `utilities_timer_delete` | Yes | The tool's action, resource `timer:<name>`, saved as `timer:*`. |
-| `utilities_weather_*` | Yes | The tool's action. Resource and save are the Open-Meteo hosts the call contacts (`api.open-meteo.com` and `geocoding-api.open-meteo.com`, or the `customer-*` hosts with a key). `metadata.location` is the place. |
-| `utilities_speech_transcribe` | The host's file rules | `read` on the file. Outside the location and the project, `external_directory` on `<directory>/*` first. |
-| `utilities_speech_synthesize` | Yes | `utilities_speech_synthesize`, resource `kitten-nano-int8/<voice>`, saved as `*`. A given `path` also asserts `edit`, and `external_directory` outside the project. |
-| First transcription or synthesis, or `/utilities-speech-install` | Yes | `utilities_speech_download`. Resource and save are the release host (`github.com`). `metadata.bytes` is the download size. |
-| First use of time or weather, or `/utilities-install` | Yes | `utilities_native_download`. Resource and save are the release host (`github.com`). Only a program that is not cached is downloaded, and its size and SHA-256 are checked before it runs. |
+| `utilities_weather_*` | Yes | The tool's action. Resource and save are the Open-Meteo hosts the call contacts. `metadata.location` is the place. |
+| `utilities_speech_transcribe` | The host's file rules | `read` on the file, and `external_directory` outside the project first. |
+| `utilities_speech_synthesize` | Yes | The tool's action, resource `kitten-nano-int8/<voice>`, saved as `*`. A given `path` also asserts `edit`, and `external_directory` outside the project. |
+| First speech call or `/utilities-speech-install` | Yes | `utilities_speech_download`, on the release host (`github.com`). |
+| First time or weather call, or `/utilities-install` | Yes | `utilities_native_download`, on the release host. Only a program that is not cached is downloaded, and its size and SHA-256 are checked before it runs. |
 
-**Allow** side effects for one agent, or for the whole config. OpenCode adds top-level rules to every agent after its built-in rules and this plugin's ask rules, then the agent's own `permissions` from your config. The last matching rule wins. So a top-level allow also allows the action for Plan and Explore. To keep a stricter agent strict, put the allow on the agent that should have it.
-
-```jsonc
-{
-  "permissions": [
-    { "action": "utilities_weather_*", "resource": "*", "effect": "allow" },
-    { "action": "utilities_timer_*", "resource": "*", "effect": "allow" },
-    { "action": "utilities_speech_*", "resource": "*", "effect": "allow" }
-  ]
-}
-```
-
-**Deny** hides the matching tools, and wins over ask, allow and a saved approval:
+To make one tool ask or stop it, add a rule with the exact name (the full list is the block above):
 
 ```jsonc
-{
-  "permissions": [
-    { "action": "utilities_speech_*", "resource": "*", "effect": "deny" }
-  ]
-}
+{ "permissions": [
+  { "action": "utilities_timer_set", "resource": "*", "effect": "deny" },
+  { "action": "utilities_weather_current", "resource": "*", "effect": "ask" }
+] }
 ```
 
-Every rule needs `"resource"`. OpenCode skips a rule without it.
+**Agents defined only in your config**, and agents added by plugins that load later, are created after this plugin
+inserts its rules, so side effects there do not ask. `/utilities-status` names those agents, unless their own rules
+already ask or deny for every Utilities side effect. Put the `ask-changes` block **first** in that agent's own
+`permissions`, followed by any top-level rules you have for `utilities_*` actions. Do not put the block in the top-level
+`permissions`: it would loosen Explore and any agent whose base is deny.
 
-**Agents defined only in your config**, and agents added by plugins that load later, are created after this plugin inserts its rules, so side effects there do not ask. `/utilities` and `/utilities-status` name those agents, unless their own rules already ask or deny for every Utilities side effect. Put the block above, with `"effect": "ask"`, **first** in that agent's own `permissions` (`agents.<name>.permissions` in `opencode.json`, or `permissions` in the agent's front matter), followed by any top-level rules you have for `utilities_*` actions, so yours keep winning. Do not put the block in the top-level `permissions`: it would loosen Explore and any agent whose base is deny.
-
-**Non-interactive runs.** In `opencode run`, a prompt is auto-rejected and the model is told to continue without the action. Pass `--auto`, or add allow rules. `--auto` approves asks but never passes a deny. For CI that uses speech, pre-seed `speech.assetsDir`.
+**Non-interactive runs.** In `opencode run`, a prompt is auto-rejected and the model is told to continue without the
+action. Pass `--auto`, or add allow rules. `--auto` approves asks but never passes a deny. For CI that uses speech,
+pre-seed `speech.assetsDir`.
 
 ## Configure
 
@@ -276,7 +268,7 @@ Options go on the plugin entry in `opencode.json`:
 ```jsonc
 {
   "plugins": [{
-    "package": "github:joe-broadhead/opencode-utilities#v0.0.7",
+    "package": "github:we-the-rebel-alliance/utilities-plugin#v0.0.0",
     "options": {
       "modules": { "weather": true, "time": true, "speech": true },
       "speech": { "assetsDir": "/opt/opencode-utilities/speech" }
@@ -285,42 +277,30 @@ Options go on the plugin entry in `opencode.json`:
 }
 ```
 
-`modules.<name>` turns a module off. `stateRoot` moves timer stores and default speech files. `speech.assetsDir` pre-seeds the speech files. `allowUntestedHost` loads on an OpenCode version outside the supported range, with a warning in status. An invalid option fails setup and names the key, never the value. The full reference, with every permission rule and error code, is [docs/configuration.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/configuration.md).
-
-## Organisation rollout
-
-A system `opencode.json` (`/Library/Application Support/opencode/opencode.json` on macOS, `/etc/opencode/opencode.json` on Linux) applies to every user and outranks their own config. This one installs the plugin, turns speech off, and could instead point `speech.assetsDir` at files the admin copied to every machine:
-
-```jsonc
-{
-  "plugins": [{
-    "package": "github:joe-broadhead/opencode-utilities#v0.0.7",
-    "options": {
-      "modules": { "weather": true, "time": true, "speech": false }
-    }
-  }]
-}
-```
-
-Members have nothing to set. To forbid an action everywhere, add a top-level `deny` rule; never a top-level `ask` or `allow`, which would loosen Explore. Weather for work is usually commercial use: each member runs `/connect` and chooses Open-Meteo to add the organisation's key.
+`modules.<name>` turns a module off. `stateRoot` moves timer stores and default speech files. `speech.assetsDir`
+pre-seeds the speech files. `sessionsDatabasePath` points `utilities_sessions_grep` at OpenCode's database; the default
+is `${XDG_DATA_HOME:-$HOME/.local/share}/opencode/opencode.db`. `allowUntestedHost` loads on an OpenCode version outside
+the supported range, with a warning in status. It covers the host version only: the session database's schema and data
+shape are always checked, and an unknown shape is `CONTRACT_MISMATCH` even with it set. An invalid option fails setup and names the key, never the value. The
+full reference is [docs/configuration.md](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/docs/configuration.md).
 
 ## Known limits
 
-- **Weather needs a network connection to Open-Meteo.** The free tier is non-commercial and rate-limited. Work use needs an Open-Meteo key, which `/connect` adds.
-- **Time and weather programs download on first use.** The first time or weather call, or `/utilities-install`, fetches the program for this platform from this repository's GitHub Release, after the `utilities_native_download` permission. On a machine that cannot reach `github.com`, those tools answer `NATIVE_FILES_MISSING` until it can.
-- **Speech files download on first use.** The engine and models, about 105 MB, come from this repository's GitHub Release. macOS x64 has no speech engine, so it has no speech tools.
-- **Linux needs a recent glibc.** Time and weather need glibc 2.34 or later (Ubuntu 22.04, Debian 12, RHEL 9), and speech needs 2.39 or later (Ubuntu 24.04, Debian 13, Fedora 40). Below a module's floor, that module reports `UNSUPPORTED_PLATFORM`, naming the floor and the system's glibc, before any prompt or download. musl is not supported.
+- **Weather needs a network connection to Open-Meteo.** The free tier is non-commercial and rate-limited; work use needs
+  an Open-Meteo key, which `/connect` adds.
+- **Time and weather programs download on first use**, after the `utilities_native_download` permission, and the speech
+  files (about 105 MB) after `utilities_speech_download`. On a machine that cannot reach `github.com`, those tools answer
+  `NATIVE_FILES_MISSING` or `SPEECH_ASSETS_MISSING` until it can.
 - **Holidays are offline and cover 2000–2030 only.** A year outside that range is refused with `HOLIDAY_COVERAGE`.
-- **Timers belong to a project and do not wake an agent.** A timer is checked with `utilities_timer_check`; nothing runs when it is due.
-- **Machine time is the server's time zone.** On a remote server, `machine_timezone` is that server's zone, not necessarily the user's.
-- **Tested on OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 and 2.3.2 only.** Other releases inside `>=2.2.3 <2.4.0` start, and status reports them as untested.
-- **Jelly.** The `access` setting declares its choices, which only a Jelly that includes app#1301 reads; an older Jelly refuses the plugin's declaration. In Jelly, **Read only** also denies the first-use downloads, so a time, weather or speech tool fails on its first call until its files are cached ([docs/jelly.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/jelly.md)).
-- **The old RPC ids go in 0.1.0.** `utilities.tools` and `utilities.tools.tools` still answer, and 0.1.0 removes them: use `utilities.local` and `utilities.local.tools`.
-- Updates are not automatic for a Git install, and `opencode plugin update` and `opencode plugin check` do not work on one: to move to a newer release, remove the old entry and add the new tag.
+- **Timers belong to a project and do not wake an agent.** Nothing runs when a timer is due.
+- **Machine time is the server's time zone.** On a remote server, `machine_timezone` is that server's zone.
+- **The session stopgaps read only.** `utilities_sessions` uses OpenCode's public session API; `utilities_sessions_grep`
+  opens OpenCode's database read-only and refuses an unknown schema, naming what it found.
 
 ## Troubleshooting
 
-Start with `/utilities` or `/utilities-status`. They end with one next step. Errors read `CODE: what happened. Next step: What to do.` Host permission errors are passed through unchanged.
+Start with `/utilities` or `/utilities-status`. It ends with one next step. Errors read `CODE: what happened. Next step:
+What to do.` Host permission errors are passed through unchanged.
 
 <!-- generated:codes -->
 
@@ -341,7 +321,7 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 | `FILE_CHANGED` | A file changed while the plugin was reading it. | Retry. |
 | `FILE_REJECTED` | A file the plugin reads is not a regular file, or is too large. | Reinstall the plugin. |
 | `HOLIDAY_COVERAGE` | Holiday data covers 2000–2030, and this call needs a year outside it. | Use dates from 2000 to 2030, or leave out country to count weekends only. |
-| `HOST_UNTESTED` | Utilities supports OpenCode >=2.2.3 <2.4.0. | Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 or 2.3.2, or set the plugin option allowUntestedHost: true to run anyway. |
+| `HOST_UNTESTED` | Utilities supports OpenCode >=2.4.1 <2.5.0. | Use OpenCode 2.4.1, or set the plugin option allowUntestedHost: true to run anyway. |
 | `INPUT_INVALID` | The tool input is invalid. | Correct the named fields and call the tool again. |
 | `INPUT_LIMIT` | The tool input is too large. | Send less text and call the tool again. |
 | `INTEGRITY_MISMATCH` | A program or model file does not match its pinned SHA-256 hash. | Reinstall the plugin, then restart OpenCode. |
@@ -389,28 +369,26 @@ Start with `/utilities` or `/utilities-status`. They end with one next step. Err
 | Skills: `<id>` is replaced by `<path>` | A skill of yours with the same id as one of the plugin's, such as `utilities-time`, loads instead of the plugin's. Rename its folder and its `name`, or move it, then restart OpenCode. |
 | Agents without default rules | Put the default rules shown by `/utilities-status` first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools. See [Permissions](#permissions). |
 
-The full list of codes is in [docs/configuration.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/configuration.md#errors). A script's errors from the tools RPC add a few codes of their own, listed in [Scripting](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md#errors). The plugin does not log tool input, paths, transcripts or timer text.
+The full list of codes is in [docs/configuration.md](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/docs/configuration.md#errors).
+The plugin does not log tool input, paths, transcripts, timer text or session content.
 
 ## Uninstall
 
-1. If you added an Open-Meteo key, sign out first, while the plugin is still installed: `opencode auth logout open-meteo`. In a terminal it asks which key to remove; without one, pass the key's ID or label from `opencode auth list`.
-2. Remove the plugin:
-
-   ```sh
-   opencode plugin remove github:joe-broadhead/opencode-utilities#v0.0.7
-   ```
-
-3. Removing the plugin keeps your data. To delete it, remove the cache folder with the speech files and the weather cache (`~/.cache/opencode-utilities`, or `$XDG_CACHE_HOME/opencode-utilities`), and the state folder with timers and speech output (`~/.local/share/opencode-utilities`, or `$XDG_DATA_HOME/opencode-utilities`, or your `stateRoot`).
+1. If you added an Open-Meteo key, sign out first, while the plugin is still installed: `opencode auth logout open-meteo`.
+2. Remove the plugin: `opencode plugin remove github:we-the-rebel-alliance/utilities-plugin#v0.0.0`.
+3. Removing the plugin keeps your data. To delete it, remove `~/.cache/opencode-utilities` (speech files and the weather
+   cache) and `~/.local/share/opencode-utilities` (timers and speech output), or your `stateRoot`.
 4. Rules you added to `permissions` stay until you remove them.
 
 ## Links
 
-- [Configuration reference](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/configuration.md)
-- [Architecture](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/architecture.md)
-- [Security policy](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/SECURITY.md)
-- [Licences of the programs and models](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/licenses/README.md)
-- [Changelog](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/CHANGELOG.md)
+- [Configuration reference](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/docs/configuration.md)
+- [Architecture](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/docs/architecture.md)
+- [Scripting](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/docs/scripting.md)
+- [Security policy](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/SECURITY.md)
+- [Licences of the programs and models](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/licenses/README.md)
+- [Changelog](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/CHANGELOG.md)
 - [Open-Meteo terms](https://open-meteo.com/en/terms)
-- [Issues](https://github.com/joe-broadhead/opencode-utilities/issues)
+- [Issues](https://github.com/we-the-rebel-alliance/utilities-plugin/issues)
 
-Licensed under the [MIT licence](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/LICENSE).
+Licensed under the [MIT licence](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/LICENSE).

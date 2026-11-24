@@ -94,7 +94,7 @@ const upstream=async name=>(await readFile(resolve(root,'licenses/upstream',name
 const section=(title,text)=>`\n${'='.repeat(72)}\n${title}\n\n${text}\n`;
 
 const names=Object.keys(sources.binaries);
-let notice=`@joe-broadhead/opencode-utilities native files for ${platform}\n\nThis release contains programs built from pinned sources:\n`;
+let notice=`@we-the-rebel-alliance/utilities-plugin native files for ${platform}\n\nThis release contains programs built from pinned sources:\n`;
 for(const [name,{repo,commit}] of Object.entries(sources.binaries))notice+=`  bin/${name}  ${repo} at ${commit} (MIT)\n`;
 notice+=`\nTheir licenses follow, then the license files of every crate in their locked Cargo graphs for\n${TARGETS[platform]}, including build and development dependencies.\n`;
 for(const name of names)notice+=section(`bin/${name}`,await upstream(`${name}-MIT.txt`));
@@ -104,8 +104,8 @@ await writeFile(resolve(root,'build','native',platform,'NOTICE'),notice);
 
 if(flag==='--speech') {
   const engines=Object.keys(onnx.distributions);
-  let speech='utilities-speech, the speech engine of @joe-broadhead/opencode-utilities\n\n';
-  speech+=`Built from native/speech-bridge in https://github.com/joe-broadhead/opencode-utilities (MIT) over aurum-core,\n`;
+  let speech='utilities-speech, the speech engine of @we-the-rebel-alliance/utilities-plugin\n\n';
+  speech+=`Built from native/speech-bridge in https://github.com/we-the-rebel-alliance/utilities-plugin (MIT) over aurum-core,\n`;
   speech+=`with ONNX Runtime ${onnx.runtimeVersion} linked statically from ${onnx.runtimeSource.repo} at ${onnx.runtimeSource.commit}.\n`;
   speech+=`The speech models are separate release files with their own licenses. The licenses of the bridge, aurum,\n`;
   speech+=`ONNX Runtime and the original Misaki lexicon follow, then the license files of every crate in the locked\nCargo graph for ${engines.join(', ')}, including build and development dependencies.\n`;

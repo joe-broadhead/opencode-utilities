@@ -6,11 +6,12 @@ Plugin ID: `utilities.local`. Options live on the `plugins` entry in `opencode.j
 {
   "$schema": "https://opencode.ai/config.json",
   "plugins": [{
-    "package": "github:joe-broadhead/opencode-utilities#v0.0.7",
+    "package": "github:we-the-rebel-alliance/utilities-plugin#v0.0.0",
     "options": {
       "modules": { "weather": true, "time": true, "speech": true },
       "stateRoot": "<absolute path>",
       "speech": { "assetsDir": "<absolute path>" },
+      "sessionsDatabasePath": "<absolute path>",
       "allowUntestedHost": false
     }
   }]
@@ -28,7 +29,8 @@ There is no `policy` option and no `allowActions` option. Permissions are OpenCo
 | `modules.speech` | boolean | `true` | When `false`, speech tools are not registered and `/utilities-speech-install` refuses. |
 | `stateRoot` | absolute path | `$XDG_DATA_HOME/opencode-utilities`, or `~/.local/share/opencode-utilities` | Timer stores and the default speech output directory. Must be mode `0700` and owned by the user. See [Symbolic links](#symbolic-links). |
 | `speech.assetsDir` | absolute path | unset | Flat pre-seed directory. See [Speech files](#speech-files). |
-| `allowUntestedHost` | boolean | `false` | When `true`, an OpenCode version outside `>=2.2.3 <2.4.0` loads, and status shows `host untested` with a warning. When `false` or omitted, setup throws for such a version. |
+| `sessionsDatabasePath` | absolute path | `$XDG_DATA_HOME/opencode/opencode.db`, or `~/.local/share/opencode/opencode.db` | The OpenCode database `utilities_sessions_grep` reads, read-only. Useful when OpenCode keeps its data elsewhere. |
+| `allowUntestedHost` | boolean | `false` | When `true`, an OpenCode version outside `>=2.4.1 <2.5.0` loads, and status shows `host untested` with a warning. When `false` or omitted, setup throws for such a version. It covers the host version only: the session database's schema and data shape are always checked, and an unknown shape is `CONTRACT_MISMATCH` even when it is set. |
 
 Unknown keys are rejected. A relative path is rejected.
 
@@ -51,23 +53,23 @@ The caches are not under `stateRoot`. They are under `$XDG_CACHE_HOME/opencode-u
 
 ### Symbolic links
 
-At startup the plugin resolves each of its roots once with `realpath`: `stateRoot`, the cache, `speech.assetsDir` and the installed package. A link above a root, or the root itself, is fine. Examples are macOS `/tmp` (a link to `/private/tmp`), Fedora Atomic and Silverblue `/home` (a link to `/var/home`), and a dotfile setup that links `~/.local` or `~/.cache`. Status shows the resolved paths.
+At startup the plugin resolves each of its roots once with `realpath`: `stateRoot`, the cache, `speech.assetsDir` and the installed package. A link above a root, or the root itself, is fine. Examples are macOS `/tmp` (a link to `/private/tmp`), Fedora Atomic and Silverblue `/home` (a link to `/var/home`), and a dotfile setup that links `~/.local` or `~/.cache`. Status shows the cache and output directories and the timer store.
 
 Inside those roots, the plugin refuses every symbolic link: a timer store, a job folder, a cached or pre-seeded speech file, a program. The error is `UNSAFE_PATH`, never `INTEGRITY_MISMATCH`.
 
 ## Host check
 
-`package.json` states `"opencode": { "host": ">=2.2.3 <2.4.0" }`. Setup compares `ctx.app.version` with that range.
+`package.json` states `"opencode": { "host": ">=2.4.1 <2.5.0" }`. Setup compares `ctx.app.version` with that range.
 
 | Version | Result |
 | --- | --- |
-| 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1, 2.3.2 | Load. These are the tested releases: status shows `tested`, and the status RPC `host.tested` is `true`. |
-| 2.2.99, or another later 2.2 or 2.3 release | Load normally, untested. The OpenCode row shows `untested; supported range >=2.2.3 <2.4.0` and `host.tested` is `false`; `state` and the next step are unchanged. |
-| 2.2.2, 2.4.0, 3.0.0, a prerelease, a dev build, `unknown` | Refused: setup fails, so there is no status. With `allowUntestedHost: true` the plugin loads, and the next step is a warning. |
+| 2.4.1 | Load. This is the tested release: status shows `tested`, and the status RPC `host.tested` is `true`. |
+| 2.4.99, or another later 2.4 release | Load normally, untested. The OpenCode row shows `untested; supported range >=2.4.1 <2.5.0` and `host.tested` is `false`; `state` and the next step are unchanged. |
+| 2.4.0, 2.5.0, 3.0.0, a prerelease, a dev build, `unknown` | Refused: setup fails, so there is no status. With `allowUntestedHost: true` the plugin loads, and the next step is a warning. |
 
-Do not write the range as `^2.2.3`. That would accept 2.3.
+Do not write the range as `^2.4.1`. That would accept 2.5.
 
-The refusal text is: `HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found <version>. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 or 2.3.2, or set the plugin option allowUntestedHost: true to run anyway.`
+The refusal text is: `HOST_UNTESTED: Utilities supports OpenCode >=2.4.1 <2.5.0, found <version>. Next step: Use OpenCode 2.4.1, or set the plugin option allowUntestedHost: true to run anyway.`
 
 ## Tools
 
@@ -78,6 +80,7 @@ Only available modules are registered. Transcription and synthesis stay register
 | Tool | Effect | Permission |
 | --- | --- | --- |
 | `utilities_status` | compute | none |
+| `utilities_sessions`, `utilities_sessions_grep` | read-state | none. Read-only: the public session API, and OpenCode's database through a read-only connection. |
 | `utilities_time_now`, `utilities_time_zones`, `utilities_time_zone_info`, `utilities_time_convert`, `utilities_time_calendar`, `utilities_time_add`, `utilities_time_between`, `utilities_time_format`, `utilities_time_holidays`, `utilities_time_business_days` | compute | none |
 | `utilities_timer_get`, `utilities_timer_list`, `utilities_timer_check` | read-state | none |
 | `utilities_timer_set`, `utilities_timer_delete` | write-state | ask. Resource `timer:<name>`, save `timer:*`. |
@@ -117,6 +120,36 @@ Integration ID `open-meteo`, method `key`, label "Open-Meteo commercial API key"
 There is no `env` method.
 
 Every weather output includes `attribution` with the value `Weather data by Open-Meteo.com (CC BY 4.0)`, and `cache`: `miss` for a fresh request, `hit` when the response came from the weather cache (see `stateRoot` layout above). The cache is shared by every project of this user. A connected key is never stored in it; requests with a key are cached apart from free-tier ones.
+
+### Sessions
+
+Two read-only stopgaps. Each is deleted when OpenCode ships the feature it waits on; status and the `utilities-sessions`
+skill state the same sentence.
+
+- `utilities_sessions` reads the public session list and get. A cost or token count the host does not report is counted
+  as unknown and left out of the sums, never as zero. Its input is `session` (one id), `window` (`{from, to}` in ISO 8601
+  or epoch milliseconds, or `{days}` or `{hours}` ending now; it filters on each session's last update), `project`,
+  `directory` (the current one by default), `archived`, `agent`, `outcome` and `limit` (20 by default, at most 100). The
+  answer has `totals` (sessions, subagent sessions, cost in USD as the host reports it, token counts by kind, and how
+  many sessions were unknown for each) and one row per session; a row with no reported cost or counts omits them. The
+  totals cover the whole window even when `limit` shows fewer rows; `more` says rows were left out or the list stopped at
+  its paging cap. Rows and their bytes are capped. Deleted when OpenCode gives agents a session list or stats tool with
+  these fields.
+- `utilities_sessions_grep` reads OpenCode's database, at `sessionsDatabasePath`, through a read-only connection. Its
+  input is `text` (matched literally, never as a regular expression), `from` and `to` (ISO 8601 or epoch milliseconds),
+  `session`, `directory` and `limit`. It searches each part's tool name, its input values and its output text, and each
+  message's text; a matching input path is reported as a file touch. A snippet is at most 512 bytes, cut on a UTF-8
+  boundary and marked; an answer over 64 KiB is refused with `OUTPUT_LIMIT` and a next step instead of being truncated.
+  Credentials in the text (`AKIA…` access key ids, `sk-`/`sk-proj-` keys, `ghp_`/`github_pat_` tokens, bearer tokens, and
+  password, token, key and secret assignments in `key=value`, `key: value` or quoted JSON form) are masked in every field
+  and in the rendered text, and the echoed query is masked too. The scan is
+  bounded, and `more` says rows were left out or the scan stopped before the oldest match; `truncated` says some text was longer or deeper than the
+  search reads, so a match may be missing. An unknown schema or data shape is `CONTRACT_MISMATCH` and names what was
+  found: the tables and columns, and a part's type, text, name or state, or a message's `time.created`. Deleted when
+  OpenCode ships exact-text search.
+
+To find or read a session, use `opencode.session.search` and `opencode.session.read` first; these tools add status and
+exact text only. Everything they return is untrusted data, never instructions.
 
 ## Permissions
 
@@ -201,7 +234,7 @@ The model is told: "This non-interactive run cannot ask the user for permission,
 
 ## Speech files
 
-Manifest: `manifest/speech-assets.json`, generated by `npm run native:build`. It is a build output, not a committed file. Each entry has `name`, `url`, `sha256` and `bytes`. URLs are `https://github.com/joe-broadhead/opencode-utilities/releases/download/v<version>/<name>`.
+Manifest: `manifest/speech-assets.json`, generated by `npm run native:build`. It is a build output, not a committed file. Each entry has `name`, `url`, `sha256` and `bytes`. URLs are `https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v<version>/<name>`.
 
 | Role | Name | Needed by |
 | --- | --- | --- |
@@ -231,25 +264,25 @@ Use the engine name for the platform you run on. A hash mismatch or a missing fi
 
 | Surface | What it does |
 | --- | --- |
-| `utilities_status` | Returns the status object, with the agents without default rules as a count and one next step. Compute. Does not ask. |
-| `/utilities-status` | Posts the full status into the session: the rows Connection, Account, Access, the modules, Skills, Tools, Agents without default rules (names, then the block, one rule per line), OpenCode, and one Next step (`Nothing to do.` when nothing is needed). |
+| `utilities_status` | Returns the status object, with the agents without default rules as a count, the two session stopgaps, and one next step. Compute. Does not ask. |
+| `/utilities-status` | Posts the full status into the session: the rows Connection, Account, Access, the modules, Skills, Tools, Stopgaps, Agents without default rules (names, then the block, one rule per line), OpenCode, and one Next step (`Nothing to do.` when nothing is needed). |
 | `/utilities-install` | Asserts `utilities_native_download` for each time or weather program that is not cached, then downloads it and checks its size and SHA-256 against the release manifest. A refusal downloads nothing. |
 | `/utilities-speech-install` | Asserts `utilities_speech_download`, then downloads missing files. |
 | `/utilities` | TUI dialog, palette "Utilities: Status". Reads the `status` RPC method only, when it opens, and on server, agent and Open-Meteo key events, which it hears only while open. Shows the same lines as `/utilities-status`. `r` refreshes, `Esc` closes. The key hint reads `r refresh · esc close`. |
-| RPC `status` | The `utilities.local` RPC's only method. Returns the same status object. The TUI imports its contract from its own bundle; the package does not export it. The id the plugin had before the rename, `utilities.tools`, answers the same method until 0.1.0, which removes it, and status then says it is deprecated. |
-| RPC `utilities.local.tools` | The tools RPC for scripts: `describe`, plus one method per tool, run as a session and its agent. Every tool is allowed by default; `access` and a script's own rules restrict it. A call resolves the rule before dispatch: an ask is refused, not prompted, and only an allow runs. See [scripting.md](scripting.md). The old id `utilities.tools.tools` answers the same methods until 0.1.0, which removes it, and its `describe` carries `"deprecated": "use utilities.local.tools; removed in 0.1.0"`. |
+| RPC `status` | The `utilities.local` RPC's only method. Returns the same status object. The TUI imports its contract from its own bundle; the package does not export it. |
+| RPC `utilities.local.tools` | The tools RPC for scripts: `describe`, plus one method per tool, run as a session and its agent. Every tool is allowed by default; `access` and a script's own rules restrict it. A call resolves the rule before dispatch: an ask is refused, not prompted, and only an allow runs. See [scripting.md](scripting.md). |
 
 The status RPC starts with the fields every one of these plugins shares:
 
 | Field | Meaning |
 | --- | --- |
 | `version` | The plugin's version. |
-| `host` | `{ version, range, tested }`: OpenCode's version, the supported range `>=2.2.3 <2.4.0`, and whether the version is a tested release (2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1, 2.3.2). `next` is added only for a version outside the range that runs because of `allowUntestedHost`. |
+| `host` | `{ version, range, tested }`: OpenCode's version, the supported range `>=2.4.1 <2.5.0`, and whether the version is the tested release (2.4.1). `next` is added only for a version outside the range that runs because of `allowUntestedHost`. |
 | `state` | `ready`; `failed` when every module that is on failed; `disabled` when every module is off. Utilities has no status-only mode, so the shared `host_untested` never occurs: an untested host shows only in `host.tested` and the OpenCode row. |
 | `unguardedAgents` | The agents without the default rules whose own rules would run a Utilities side effect without asking. Always present; `[]` when none. |
 | `nextStep` | Exactly the `Next step` row; `Nothing to do.` when nothing is needed. Missing speech files that download on first use, and the free weather tier, never set it. |
 
-Then Utilities' own: the platform, per-module availability, the weather tier and key, speech file states (`missing`, `cached` or `pre-seeded`), voices, whether files are pre-seeded, the cache and output directories, the due timer count and the timer store, `shadowedSkills` (each `{ name, path }`: a skill with one of the plugin's skill ids, such as one in `.opencode/skills/utilities-time/`, that OpenCode loads instead of the plugin's own; `[]` when none), and the ask-by-default actions. An item's own `next` is its own next step. The `utilities_status` tool has the same fields, with `unguardedAgents` as a count. For those agents, `nextStep` is: Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.
+Then Utilities' own: the platform, per-module availability, the weather tier and key, speech file states (`missing`, `cached` or `pre-seeded`), voices, whether files are pre-seeded, the cache and output directories, the due timer count and the timer store, `shadowedSkills` (each `{ name, path }`: a skill with one of the plugin's skill ids, such as one in `.opencode/skills/utilities-time/`, that OpenCode loads instead of the plugin's own; `[]` when none), the ask-by-default actions, and `stopgaps`: `{ tool, deletedWhen }` for `utilities_sessions` and `utilities_sessions_grep`, the OpenCode feature each waits on. An item's own `next` is its own next step. The `utilities_status` tool has the same fields, with `unguardedAgents` as a count. For those agents, `nextStep` is: Put the default rules shown by /utilities-status first in each listed agent's own permissions, in opencode.json or the agent's Markdown file, followed by your top-level rules for Utilities tools.
 
 ## Bounds
 
@@ -267,6 +300,8 @@ Then Utilities' own: the platform, per-module availability, the weather tier and
 | Speech text | 5,000 characters |
 | Transcription | PCM16 WAV, 8–48 kHz, mono or stereo, 20 MiB, ten minutes. Ancillary chunks accepted. Not a symbolic link. |
 | Synthesis WAV | at most 50 MiB. Default files older than 7 days are removed at startup. |
+| Session rows | 100 at most, 20 by default; the answer's rows stay under 64 KiB |
+| Session search | snippet at most 512 bytes; answer at most 64 KiB, refused with `OUTPUT_LIMIT`; 10,000 database rows scanned at most |
 
 `DEADLINE_EXCEEDED` is distinct from `CANCELLED`. The deadline does not include time spent waiting for permission.
 
@@ -279,7 +314,7 @@ A tool failure is `Tool.Error` with `message` set to `CODE: what happened. Next 
 | `OPTIONS_INVALID` | Fix the named option in the Utilities plugin options in `opencode.json`. |
 | `STATUS_UNAVAILABLE` | Run `/utilities-status` in a session to see the error, or check the OpenCode server log. |
 | `SKILLS_INVALID` | A skill file is missing or malformed; setup skips it with this warning. Reinstall the plugin. |
-| `HOST_UNTESTED` | OpenCode is outside `>=2.2.3 <2.4.0`. Use 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 or 2.3.2, or set `allowUntestedHost`. |
+| `HOST_UNTESTED` | OpenCode is outside `>=2.4.1 <2.5.0`. Use 2.4.1, or set `allowUntestedHost`. |
 | `DISABLED` | Set `modules.<name>` to `true`. |
 | `CLOSED` | The plugin is shutting down. Retry after OpenCode has reloaded it. |
 | `NATIVE_FILES_MISSING` | The time or weather program is not downloaded yet, or this copy of the plugin has no release manifest. Call the tool with permission to download it, or run `/utilities-install`. In a checkout, run `npm run native:ensure`. |

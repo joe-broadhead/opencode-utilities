@@ -3,7 +3,7 @@ import { homedir } from "node:os"
 import { dirname, isAbsolute, join, parse, relative, resolve } from "node:path"
 import type { EffectiveToolName, PermissionRequest, ProjectLocation } from "../domain/contract.js"
 
-/** A file path resolved the way the host's own file tools resolve it (anomalyco/opencode@v2.2.3 FileAccess.resolve). */
+/** A file path resolved the way the host's own file tools resolve it. */
 export interface FileAccess {
   readonly absolute: string
   /** Relative to the location directory when inside the location or project directory; otherwise the absolute path. */

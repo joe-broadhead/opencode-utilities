@@ -61,8 +61,6 @@ interface Setup {
   /** Test-only: false disables the MCP-only next-step shim below, to prove registration still requires them. */
   shim?: boolean
   lookup?: (sessionID: string) => Promise<unknown>
-  /** A host that reports a missing agent as a plain Error, as stock 2.2.3 to 2.2.6 do. */
-  plainAgentError?: boolean
   unavailableDetail?: NonNullable<ToolsRpcOptions["mcp"]>["unavailableDetail"]
   notRegistered?: NonNullable<ToolsRpcOptions["mcp"]>["notRegistered"]
 }
@@ -82,9 +80,9 @@ interface Harness {
 }
 
 /**
- * The MCP-only next steps a block whose tools are all its own (GWS, History, Utilities, Jobs) may omit. The suite's fake
- * MCP table needs them, so a setup that uses it supplies a test-only value for each missing one. The shared module is
- * not changed: this is the suite's own shim, and it never overrides a step the block declares.
+ * The MCP-only next steps a block whose tools are all its own may omit. The suite's fake MCP table needs them, so a setup
+ * that uses it supplies a test-only value for each missing one. The shared module is not changed: this is the suite's own
+ * shim, and it never overrides a step the block declares.
  */
 const MCP_STEPS: Readonly<Record<string, string>> = {
   AUTH_REQUIRED: "Run /connect and sign in.",
@@ -159,7 +157,7 @@ async function setup(options: Setup = {}): Promise<Harness> {
       // The module looks the agent up in its own location, without passing one: the session was read there.
       get: async ({ agentID }: { agentID: string }) => {
         const permissions = agents[agentID]
-        if (!permissions) throw options.plainAgentError ? new Error(`Agent not found: ${agentID}`) : Object.assign(new Error(`Agent not found: ${agentID}`), { _tag: "Agent.NotFoundError" })
+        if (!permissions) throw Object.assign(new Error(`Agent not found: ${agentID}`), { _tag: "Agent.NotFoundError" })
         return { location: { directory: LOCATION }, data: { id: agentID, permissions } }
       },
     },
@@ -535,12 +533,6 @@ describe("sessions", () => {
     expect(h.calls).toEqual([])
   })
 
-  test("a host that reports a missing agent as a plain 'Agent not found' error gets SESSION_AGENT_REQUIRED, not rpc.internal", async () => {
-    const h = await setup({ sessions: { ses_gone: { agent: "gone" } }, plainAgentError: true })
-    refusedWith(await call(h, READ, {}, "ses_gone"), "SESSION_AGENT_REQUIRED")
-    expect(NEXT_STEPS.SESSION_AGENT_REQUIRED).toContain('"location"')
-    expect(h.calls).toEqual([])
-  })
 })
 
 describe("plugin-owned methods", () => {

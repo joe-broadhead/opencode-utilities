@@ -1,6 +1,6 @@
 import * as z from "zod"
 import { parse } from "../domain/common.js"
-import { DEPRECATED_IDS, NAMESPACE, methodClass, toolRegistrable, type ToolName } from "../domain/contract.js"
+import { NAMESPACE, methodClass, toolRegistrable, type ToolName } from "../domain/contract.js"
 import { TOOL_DEFINITIONS } from "../domain/registry.js"
 import { registerToolsRpc, type JsonSchema, type PluginMethod, type ToolsRpcContext } from "@we-the-rebel-alliance/source-contract/tools-rpc"
 import { PLUGIN } from "../tools-rpc.js"
@@ -39,52 +39,9 @@ export function scriptMethods(sources: ToolSources): PluginMethod[] {
   }))
 }
 
-type Handler = (raw: unknown, context: never) => unknown
-
-/** The contract the shared module builds: an id, and one entry per method with its schemas. */
-interface Contract {
-  readonly id: string
-  readonly methods: Readonly<Record<string, { readonly input: unknown; readonly output: unknown; readonly errors?: unknown }>>
-}
-
 /**
- * Registers the tools RPC, and the id it had before the rename (`utilities.tools.tools`) alongside it. The shared module
- * builds one contract, so a context whose `register` takes every contract twice gives the old id the same handlers,
- * the same resolve and the same refusal, and its `describe` says it is deprecated. The old id answers until 0.1.0,
- * which removes it.
+ * Registers the tools RPC. The shared module builds one contract: an id, and one entry per method with its schemas.
  */
-export function registerScripting(ctx: ToolsRpcContext, sources: ToolSources, onAliasCalled?: () => void) {
-  type Registration = { dispose(): Promise<void> }
-  const register = ctx.rpc.register.bind(ctx.rpc) as unknown as (contract: { readonly id: string }, handlers: Record<string, Handler>) => Promise<Registration>
-  const both = async (contract: Contract, handlers: Record<string, Handler>) => {
-    const stopping = await register(contract, handlers)
-    // The alias marks itself on any call, and its describe carries the note.
-    const aliasHandlers: Record<string, Handler> = Object.fromEntries(
-      Object.entries(handlers).map(([name, handler]) => [name, async (raw: unknown, context: never) => {
-        onAliasCalled?.()
-        const value = await handler(raw, context) as Record<string, unknown>
-        return name === "describe" ? { ...value, deprecated: `use ${DEPRECATED_IDS.use}.tools; removed in ${DEPRECATED_IDS.removedIn}` } : value
-      }]),
-    )
-    // The host validates an output against its declared schema, so the alias's describe declares the extra field.
-    const describe = contract.methods.describe,
-          output = describe.output as { readonly properties?: Record<string, unknown> }
-    const aliasContract: Contract = {
-      ...contract,
-      id: DEPRECATED_IDS.tools,
-      methods: {
-        ...contract.methods,
-        describe: { ...describe, output: { ...output, properties: { ...output.properties, deprecated: { type: "string" } } } },
-      },
-    }
-    const aliasing = await register(aliasContract, aliasHandlers)
-    return {
-      dispose: async () => {
-        await aliasing.dispose().catch(() => undefined)
-        await stopping.dispose().catch(() => undefined)
-      },
-    }
-  }
-  const aliasing = { ...ctx, rpc: { ...ctx.rpc, register: both } } as unknown as ToolsRpcContext
-  return registerToolsRpc(aliasing, { plugin: PLUGIN, methods: scriptMethods(sources) })
+export function registerScripting(ctx: ToolsRpcContext, sources: ToolSources) {
+  return registerToolsRpc(ctx, { plugin: PLUGIN, methods: scriptMethods(sources) })
 }

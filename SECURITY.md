@@ -2,7 +2,7 @@
 
 ## Supported versions
 
-Fixes go into the newest release. Use the latest release from GitHub (`github:joe-broadhead/opencode-utilities#v<version>`) on OpenCode `>=2.2.3 <2.4.0`.
+Fixes go into the newest release. Use the latest release from GitHub (`github:we-the-rebel-alliance/utilities-plugin#v<version>`) on OpenCode `>=2.4.1 <2.5.0`.
 
 Supported platforms are macOS 14 or later, and Linux with glibc: 2.34 or later for the time and weather programs, and 2.39 or later for the speech engine. The release builds the Linux programs on Ubuntu 22.04 and the speech engine on Ubuntu 24.04, and checks every Linux binary against its floor before it is attested. On a Linux below a floor, the plugin reports `UNSUPPORTED_PLATFORM` for that module and downloads and runs nothing for it.
 
@@ -44,7 +44,7 @@ Open-Meteo key or write outside the paths the host's own rules allow.
 To restrict it, set `access` in the plugin options: `"ask-changes"` asks for the timer writes, synthesis and the speech
 download, and `"read-only"` denies them while every read still runs. Per-tool rules still work as before, and a later
 rule wins.
-- **Some agents get no default rules.** Agents defined only in your config, and agents added by plugins that load after this one, are created after the plugin inserts its rules. When `access` restricts changes, `/utilities-status` and `/utilities` name agents whose own rules would allow them without those restrictions. The [README](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/README.md#permissions) gives the fix: put the default block first in that agent's own `permissions`, followed by any top-level rules you have for `utilities_*` actions. Never put the block in the top-level `permissions`. That would loosen Explore.
+- **Some agents get no default rules.** Agents defined only in your config, and agents added by plugins that load after this one, are created after the plugin inserts its rules. When `access` restricts changes, `/utilities-status` and `/utilities` name agents whose own rules would allow them without those restrictions. The [README](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/README.md#permissions) gives the fix: put the default block first in that agent's own `permissions`, followed by any top-level rules you have for `utilities_*` actions. Never put the block in the top-level `permissions`. That would loosen Explore.
 - **Saved approvals are project-wide.** An "Always allow" answer is saved for the whole project and applies to every agent in it, Plan included. A directory with no git commit belongs to OpenCode's shared `global` project, so an approval saved there applies in every such directory. Review saved approvals and remove the ones you no longer need.
 - **Deny is final.** A configured `deny` rule wins over every `ask`, `allow` and saved approval. Use `deny` for anything that must never run, including in non-interactive runs, because `--auto` approves asks and still cannot pass a deny.
 - **A top-level allow applies to every agent.** OpenCode adds top-level rules after each agent's built-in rules, and the last matching rule wins. So it skips the prompt for Build, and it also allows that action for Plan and Explore. Put the allow on the agent that should have it when a stricter agent must stay strict.
@@ -54,11 +54,11 @@ rule wins.
 
 ## Scripts
 
-The tools RPC (`utilities.local.tools`, see [docs/scripting.md](https://github.com/joe-broadhead/opencode-utilities/blob/HEAD/docs/scripting.md)) runs the plugin's tools for a script, with no model. It adds no authority:
+The tools RPC (`utilities.local.tools`, see [docs/scripting.md](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/docs/scripting.md)) runs the plugin's tools for a script, with no model. It adds no authority:
 
 - A script names a session that names an agent, and runs as them. A call resolves the tool's action against that agent's rules and then the session's before anything runs, and the tool then makes the same permission requests it makes for the model.
 - Only a resolved `allow` runs. An `ask` is refused, because no one is there to answer it, and a `deny` is refused; both cost no tool call and no prompt. The default rules allow every tool; a restriction may require an explicit allow. The plugin's permission hook changes only an inner ask on one of its own script calls in flight, only to a deny, and leaves every other call alone.
-- Every tool is a method, with a class; a saved **Always allow** does not authorise an ad-hoc script, because it is not part of those rules. A script's grant is a rule in config, or a Jobs run session.
+- Every tool is a method, with a class; a saved **Always allow** does not authorise an ad-hoc script, because it is not part of those rules. A script's grant is a rule in config, or a later allow rule on the session.
 - The Open-Meteo key stays with the weather program; a script never receives it. Errors carry the same codes and messages as the tools, with no input values, keys or paths.
 - OpenCode's `execute.before` and `execute.after` tool hooks, from any plugin, do not run for a script's call, so another plugin's policy hook does not see it. A script's calls are not recorded in the session.
 - The RPC is reachable only by callers of the OpenCode server API, who already hold the server's full authority. The session is not a login: it scopes a script to what its agent may do.

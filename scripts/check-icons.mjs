@@ -264,7 +264,7 @@ const ASSET_EXPORTS = [
 
 /** Our own products: no vendor's service is behind them, so no vendor is declared. */
 const OWN_PACKAGES = new Set([
-  "@joe-broadhead/opencode-utilities",
+  "@we-the-rebel-alliance/utilities-plugin",
   "@joe-broadhead/opencode-history",
   "@joe-broadhead/opencode-jobs",
   "@joe-broadhead/opencode-charts",

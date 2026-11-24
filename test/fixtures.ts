@@ -82,13 +82,13 @@ export async function fixture(o: FixtureOptions = {}) {
   const root = await mkdtemp(join(await realpath(tmpdir()), "utilities-synthetic-")), calls = join(root, "calls.jsonl")
   const code = program(calls, o.body)
   await mkdir(join(root, "manifest")); await mkdir(join(root, "state"), { mode: 0o700 }); await mkdir(join(root, "project"))
-  await writeFile(join(root, "package.json"), JSON.stringify({ name: "github:joe-broadhead/opencode-utilities#v0.0.0", version: VERSION }))
+  await writeFile(join(root, "package.json"), JSON.stringify({ name: "github:we-the-rebel-alliance/utilities-plugin#v0.0.0", version: VERSION }))
   const gz = gzipSync(Buffer.from(code), { level: 9 })
-  const native = (module: string) => ({ name: `${module}-darwin-arm64.gz`, url: `https://github.com/joe-broadhead/opencode-utilities/releases/download/v${VERSION}/${module}-darwin-arm64.gz`, bytes: gz.length, sha256: sha(gz), executable: { name: module, bytes: Buffer.byteLength(code), sha256: sha(code) } })
-  await writeFile(join(root, "manifest/native.json"), JSON.stringify({ schema: 1, plugin: "opencode-utilities", repository: "joe-broadhead/opencode-utilities", tag: `v${VERSION}`, built: { commit: "0".repeat(40), run: 0, workflow: "native" }, modules: { "time-keep": { "darwin-arm64": native("time-keep") }, "weather-signal": { "darwin-arm64": native("weather-signal") } } }))
+  const native = (module: string) => ({ name: `${module}-darwin-arm64.gz`, url: `https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v${VERSION}/${module}-darwin-arm64.gz`, bytes: gz.length, sha256: sha(gz), executable: { name: module, bytes: Buffer.byteLength(code), sha256: sha(code) } })
+  await writeFile(join(root, "manifest/native.json"), JSON.stringify({ schema: 1, plugin: "opencode-utilities", repository: "we-the-rebel-alliance/utilities-plugin", tag: `v${VERSION}`, built: { commit: "0".repeat(40), run: 0, workflow: "native" }, modules: { "time-keep": { "darwin-arm64": native("time-keep") }, "weather-signal": { "darwin-arm64": native("weather-signal") } } }))
   const files = new Map<SpeechAssetRole, { name: string; content: Buffer }>([["engine", { name: ENGINE, content: Buffer.from(o.engine ?? code) }]])
   for (const [role, name] of Object.entries(MODELS)) files.set(role as SpeechAssetRole, { name, content: Buffer.from(`synthetic:${role}`) })
-  const release = o.release ?? `https://github.com/joe-broadhead/opencode-utilities/releases/download/v${VERSION}`
+  const release = o.release ?? `https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v${VERSION}`
   const asset = (role: SpeechAssetRole) => { const f = files.get(role)!; return { name: f.name, url: `${release}/${f.name}`, sha256: sha(f.content), bytes: f.content.length } }
   const speech: SpeechAssetManifest = { engines: { "darwin-arm64": asset("engine") }, models: { "tiny-q5_1": asset("tiny-q5_1"), "kitten-model": asset("kitten-model"), "kitten-voices": asset("kitten-voices"), "kitten-config": asset("kitten-config") } }
   await writeFile(join(root, "manifest/speech-assets.json"), JSON.stringify(speech))
@@ -151,7 +151,7 @@ export async function releaseServer() {
     res.writeHead(200, { "content-length": content.length }); res.end(content)
   })
   await new Promise<void>(resolve => server.listen(0, "127.0.0.1", resolve))
-  const url = `https://github.com/joe-broadhead/opencode-utilities/releases/download/v${VERSION}`, local = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v${VERSION}`
+  const url = `https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v${VERSION}`, local = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v${VERSION}`
   const realFetch = globalThis.fetch
   globalThis.fetch = Object.assign((input: Parameters<typeof fetch>[0], init?: Parameters<typeof fetch>[1]) => realFetch(typeof input === "string" && input.startsWith(`${url}/`) ? local + input.slice(url.length) : input, init), realFetch)
   return {

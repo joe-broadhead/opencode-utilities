@@ -3,12 +3,12 @@ import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { describe, expect, test } from "vitest"
 
-// manifest/speech-assets.json is committed and pinned here. The seven files are the v0.0.7 release's, carried to v0.0.0 with
-// the same bytes (NATIVE-DESIGN.md, section 1): the three speech engines and the four models. A change to a pin is a deliberate
-// edit to this test as well, made with `npm run speech:manifest -- --from <folder of the release files>`.
+// manifest/speech-assets.json is committed and pinned here: the three speech engines and the four models, at this
+// release's URLs and with the same bytes as the last release. A change to a pin is a deliberate edit to this test as
+// well, made with `npm run speech:manifest -- --from <folder of the release files>`.
 const root = fileURLToPath(new URL("../..", import.meta.url))
 const read = (path: string) => readFileSync(join(root, path), "utf8")
-const RELEASE = "https://github.com/joe-broadhead/opencode-utilities/releases/download/v0.0.0/"
+const RELEASE = "https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v0.0.0/"
 const file = (name: string, bytes: number, sha256: string) => ({ name, url: `${RELEASE}${name}`, sha256, bytes })
 
 const PINNED = {
@@ -26,7 +26,7 @@ const PINNED = {
 }
 
 describe("the committed speech manifest", () => {
-  test("pins exactly the seven v0.0.7 files, at v0.0.0 URLs, with their sizes and SHA-256s", () => {
+  test("pins exactly the seven release files, at the v0.0.0 URLs, with their sizes and SHA-256s", () => {
     expect(JSON.parse(read("manifest/speech-assets.json"))).toEqual(PINNED)
   })
 

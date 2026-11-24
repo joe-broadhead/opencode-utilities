@@ -174,8 +174,8 @@ describe("regional holidays (UTIL-4)", () => {
 describe("timers belong to the project (UTIL-5)", () => {
   const timeKeep = join(repo, "build/native", detectTarget(), "time-keep")
   const hash = (value: unknown) => createHash("sha256").update(JSON.stringify(value)).digest("hex")
-  /** A store where 0.0.1 kept it, per folder: projects/sha256([project, directory])/timers. */
-  async function legacy(state: string, project: string, directory: string, timers: { name: string; deadline: string; description?: string; tags?: string[] }[]) {
+  /** A store kept per folder, as an earlier release did: projects/sha256([project, directory])/timers. */
+  async function otherStore(state: string, project: string, directory: string, timers: { name: string; deadline: string; description?: string; tags?: string[] }[]) {
     const store = join(state, "projects", hash([project, directory]), "timers")
     await mkdir(store, { recursive: true, mode: 0o700 }); await writeFile(join(state, "empty.toml"), "")
     for (const t of timers) execFileSync(timeKeep, ["--output=json", `--config=${join(state, "empty.toml")}`, `--data-dir=${store}`, "timer", "set", ...t.description ? [`--description=${t.description}`] : [], ...(t.tags ?? []).map(tag => `--tag=${tag}`), "--", t.name, t.deadline])
@@ -203,9 +203,9 @@ describe("timers belong to the project (UTIL-5)", () => {
     expect((await list(root)).map(t => t.name).sort()).toEqual(["from-root", "from-sub"])
     expect((await root.status()).timers.directory).toBe((await sub.status()).timers.directory)
   })
-  test("a timer read never touches another store, such as one 0.0.1 kept per folder (UTIL-R6)", async () => {
+  test("a timer read never touches another store, such as one kept per folder (UTIL-R6)", async () => {
     const p = await project("p-old", "repo"), dir = join(p.base, "repo")
-    const store = await legacy(p.state, "p-old", dir, [{ name: "old", deadline: "2020-01-01T00:00:00Z" }])
+    const store = await otherStore(p.state, "p-old", dir, [{ name: "old", deadline: "2020-01-01T00:00:00Z" }])
     const runtime = await p.open("repo")
     expect(await list(runtime)).toEqual([])
     expect((await runtime.status()).timers).toMatchObject({ due: 0 })

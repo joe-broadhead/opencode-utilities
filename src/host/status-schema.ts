@@ -30,7 +30,7 @@ export const StatusSchema = z.strictObject({
     block: z.array(z.strictObject({ action: z.string().max(128), resource: z.string().max(128), effect: z.enum(["allow", "ask", "deny"]) })).max(64),
   }),
   access: z.enum(["all", "ask-changes", "read-only"]),
-  deprecated: z.string().max(512).optional(),
+  stopgaps: z.array(z.strictObject({ tool: z.string().max(64), deletedWhen: z.string().max(512) })).max(8),
 }) satisfies z.ZodType<StatusView>
 /** The status tool's output schema: the unguarded agents are a count, and `nextStep` points to /utilities-status for them. */
 export const StatusSummarySchema = StatusSchema.extend({

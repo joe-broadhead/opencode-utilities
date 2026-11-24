@@ -13,7 +13,7 @@ const withoutNative = args.includes("--without-native-manifest")
 const [dir, destination] = args.filter(arg => !arg.startsWith("--"))
 if (!dir || !destination) throw new Error("usage: bun scripts/pack.mjs <package dir> <destination> [--without-native-manifest]")
 const manifest = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"))
-if (manifest.name !== "@joe-broadhead/opencode-utilities") throw new Error(`${manifest.name} is not the main package`)
+if (manifest.name !== "@we-the-rebel-alliance/utilities-plugin") throw new Error(`${manifest.name} is not the main package`)
 const packed = manifest
 
 // A tarball without the native manifest installs and then refuses every tool that needs a program. The manifest is a

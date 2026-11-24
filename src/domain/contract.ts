@@ -2,15 +2,20 @@
 
 export const PLUGIN_ID = "utilities.local"
 export const TUI_ID = "utilities.local.tui"
-/**
- * The ids before the rename to `utilities.local`. They answer until 0.1.0, which removes them, running the same
- * handlers, so a script written against them keeps working; `deprecated` and one status line say so.
- */
-export const DEPRECATED_IDS = { status: "utilities.tools", tools: "utilities.tools.tools", use: PLUGIN_ID, removedIn: "0.1.0" } as const
 export const NAMESPACE = "utilities"
 export const COMMANDS = { status: "utilities-status", speechInstall: "utilities-speech-install", nativeInstall: "utilities-install" } as const
 export const WEATHER_INTEGRATION = "open-meteo"
 export const WEATHER_ATTRIBUTION = "Weather data by Open-Meteo.com (CC BY 4.0)"
+
+/**
+ * The two session stopgaps. Each names the OpenCode feature whose arrival deletes it; status and the utilities-sessions
+ * skill state the same sentence. They cover what OpenCode's own session search and stats do not yet, and are deleted
+ * when it ships them.
+ */
+export const STOPGAPS = [
+  { tool: "utilities_sessions", deletedWhen: "OpenCode gives agents a session list or stats tool with outcome, cost and token fields." },
+  { tool: "utilities_sessions_grep", deletedWhen: "OpenCode ships exact-text search over past sessions." },
+] as const
 
 export const MODULES = ["weather", "time", "speech"] as const
 export type Module = typeof MODULES[number]
@@ -19,9 +24,11 @@ export type Module = typeof MODULES[number]
 const EFFECTS = ["compute", "read-state", "write-state", "network", "read-file", "write-file"] as const
 export type Effect = typeof EFFECTS[number]
 
-/** The 24 tools, registered in NAMESPACE as `utilities_<name>`. `module` and `operation` route a call to its adapter. */
+/** The 26 tools, registered in NAMESPACE as `utilities_<name>`. `module` and `operation` route a call to its adapter. */
 export const TOOLS = {
   status: { effect: "compute" },
+  sessions: { effect: "read-state" },
+  sessions_grep: { effect: "read-state" },
   time_now: { effect: "compute", module: "time", operation: "current_time" },
   time_zones: { effect: "compute", module: "time", operation: "list_timezones" },
   time_zone_info: { effect: "compute", module: "time", operation: "timezone_info" },
@@ -159,8 +166,8 @@ export interface StatusView {
   readonly unguardedAgents: readonly string[]
   /** What the generated default rules allow, from the plugin options. */
   readonly access: Access
-  /** Set only after an old id answered in this process: one line naming it and the id to use. */
-  readonly deprecated?: string
+  /** The two session stopgaps and the OpenCode feature each waits on. */
+  readonly stopgaps: readonly { readonly tool: string; readonly deletedWhen: string }[]
   readonly nextStep: string
   readonly platform: { readonly target: string; readonly availability: Availability; readonly next?: string }
   readonly modules: { readonly [M in Module]: { readonly availability: Availability; readonly next?: string } }
@@ -211,6 +218,7 @@ export interface Config {
   readonly modules?: { readonly [M in Module]?: boolean }
   readonly stateRoot?: string
   readonly speech?: { readonly assetsDir?: string }
+  readonly sessionsDatabasePath?: string
   readonly allowUntestedHost?: boolean
 }
 /**
@@ -290,7 +298,7 @@ type SpeechModelRole = typeof SPEECH_MODEL_ROLES[number]
 export type SpeechAssetRole = "engine" | SpeechModelRole
 /** A release file, cached at `<cacheRoot>/<sha256>/<name>`. */
 export interface SpeechAsset { readonly name: string; readonly url: string; readonly sha256: string; readonly bytes: number }
-/** manifest/speech-assets.json. URLs are `https://github.com/joe-broadhead/opencode-utilities/releases/download/v<version>/<file>`. */
+/** manifest/speech-assets.json. URLs are `https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v<version>/<file>`. */
 export interface SpeechAssetManifest {
   readonly engines: { readonly [P in Platform]?: SpeechAsset }
   readonly models: { readonly [R in SpeechModelRole]: SpeechAsset }

@@ -13,7 +13,9 @@ const root = fileURLToPath(new URL("../", import.meta.url))
 const dist = join(root, "dist")
 // The host provides these modules to plugins at run time, so they stay imports. Nothing else may stay external.
 const HOST = ["@opencode/plugin", "@opencode/plugin/*", "@opentui/*", "solid-js", "solid-js/*"]
-const allowed = path => path.startsWith("node:") || HOST.some(name => name.endsWith("/*") ? path.startsWith(name.slice(0, -1)) : path === name)
+// A runtime built-in: `bun:sqlite`, which utilities_sessions_grep imports dynamically so a Node unit test can inject a database.
+const BUILTIN = ["bun:sqlite"]
+const allowed = path => path.startsWith("node:") || BUILTIN.includes(path) || HOST.some(name => name.endsWith("/*") ? path.startsWith(name.slice(0, -1)) : path === name)
 
 // The TUI view is Solid JSX for OpenTUI's universal renderer. It is compiled here, so no .tsx runs from node_modules.
 const solid = {
@@ -51,7 +53,7 @@ const result = await build({
   format: "esm",
   platform: "node",
   target: "es2022",
-  external: HOST,
+  external: [...HOST, ...BUILTIN],
   plugins: [solid],
   legalComments: "none",
   metafile: true,
@@ -83,7 +85,7 @@ const notices = [...inlined.keys()].sort().map(name => {
   if (!file) throw new Error(`NOTICE_MISSING: ${name} ships no licence file`)
   return `## ${name} ${version} (${license}), in ${[...inlined.get(name)].sort().join(" and ")}\n\n${readFileSync(join(dir, file), "utf8").trim()}\n`
 })
-const notice = `@joe-broadhead/opencode-utilities bundles this third-party code into dist/.\n\n${notices.join("\n")}`
+const notice = `@we-the-rebel-alliance/utilities-plugin bundles this third-party code into dist/.\n\n${notices.join("\n")}`
 const noticePath = join(root, "NOTICE")
 if (process.argv.includes("--notice")) writeFileSync(noticePath, notice)
 else if (!existsSync(noticePath) || readFileSync(noticePath, "utf8") !== notice) {
