@@ -30,9 +30,10 @@ into the plugin cache (`$XDG_CACHE_HOME/opencode-utilities/native/v<version>/<pr
 npm run check
 ```
 
-It runs `native:ensure`, the typecheck, the unit tests, the build, the host tests on the tested OpenCode release, the
-TUI tests, the lint (forbidden APIs, copied files, icons, workflows) and the pack test. The copied release kit's own
-tests (`npm run test:kit`) are not in it while the kit is replaced by the plugin kit. Host and
+It runs `native:ensure`, the typecheck, the unit tests, the kit tests, the build, the host tests on the tested OpenCode
+release, the TUI tests, the lint (forbidden APIs, copied files, icons, workflows) and the pack test. The kit stage skips
+two obsolete CI-shape assertions — the old multi-runner/macOS `ci.yml` check and its nested re-run wrapper — which the
+mandated one-job `ci` shape replaces for 4a; 4b replaces the kit. Host and
 pack tests bind ports, so run one repository's check at a time. Do not skip, weaken or delete a test to get green.
 
 Smaller loops:

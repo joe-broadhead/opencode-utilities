@@ -78,7 +78,7 @@ errors; [docs/architecture.md](docs/architecture.md) is the design. The family s
 
 ## Checks
 
-- `npm run check` is the one command: `native:ensure`, typecheck, unit, build, host, TUI, lint, pack. The copied release kit's own tests (`npm run test:kit`) are not in it while the kit is replaced by the plugin kit, whose CI check would demand the old macOS matrix. Host and pack
+- `npm run check` is the one command: `native:ensure`, typecheck, unit, kit, build, host, TUI, lint, pack. The kit stage skips two obsolete CI-shape assertions — the old multi-runner/macOS `ci.yml` check and its nested re-run wrapper — which the mandated one-job `ci` shape replaces for 4a; 4b replaces the kit. Host and pack
   runs set `HOME`, the XDG variables, `OPENCODE_TEST_HOME` and `TMPDIR` inside a temp root that is never under the real
   home, and assert that OpenCode's paths stay there.
 - The tested OpenCode release is `TESTED_HOSTS` in `src/host/versions.ts`. The host and pack stages, CI and the status's

@@ -66,7 +66,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=2",
-    "test:kit": "node --test scripts/release-kit.test.mjs",
+    "test:kit": "node --test \"--test-skip-pattern=this repository.s ci\\\\.yml|pass with GITHUB_REPOSITORY unset\" scripts/release-kit.test.mjs",
     "build": "node scripts/build.mjs",
     "test:host": "node scripts/host-tests.mjs",
     "test:tui": "bun test test/tui",
@@ -76,7 +76,7 @@
     "native:build": "bash scripts/native-build.sh",
     "native:ensure": "node scripts/native-ensure.mjs",
     "speech:manifest": "node scripts/speech-manifest.mjs",
-    "check": "npm run native:ensure && npm run typecheck && npm test && npm run build && npm run test:host && npm run test:tui && npm run lint && npm run test:pack",
+    "check": "npm run native:ensure && npm run typecheck && npm test && npm run test:kit && npm run build && npm run test:host && npm run test:tui && npm run lint && npm run test:pack",
     "capture": "node scripts/capture-tools.mjs"
   },
   "devDependencies": {
