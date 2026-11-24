@@ -48,6 +48,7 @@ jobs:
             echo "The native prerequisites are already installed."
             exit 0
           fi
+          echo "Missing native prerequisites: ${missing[*]}"
           sudo apt-get update && sudo apt-get install -y --no-install-recommends "${missing[@]}"
       # The workflows are tools too: `npm run lint` lints them with actionlint when it is installed, and this puts it on
       # PATH so a workflow GitHub would refuse fails the run.
