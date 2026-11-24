@@ -64,7 +64,8 @@ await tools.utilities.sessions_grep({ text: "invoice", from: "2026-11-01" })
   fields; `utilities_sessions_grep` (exact text in tool calls, outputs and file touches, over OpenCode's database,
   read-only) ends when OpenCode ships exact-text search. To find or read a session, use `opencode.session.search` and
   `opencode.session.read` first. The search matches literal text only, never a regular expression, and masks the
-  credentials it recognizes in snippets, titles, paths and the echoed query.
+  credentials it recognizes (AWS, OpenAI, GitHub and bearer tokens, and password/token/key/secret assignments in
+  `key=value` or quoted JSON form) in snippets, titles, paths and the echoed query.
 
 No Utilities tool is pinned in the Code Mode catalogue. Four skills cover the tools: `utilities-time`,
 `utilities-weather`, `utilities-speech` and `utilities-sessions`. Each module's skills are offered only while its tools

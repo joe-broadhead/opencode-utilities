@@ -79,8 +79,15 @@ const refuse = (what: string): never => fail("CONTRACT_MISMATCH", {
   hint: "Update the plugin, or find the session with opencode.session.search instead.",
 })
 
-/** A sampled type, named without echoing its content: a data column may hold secrets. */
-const kind = (value: unknown) => typeof value === "string" ? JSON.stringify(value.slice(0, 40)) : value === undefined ? "no type" : "a non-string type"
+/** The JSON kind of a sampled value only: a data column may hold secrets, so the value is never echoed. */
+const kind = (value: unknown): string =>
+  value === undefined ? "no type"
+  : value === null ? "null"
+  : Array.isArray(value) ? "an array"
+  : typeof value === "string" ? "a string"
+  : typeof value === "number" ? "a number"
+  : typeof value === "boolean" ? "a boolean"
+  : "an object"
 
 /**
  * Beyond the columns: the data envelope this stopgap reads. A `session_part.data` is a JSON object whose `type` is the

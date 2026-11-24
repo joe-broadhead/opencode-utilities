@@ -44,7 +44,8 @@ outputs and file touches, read-only, over OpenCode's database.
   the database gives none), the matching field and a snippet of at most 512 bytes (cut on a UTF-8 boundary and marked),
   or the file path for a file touch.
 - Credentials in the text are masked before the answer, and so is the echoed query: AWS key ids, `sk-` and `sk-proj-`
-  keys, bearer tokens, and password, token, key and secret assignments. Never repeat a masked value or try to recover it.
+  keys, GitHub `ghp_`/`github_pat_` tokens, bearer tokens, and password, token, key and secret assignments in
+  `key=value`, `key: value` or quoted JSON form. Never repeat a masked value or try to recover it.
 - An answer over 64 KiB is refused with a next step instead of being truncated: lower `limit`, or pass `from` and `to`.
   The scan is bounded too; `more: true` says it stopped before the oldest match, and `truncated: true` says some text was
   longer or deeper than the search reads, so a match may be missing.

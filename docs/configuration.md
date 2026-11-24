@@ -140,8 +140,9 @@ skill state the same sentence.
   `session`, `directory` and `limit`. It searches each part's tool name, its input values and its output text, and each
   message's text; a matching input path is reported as a file touch. A snippet is at most 512 bytes, cut on a UTF-8
   boundary and marked; an answer over 64 KiB is refused with `OUTPUT_LIMIT` and a next step instead of being truncated.
-  Credentials in the text (AWS key ids, `sk-` and `sk-proj-` keys, bearer tokens, and password, token, key and secret
-  assignments) are masked in every field and in the rendered text, and the echoed query is masked too. The scan is
+  Credentials in the text (AWS key ids, `sk-` and `sk-proj-` keys, GitHub `ghp_`/`github_pat_` tokens, bearer tokens, and
+  password, token, key and secret assignments in `key=value`, `key: value` or quoted JSON form) are masked in every field
+  and in the rendered text, and the echoed query is masked too. The scan is
   bounded, and `more` says it stopped before the oldest match; `truncated` says some text was longer or deeper than the
   search reads, so a match may be missing. An unknown schema or data shape is `CONTRACT_MISMATCH` and names what was
   found: the tables and columns, and a part's type, text, name or state, or a message's `time.created`. Deleted when

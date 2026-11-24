@@ -181,7 +181,7 @@ function fixture(options: FixtureOptions = {}) {
   const now = Date.UTC(2026, 10, 20, 12, 0, 0)
   insert("project", { id: "project-fixture", worktree: "/project", time_created: now, time_updated: now, sandboxes: "[]" })
   insert("session_v2", {
-    id: "ses_fixture", project_id: "project-fixture", parent_id: null, slug: "fixture", title: "Fixture",
+    id: "ses_fixture", project_id: "project-fixture", parent_id: null, slug: "fixture", title: "Fixture ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
     cost: 1, tokens_input: 1, tokens_output: 1, tokens_reasoning: 0, tokens_cache_read: 0, tokens_cache_write: 0,
     time_created: now, time_updated: now + 1_000, time_busy: null, time_idle: null, time_archived: null,
     directory: "/project", version: "2.4.1", agent: "build", model: "{}",
@@ -209,14 +209,18 @@ function fixture(options: FixtureOptions = {}) {
     data: JSON.stringify({ type: "tool", name: "bash", state: { input: { command: `needle-bulk ${"x".repeat(700)}` }, content: [] } }),
   })
   if (options.secrets) {
-    const command = 'echo needle AKIAIOSFODNN7EXAMPLE password=hunter2 sk-proj-abcdefghijklmnop "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload" token=abc123 access_token=def456 api_key=ghi789 secret=jkl012'
+    const command = `echo needle ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 github_pat_11ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 AKIAIOSFODNN7EXAMPLE password=hunter2 sk-proj-abcdefghijklmnop "Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload" token=abc123 access_token=def456 api_key=ghi789 apikey=jkl012 secret=mno345`
     insert("session_part", {
       message_id: "msg_1", session_id: "ses_fixture", ordinal: 20, type: "tool", call_id: "call_secret", time_created: now + 800, time_updated: now + 800,
       data: JSON.stringify({ type: "tool", name: "bash", state: { input: { command }, content: [] } }),
     })
+    insert("session_part", {
+      message_id: "msg_1", session_id: "ses_fixture", ordinal: 21, type: "tool", call_id: "call_secret_file", time_created: now + 850, time_updated: now + 850,
+      data: JSON.stringify({ type: "tool", name: "read", state: { input: { filePath: "/project/ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.md" }, content: [] } }),
+    })
     insert("session_message", {
       id: "msg_secret", session_id: "ses_fixture", type: "user", seq: 2, time_created: now + 900, time_updated: now + 900,
-      data: JSON.stringify({ type: "user", time: { created: now + 900 }, text: "needle passwd=letmein" }),
+      data: JSON.stringify({ type: "user", time: { created: now + 900 }, text: `needle {"password":"hunter2"} {"api_key":"abc123"} passwd=letmein` }),
     })
   }
   if (options.manyInputs) {
@@ -262,24 +266,31 @@ describe("utilities_sessions_grep", () => {
     const result = await grep({ text: "needle" }, { databasePath: fixture({ secrets: true }), open, now: () => at })
     const json = JSON.stringify(result.output)
     const text = result.text
-    for (const secret of ["AKIAIOSFODNN7EXAMPLE", "hunter2", "sk-proj-abcdefghijklmnop", "eyJhbGciOiJIUzI1NiJ9", "abc123", "def456", "ghi789", "jkl012", "letmein"]) {
+    const secrets = [
+      "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", "github_pat_11ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+      "AKIAIOSFODNN7EXAMPLE", "hunter2", "sk-proj-abcdefghijklmnop", "eyJhbGciOiJIUzI1NiJ9",
+      "abc123", "def456", "ghi789", "jkl012", "mno345", "letmein",
+    ]
+    for (const secret of secrets) {
       expect(json, secret).not.toContain(secret)
       expect(text, secret).not.toContain(secret)
     }
-    expect(json).toContain("AKIA****************")
-    expect(json).toContain("password=[redacted]")
-    expect(json).toContain("passwd=[redacted]")
-    expect(json).toContain("sk-proj-[redacted]")
-    expect(json).toContain("Bearer [redacted]")
-    expect(text).toContain("token=[redacted]")
-    expect(text).toContain("access_token=[redacted]")
-    expect(text).toContain("api_key=[redacted]")
-    expect(text).toContain("secret=[redacted]")
-    // The query is echoed masked, and a search for a secret still finds the row without echoing it.
-    const secret = await grep({ text: "AKIAIOSFODNN7EXAMPLE" }, { databasePath: fixture({ secrets: true }), open, now: () => at })
-    expect(secret.output.query).toBe("AKIA****************")
-    expect(secret.output.rows.length).toBeGreaterThan(0)
-    expect(JSON.stringify(secret.output) + secret.text).not.toContain("AKIAIOSFODNN7EXAMPLE")
+    for (const marker of [
+      "ghp_[redacted]", "github_pat_[redacted]", "AKIA****************", "password=[redacted]", "passwd=[redacted]",
+      "sk-proj-[redacted]", "Bearer [redacted]", "token=[redacted]", "access_token=[redacted]", "api_key=[redacted]",
+      "secret=[redacted]",
+    ]) expect(json, marker).toContain(marker)
+    // The session title (in every row), the tool command (a snippet), the file path and the message are all masked.
+    expect(result.output.rows.every(row => row.title === "Fixture ghp_[redacted]")).toBe(true)
+    expect(result.output.rows.some(row => row.field === "input.command" && row.snippet.includes("ghp_[redacted]"))).toBe(true)
+    expect(result.output.rows.some(row => row.field === "message.text" && row.snippet.includes('{"password":"[redacted]"} {"api_key":"[redacted]"}'))).toBe(true)
+    // A search for a GitHub token echoes the query masked, still finds the rows, and names the masked file path.
+    const token = await grep({ text: "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" }, { databasePath: fixture({ secrets: true }), open, now: () => at })
+    expect(token.output.query).toBe("ghp_[redacted]")
+    expect(token.output.rows.length).toBeGreaterThan(0)
+    expect(token.output.rows.some(row => row.file === "/project/ghp_[redacted].md")).toBe(true)
+    expect(token.text).toContain('exact text "ghp_[redacted]"')
+    expect(JSON.stringify(token.output) + token.text).not.toContain("ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
   })
 
   test("filters by the window, the session and the directory, and caps rows at limit", async () => {
