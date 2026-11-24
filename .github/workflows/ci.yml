@@ -29,7 +29,15 @@ jobs:
         with:
           bun-version: 1.4.5
       - name: Rust toolchain
-        run: rustup toolchain install 1.96.0 --profile minimal
+        run: |
+          export PATH="$HOME/.cargo/bin:$PATH"
+          if command -v rustup >/dev/null 2>&1; then
+            rustup toolchain install 1.96.0 --profile minimal
+          else
+            # A self-hosted runner may have no rustup: install it and put it on PATH for the native build.
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.96.0
+            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          fi
       - name: Native prerequisites
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libclang-dev cmake pkg-config
       # The workflows are tools too: `npm run lint` lints them with actionlint when it is installed, and this puts it on
