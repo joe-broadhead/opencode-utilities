@@ -1,10 +1,11 @@
 // Utilities on the public @opencode/sdk host (no private host imports), with a fake runtime that makes
 // the real runtime's permission requests. This is where V3 is recorded: the shipped permission mechanism
 // is the default-ask agent rules, and user rules and saved approvals win over them.
-import { AUTOMATIONS, HOST_VERSION, project, removeRoot, startHost, toolErrorMetadata, unattended } from "./harness.js"
+import { HOST_VERSION, project, removeRoot, startHost, toolErrorMetadata, unattended } from "./harness.js"
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
+import { tmpdir } from "node:os"
 import { fileURLToPath } from "node:url"
 import { Model, Plugin, Provider } from "@opencode/plugin"
 import { z } from "zod"
@@ -17,6 +18,7 @@ import { formatStatus, Utilities } from "../../src/rpc.js"
 import { Rpc } from "@opencode/plugin/rpc"
 import { fakeRuntimes, failure, type FakeRuntime } from "./runtime.js"
 import { INPUTS, SAMPLES } from "./samples.js"
+import { fixtureDatabase, NEEDLE } from "./sessions.js"
 
 setDefaultTimeout(60_000)
 const packageRoot = fileURLToPath(new URL("../../", import.meta.url))
@@ -28,9 +30,8 @@ type Rule = { action: string; resource: string; effect: string }
 const contexts = new Map<string, Pick<Plugin.Context, "tool">>()
 const observer: Plugin.Plugin = { id: "test.observer", setup(ctx) { contexts.set(ctx.location.directory, ctx) } }
 const runtimes = fakeRuntimes({ speech: "SPEECH_ASSETS_MISSING" })
-// A schedule's check program, or on 2.3.1 and later an automation's code action, is how a host test runs Code Mode
-// with nobody present to answer a prompt.
-const CODE_MODE_FLAG = AUTOMATIONS ? { automations: true } : { schedules: true }
+// An automation's code action is how a host test runs Code Mode with nobody present to answer a prompt.
+const CODE_MODE_FLAG = { automations: true }
 const dirs = {
   main: project("main", { experimental: CODE_MODE_FLAG, agents: { reviewer: { mode: "primary", description: "Defined only in config" } } }),
   allowed: project("allowed", { experimental: CODE_MODE_FLAG, permissions: ["utilities_weather_*", "utilities_timer_*", "utilities_speech_*"].map(allow) }),
@@ -45,12 +46,15 @@ writeFileSync(shadowSkill, "---\nname: utilities-time\ndescription: A user's own
 let host: Awaited<ReturnType<typeof startHost>>
 let calls = 0, closed = false
 
+// A synthetic OpenCode database for utilities_sessions_grep: built at test time, never a real one.
+const fixtures = realpathSync(mkdtempSync(join(tmpdir(), "utilities-sessions-")))
+const sessionsDatabasePath = fixtureDatabase(join(fixtures, "opencode.db"))
 const runtime = (directory: string) => runtimes.created.find(r => r.options.location.directory === directory) as FakeRuntime
 async function boot(directory: string, agent = "build") {
   const session = await host.sdk.session.create({ agent, location: { directory } })
   // Plugins set up on the location's first listing, which fails while they are still activating.
   await waitFor(() => host.sdk.agent.list({ location: { directory } }).then(() => contexts.has(directory), () => false), 30_000, `the plugin's context in ${directory}`)
-  // From 2.2.7 a location's plugins load in the background, so the context can exist before the plugin has registered
+  // A location's plugins load in the background, so the context can exist before the plugin has registered
   // its RPC. The status RPC is the readiness probe: it answers only once setup has registered it.
   await waitFor(async () => {
     try { await host.sdk.rpc(Utilities).status({}, { location: { directory } }); return true } catch { return false }
@@ -79,7 +83,7 @@ async function call(directory: string, sessionID: string, tool: ToolName, replie
   await run
   return { ...settled!, requests }
 }
-/** Runs a Code Mode program through the host's own tool path, unattended, as a schedule condition does. */
+/** Runs a Code Mode program through the host's own tool path, unattended, as an automation's code action does. */
 async function codemode(sessionID: string, body: string) {
   const code = `const seen = {}\n${body}\nthrow new Error("SEEN " + JSON.stringify(seen))`
   const outcome = await unattended(host, sessionID, code)
@@ -102,13 +106,14 @@ const succeeded = (seen: Record<string, unknown>) => Object.fromEntries(Object.e
 beforeAll(async () => {
   const plugin = createPlugin({ createRuntime: runtimes.create, packageRoot })
   host = await startHost([
-    { id: plugin.id, setup: (ctx: Plugin.Context) => plugin.setup({ ...ctx, options: { access: "ask-changes" } }) },
+    { id: plugin.id, setup: (ctx: Plugin.Context) => plugin.setup({ ...ctx, options: { access: "ask-changes", sessionsDatabasePath } }) },
     observer,
   ])
 })
 afterAll(async () => {
   if (!closed) await host?.sdk.close()
   removeRoot()
+  rmSync(fixtures, { recursive: true, force: true })
 })
 
 describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
@@ -126,7 +131,7 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     }
     expect(registered.filter(t => t.options?.pinned)).toEqual([])
     const skills = await host.sdk.skill.list({ location: { directory: dirs.main } })
-    expect(skills.data.map((s: { id: string }) => s.id).filter((id: string) => id.startsWith("utilities")).sort()).toEqual(["utilities-speech", "utilities-time", "utilities-weather"])
+    expect(skills.data.map((s: { id: string }) => s.id).filter((id: string) => id.startsWith("utilities")).sort()).toEqual(["utilities-sessions", "utilities-speech", "utilities-time", "utilities-weather"])
     const commands = await host.sdk.command.list({ location: { directory: dirs.main } })
     expect(commands.data.map((c: { name: string }) => c.name).filter((n: string) => n.startsWith("utilities")).sort()).toEqual(["utilities-install", "utilities-speech-install", "utilities-status"])
   })
@@ -134,7 +139,7 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
   test("inserts the ask rules right after each agent's base allow; config-only agents are named with the fix", async () => {
     const listed = async () => (await host.sdk.agent.list({ location: { directory: dirs.main } })).data as { id: string; permissions: Rule[] }[]
     let agents = await listed()
-    // 2.3.2 can list a config-only agent a moment after the location is ready; the assertion below is unchanged.
+    // A config-only agent can be listed a moment after the location is ready; the assertion below is unchanged.
     await waitFor(async () => { agents = await listed(); return agents.some(a => a.id === "reviewer") }, 30_000, "the config-only agent reviewer")
     const rules = (id: string) => agents.find(a => a.id === id)!.permissions.map(r => `${r.effect} ${r.action} ${r.resource}`)
     const block = defaultRules("ask-changes").map(r => `${r.effect} ${r.action} ${r.resource}`)
@@ -168,7 +173,7 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
   test("computation, timer reads and status run unattended through the host's tool path", async () => {
     const sessionID = await boot(dirs.main)
     const reads = NAMES.filter(n => TOOLS[n].effect === "compute" || TOOLS[n].effect === "read-state")
-    expect(reads.length).toBe(14)
+    expect(reads.length).toBe(16)
     expect(succeeded(await codemode(sessionID, program(reads)))).toEqual(Object.fromEntries(reads.map(name => [name, "ok"])))
   })
 
@@ -224,6 +229,35 @@ describe(`Utilities on @opencode/sdk, host version ${HOST_VERSION}`, () => {
     expect((await tools(dirs.main)).some(t => t.id === "utilities_time_now")).toBe(true)
     runtime(dirs.main).setAvailability("weather", "AVAILABLE")
     await waitFor(async () => (await tools(dirs.main)).some(t => t.id === "utilities_weather_current"))
+  })
+
+  test("utilities_sessions reads this host's sessions through the public session API, and one by id", async () => {
+    const sessionID = await boot(dirs.main)
+    const listed = await call(dirs.main, sessionID, "sessions", [], "build", {})
+    expect(listed.error).toBeUndefined()
+    const output = listed.result!.output as { totals: { sessions: number; subagents: number }; rows: { id: string }[]; trust: string }
+    expect(output.trust).toBe("untrusted")
+    expect(output.totals.sessions).toBeGreaterThanOrEqual(1)
+    expect(output.rows.map(row => row.id)).toContain(sessionID)
+    const one = await call(dirs.main, sessionID, "sessions", [], "build", { session: sessionID })
+    const single = one.result!.output as { totals: { sessions: number }; rows: { id: string }[] }
+    expect(single.totals.sessions).toBe(1)
+    expect(single.rows.map(row => row.id)).toEqual([sessionID])
+  })
+
+  test("utilities_sessions_grep searches OpenCode's database read-only, literally, and names a file touch", async () => {
+    const sessionID = await boot(dirs.main)
+    const found = await call(dirs.main, sessionID, "sessions_grep", [], "build", { text: NEEDLE })
+    expect(found.error).toBeUndefined()
+    const output = found.result!.output as { query: string; rows: { session: string; field: string; file?: string; snippet: string }[]; trust: string }
+    expect(output.query).toBe(NEEDLE)
+    expect(output.trust).toBe("untrusted")
+    expect(output.rows.some(row => row.session === "ses_fixture" && row.field === "input.command")).toBe(true)
+    expect(output.rows.some(row => row.file === `/fixture/project/${NEEDLE}.md` && row.field === "input.filePath")).toBe(true)
+    expect(output.rows.some(row => row.field.startsWith("message."))).toBe(true)
+    // A regular expression is literal text: no rows, no backtracking.
+    const literal = await call(dirs.main, sessionID, "sessions_grep", [], "build", { text: "(a+)+$" })
+    expect((literal.result!.output as { rows: unknown[] }).rows).toEqual([])
   })
 
   test("a saved Always allow skips the next prompt (V3)", async () => {
@@ -318,9 +352,11 @@ describe(`the tools RPC ${TOOLS_RPC_ID} on @opencode/sdk, host version ${HOST_VE
     const { value } = await script(directory, "describe", {})
     expect(value.id).toBe(TOOLS_RPC_ID)
     expect(value.methods.map((method: { name: string }) => method.name)).toEqual([...SCRIPT_TOOLS])
-    expect(SCRIPT_TOOLS).toHaveLength(24)
+    expect(SCRIPT_TOOLS).toHaveLength(26)
     for (const method of value.methods) expect(method).toMatchObject({ kind: "plugin", action: `utilities_${method.name}`, available: true, input: expect.any(Object), output: expect.any(Object) })
     expect(Object.fromEntries(value.methods.map((method: { name: string; class: string }) => [method.name, method.class]))).toMatchObject({
+      sessions: "read",
+      sessions_grep: "read",
       time_now: "read",
       timer_set: "write",
       timer_delete: "write",
@@ -349,20 +385,6 @@ describe(`the tools RPC ${TOOLS_RPC_ID} on @opencode/sdk, host version ${HOST_VE
     } finally {
       runtime(directory).setAvailability("weather", "AVAILABLE")
     }
-  })
-
-  test("the ids before the rename answer the same calls, say they are deprecated, and status notes the call", async () => {
-    // The tools RPC under `utilities.tools.tools`: the same methods, and `describe` says to move.
-    const legacy = host.sdk.rpc(Rpc.define({ id: "utilities.tools.tools", methods: { describe: { input: any, output: any, errors: { failed: any } } }, events: {} } as never)) as unknown as { describe: (i: unknown, o: object) => Promise<Record<string, any>> }
-    const described = await legacy.describe({}, { location: { directory } })
-    expect(described.methods.map((method: { name: string }) => method.name)).toEqual((await client().describe({}, { location: { directory } })).methods.map((method: { name: string }) => method.name))
-    expect(described.deprecated).toBe("use utilities.local.tools; removed in 0.1.0")
-    // The status RPC under `utilities.tools`, and the one line it leaves behind on the new id.
-    const old = host.sdk.rpc(Rpc.define({ id: "utilities.tools", methods: { status: { input: any, output: any, errors: { failed: any } } }, events: {} } as never)) as unknown as { status: (i: unknown, o: object) => Promise<Record<string, any>> }
-    expect((await old.status({}, { location: { directory } })).version).toBe(version)
-    const status = await host.sdk.rpc(Utilities).status({}, { location: { directory } })
-    expect(status.deprecated).toBe("Deprecated id called: utilities.tools, utilities.tools.tools. Use utilities.local, utilities.local.tools instead; the old id works until 0.1.0, which removes it.")
-    expect(formatStatus(status)).toContain("Deprecated: Deprecated id called:")
   })
 
   test("runs a read as the session and its agent with no model turn, and returns the tool's output", async () => {
@@ -515,21 +537,21 @@ describe("host compatibility and unload", () => {
       createPlugin({ createRuntime: refused.create, packageRoot }),
       { id: "test.allowed", setup: (ctx: Plugin.Context) => createPlugin({ createRuntime: allowed.create, packageRoot }).setup({ ...ctx, options: { allowUntestedHost: true } }) },
       observer,
-    ], "2.4.0")
+    ], "2.5.0")
     try {
       const location = { directory: project("untested", {}) }
-      // From 2.2.7 a location's plugins load in the background: wait until the refusing plugin has logged and the
-      // allowing plugin answers its status RPC, then run the unchanged assertions below.
+      // A location's plugins load in the background: wait until the refusing plugin has logged and the allowing
+      // plugin answers its status RPC, then run the unchanged assertions below.
       await waitFor(async () => {
         await untested.sdk.agent.list({ location }).catch(() => undefined)
-        if (!untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found 2.4.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 or 2.3.2, or set the plugin option allowUntestedHost: true"))) return false
+        if (!untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.4.1 <2.5.0, found 2.5.0. Next step: Use OpenCode 2.4.1, or set the plugin option allowUntestedHost: true"))) return false
         try { await untested.sdk.rpc(Utilities).status({}, { location }); return true } catch { return false }
       }, 30_000, "the untested host's refusal and its allowing plugin's status RPC")
-      expect(untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.2.3 <2.4.0, found 2.4.0. Next step: Use OpenCode 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 or 2.3.2, or set the plugin option allowUntestedHost: true"))).toBe(true)
+      expect(untested.logs.some(log => log.text.includes("HOST_UNTESTED: Utilities supports OpenCode >=2.4.1 <2.5.0, found 2.5.0. Next step: Use OpenCode 2.4.1, or set the plugin option allowUntestedHost: true"))).toBe(true)
       expect(refused.created).toHaveLength(0)
       expect(allowed.created).toHaveLength(1)
       const status = await untested.sdk.rpc(Utilities).status({}, { location })
-      expect(status.host).toMatchObject({ version: "2.4.0", range: ">=2.2.3 <2.4.0", tested: false, next: expect.stringContaining("allowUntestedHost is set") })
+      expect(status.host).toMatchObject({ version: "2.5.0", range: ">=2.4.1 <2.5.0", tested: false, next: expect.stringContaining("allowUntestedHost is set") })
       expect(status.state).toBe("ready")
     } finally { await untested.sdk.close() }
   })

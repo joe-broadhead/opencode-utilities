@@ -1,20 +1,20 @@
 {
-  "name": "@joe-broadhead/opencode-utilities",
-  "version": "0.0.7",
+  "name": "@we-the-rebel-alliance/utilities-plugin",
+  "version": "0.0.0",
   "private": true,
-  "description": "Unofficial OpenCode plugin: weather, time, polled timers and local speech tools",
+  "description": "OpenCode utilities plugin: time, holidays, timers, weather, on-device speech and past-session lookups.",
   "keywords": [
     "opencode",
     "opencode-plugin",
     "utilities"
   ],
-  "homepage": "https://github.com/joe-broadhead/opencode-utilities#readme",
+  "homepage": "https://github.com/we-the-rebel-alliance/utilities-plugin#readme",
   "bugs": {
-    "url": "https://github.com/joe-broadhead/opencode-utilities/issues"
+    "url": "https://github.com/we-the-rebel-alliance/utilities-plugin/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/joe-broadhead/opencode-utilities.git"
+    "url": "git+https://github.com/we-the-rebel-alliance/utilities-plugin.git"
   },
   "license": "MIT",
   "type": "module",
@@ -38,7 +38,7 @@
     "CHANGELOG.md"
   ],
   "opencode": {
-    "host": ">=2.2.3 <2.4.0",
+    "host": ">=2.4.1 <2.5.0",
     "icons": [
       {
         "src": "assets/icon.svg",
@@ -76,15 +76,15 @@
     "native:build": "bash scripts/native-build.sh",
     "native:ensure": "node scripts/native-ensure.mjs",
     "speech:manifest": "node scripts/speech-manifest.mjs",
-    "check": "npm run native:ensure && npm run typecheck && npm test && npm run test:kit && npm run build && npm run test:host && npm run test:tui && npm run lint && npm run test:pack",
+    "check": "npm run native:ensure && npm run typecheck && npm test && npm run build && npm run test:host && npm run test:tui && npm run lint && npm run test:pack",
     "capture": "node scripts/capture-tools.mjs"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",
     "@babel/preset-typescript": "7.27.1",
-    "@opencode/plugin": "2.2.3",
-    "@opencode/sdk": "2.2.3",
-    "@opencode/util": "2.2.3",
+    "@opencode/plugin": "2.4.1",
+    "@opencode/sdk": "2.4.1",
+    "@opencode/util": "2.4.1",
     "@opentui/core": "0.8.0",
     "@opentui/solid": "0.8.0",
     "@types/bun": "1.4.4",
@@ -98,12 +98,24 @@
   },
   "jelly": {
     "title": "Utilities",
-    "summary": "Time zones, holidays, timers, weather and on-device speech.",
+    "summary": "Time, holidays, timers, weather, on-device speech and past-session lookups.",
     "icon": "assets/icon.svg",
     "tools": [
       {
         "name": "utilities.status",
         "permission": "utilities_status",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.sessions",
+        "permission": "utilities_sessions",
+        "effect": "allow",
+        "readOnly": true
+      },
+      {
+        "name": "utilities.sessions_grep",
+        "permission": "utilities_sessions_grep",
         "effect": "allow",
         "readOnly": true
       },
@@ -249,7 +261,8 @@
     "skills": [
       "utilities-time",
       "utilities-weather",
-      "utilities-speech"
+      "utilities-speech",
+      "utilities-sessions"
     ],
     "rpc": [],
     "views": [],

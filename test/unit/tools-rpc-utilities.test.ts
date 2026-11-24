@@ -15,7 +15,10 @@ const call = { sessionID: "ses_1", agent: "build", messageID: "msg_script", id: 
 function methods(modules = modulesWith({})) {
   const invoke = vi.fn(async (tool: ToolName) => SAMPLES[tool as Exclude<ToolName, "status">])
   const settle = vi.fn(async () => {})
-  return { invoke, settle, methods: scriptMethods({ runtime: { invoke }, weather: { settle }, status: async () => { throw new Error("not used") }, modules: () => modules }) }
+  return { invoke, settle, methods: scriptMethods({
+    runtime: { invoke }, weather: { settle }, status: async () => { throw new Error("not used") }, modules: () => modules,
+    sessions: { read: { list: async () => ({ data: [], cursor: {} }), get: async () => ({} as never), directory: "/d" }, grep: { databasePath: "/opencode.db" } },
+  }) }
 }
 
 describe("Utilities' tools RPC", () => {
@@ -25,6 +28,8 @@ describe("Utilities' tools RPC", () => {
     const list = methods().methods
     expect(list.map(method => [method.name, method.class])).toEqual([
       ["status", "read"],
+      ["sessions", "read"],
+      ["sessions_grep", "read"],
       ...["time_now", "time_zones", "time_zone_info", "time_convert", "time_calendar", "time_add", "time_between", "time_format", "time_holidays", "time_business_days"].map(name => [name, "read"]),
       ["timer_set", "write"],
       ...["timer_get", "timer_list", "timer_check"].map(name => [name, "read"]),

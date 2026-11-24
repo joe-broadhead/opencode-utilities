@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url"
 const [project] = process.argv.slice(2)
 if (!project) throw new Error("usage: bun test/pack/probe.ts <project>")
 const repo = fileURLToPath(new URL("../../", import.meta.url))
-const NAME = "@joe-broadhead/opencode-utilities"
+const NAME = "@we-the-rebel-alliance/utilities-plugin"
 const installed = join(project, "node_modules", NAME)
 
 const HOST_MODULES = /^(?:@opencode\/plugin|effect|@opentui\/[^/]+|solid-js)(?:\/.*)?$/

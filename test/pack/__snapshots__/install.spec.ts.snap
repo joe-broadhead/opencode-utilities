@@ -13,6 +13,7 @@ exports[`the tarball holds the whitelisted files only, under 1 MB 1`] = `
   "dist/tui.js",
   "manifest/speech-assets.json",
   "package.json",
+  "skills/utilities-sessions/SKILL.md",
   "skills/utilities-speech/SKILL.md",
   "skills/utilities-time/SKILL.md",
   "skills/utilities-weather/SKILL.md",

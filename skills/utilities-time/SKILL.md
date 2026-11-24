@@ -1,6 +1,6 @@
 ---
 name: utilities-time
-description: Exact answers for times, time zones, dates, public holidays and working days, and polled project timers, from Utilities' offline tools. Use it for "what time is it in Tokyo", "3pm London in New York", "is Monday a bank holiday", "how many working days in March", "the next business day after a given date", "90 days from today", or a project timer to check, instead of counting yourself, the shell's date, or a web search. Not for weather or forecasts: use utilities-weather for those.
+description: Exact times, time zones, dates, holidays, working days and project timers from offline tools, instead of counting yourself, the shell's date or a web search. Not for weather (utilities-weather).
 ---
 
 # Time, dates and timers
@@ -46,6 +46,6 @@ Timers belong to the current project and never alert on their own: they are chec
 3. `utilities_timer_check` shows what is due or overdue. Call it when the user asks about reminders. `utilities_timer_get`, `utilities_timer_list` (optionally by `tag`) and `utilities_timer_delete` manage them.
 4. If the timer state is unknown (`TIMER_STATE_UNKNOWN`), read the timer before you retry.
 
-For an alert that fires by itself, suggest OpenCode's automations (`automation_*` tools, OpenCode 2.3.1 and later), which need `"experimental": { "automations": true }` in `opencode.json`. On OpenCode 2.2.3 to 2.3.0 they are the `schedule_*` tools, which need `"experimental": { "schedules": true }`.
+For an alert that fires by itself, suggest OpenCode's automations (`automation_*` tools), which need `"experimental": { "automations": true }` in `opencode.json`.
 
-A cron job can call the read tools (not timer writes) with no model, through the RPC `utilities.local.tools`. It uses a session created for it (`opencode api post /api/session …`, keep `data.id`), and so does a test of a script. Never borrow a session found through history or a session list: the script would run as that session's agent, under its rules. Details: https://raw.githubusercontent.com/joe-broadhead/opencode-utilities/HEAD/docs/scripting.md.
+An OpenCode automation or a script can call the read tools (not timer writes) with no model, through the RPC `utilities.local.tools`. It uses a session created for it (`opencode api post /api/session …`, keep `data.id`), and so does a test of a script. Never borrow an existing session found by searching past sessions or a session list: the script would run as that session's agent, under its rules. Details: https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/docs/scripting.md.

@@ -1,6 +1,6 @@
 ---
 name: utilities-weather
-description: Current weather and forecasts for a place from Open-Meteo through Utilities' weather tools, with the attribution Open-Meteo requires. Use it for "what's the weather in Lisbon", "will it rain this weekend", "forecast for Tuesday", "how windy will it be tomorrow", hourly or 16-day outlooks, and whether the free tier allows business use, instead of a web search or a weather website.
+description: Current weather and forecasts from Open-Meteo, with the attribution it requires, and whether the free tier allows business use, instead of a web search.
 ---
 
 # Weather
@@ -43,4 +43,4 @@ Without a key, Open-Meteo's free tier is for non-commercial use only and is rate
 - `BACKEND_FAILED`, "rate limit was reached": tell the user and wait. Don't loop.
 - `WEATHER_KEY_REJECTED`: the user runs `/connect` again with a valid key, or `opencode auth logout open-meteo` for the free tier.
 
-A script can call the weather tools with no model, through the RPC `utilities.local.tools`. It uses a session created for it (`opencode api post /api/session …`, keep `data.id`), and so does a test of a script. Never borrow a session found through history or a session list: the script would run as that session's agent, under its rules. A script can't answer a prompt, so it needs an allow rule, such as `{"action": "utilities_weather_daily", "resource": "*", "effect": "allow"}`, in its session's agent or in the session. Details: https://raw.githubusercontent.com/joe-broadhead/opencode-utilities/HEAD/docs/scripting.md.
+An OpenCode automation or a script can call the weather tools with no model, through the RPC `utilities.local.tools`. It uses a session created for it (`opencode api post /api/session …`, keep `data.id`), and so does a test of a script. Never borrow an existing session found by searching past sessions or a session list: the script would run as that session's agent, under its rules. A script can't answer a prompt, so it needs an allow rule, such as `{"action": "utilities_weather_daily", "resource": "*", "effect": "allow"}`, in its session's agent or in the session. Details: https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/docs/scripting.md.

@@ -1,4 +1,4 @@
-import { DEFAULT_ASK, type Access, type Runtime, type StatusView } from "../domain/contract.js"
+import { DEFAULT_ASK, STOPGAPS, type Access, type Runtime, type StatusView } from "../domain/contract.js"
 import { completeStatus } from "../rpc.js"
 import type { HostCheck } from "./compat.js"
 import { defaultRules, unguardedAgents } from "./permissions.js"
@@ -17,8 +17,6 @@ export interface StatusSources {
   readonly skills: () => Promise<readonly { readonly id: string; readonly path: string }[]>
   /** What the generated default rules allow, from the plugin options. */
   readonly access?: Access
-  /** The one line status shows when an old id was called in this process. */
-  readonly deprecated?: string
 }
 
 /** OpenCode loads one skill per id, so a user's skill with one of the plugin's ids takes the place of the plugin's own. */
@@ -40,7 +38,7 @@ export async function buildStatus(sources: StatusSources): Promise<StatusView> {
     shadowedSkills: shadowed(sources.ownSkills, skills),
     permissions: { askByDefault: (sources.access ?? "all") === "all" ? [] : [...DEFAULT_ASK], block: [...defaultRules(sources.access ?? "all")] },
     access: sources.access ?? "all",
-    ...(sources.deprecated === undefined ? {} : { deprecated: sources.deprecated }),
+    stopgaps: [...STOPGAPS],
   })
   return JSON.parse(JSON.stringify(view)) as StatusView
 }

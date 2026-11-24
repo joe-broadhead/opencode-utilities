@@ -9,11 +9,11 @@ const description = skill.split("\n").find((line) => line.startsWith("descriptio
 
 describe("the utilities-time skill description", () => {
   test("names no day-of-the-week trigger, so a reminder for a day does not load the time skill", () => {
-    expect(description).not.toContain("after Friday")
-    expect(description).toContain('"the next business day after a given date"')
+    expect(description).not.toMatch(/\b(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\b/)
+    expect(description).toContain("instead of counting yourself, the shell's date or a web search")
   })
 
-  test("points a forecast question to the weather skill, so the time skill does not load for it", () => {
-    expect(description).toContain("Not for weather or forecasts: use utilities-weather for those.")
+  test("points weather questions to the weather skill, so the time skill does not load for them", () => {
+    expect(description).toContain("Not for weather (utilities-weather).")
   })
 })

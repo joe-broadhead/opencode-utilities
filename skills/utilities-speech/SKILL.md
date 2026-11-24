@@ -1,6 +1,6 @@
 ---
 name: utilities-speech
-description: On-device speech through Utilities' speech tools. Transcribe a WAV recording to text ("transcribe clip.wav", "what does this recording say"), turn text into a spoken WAV file ("read this aloud", "make an audio file of this"), and answer whether speech is set up on this machine. Nothing is sent to a speech service. Use it instead of installing whisper or another transcriber.
+description: On-device speech: transcribe a WAV file, write text to a spoken WAV file, and check whether speech is set up here. Nothing is sent to a service. Use instead of installing whisper.
 ---
 
 # Speech

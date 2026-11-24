@@ -9,6 +9,7 @@ const ConfigSchema = z.strictObject({
   modules: z.strictObject({ weather: z.boolean().optional(), time: z.boolean().optional(), speech: z.boolean().optional() }).optional(),
   stateRoot: absolute.optional(),
   speech: z.strictObject({ assetsDir: absolute.optional() }).optional(),
+  sessionsDatabasePath: absolute.optional(),
   allowUntestedHost: z.boolean().optional(),
   access: z.enum(ACCESS_VALUES).optional(),
 }) satisfies z.ZodType<Config>
@@ -18,6 +19,8 @@ export interface ResolvedConfig {
   readonly stateRoot: string
   readonly cacheRoot: string
   readonly speechAssetsDir?: string
+  /** OpenCode's own SQLite database, read read-only by utilities_sessions_grep. */
+  readonly sessionsDatabasePath: string
   readonly allowUntestedHost: boolean
   /** What the generated default rules allow: everything, changes ask, or read-only. */
   readonly access: Access
@@ -40,6 +43,7 @@ export function loadConfig(options: unknown, env: Readonly<Record<string, string
     stateRoot: value.stateRoot ?? join(xdg("XDG_DATA_HOME", ".local/share"), "opencode-utilities"),
     cacheRoot: join(xdg("XDG_CACHE_HOME", ".cache"), "opencode-utilities"),
     ...(value.speech?.assetsDir ? { speechAssetsDir: value.speech.assetsDir } : {}),
+    sessionsDatabasePath: value.sessionsDatabasePath ?? join(xdg("XDG_DATA_HOME", ".local/share"), "opencode", "opencode.db"),
     allowUntestedHost: value.allowUntestedHost ?? false,
     access: value.access ?? "all",
   }

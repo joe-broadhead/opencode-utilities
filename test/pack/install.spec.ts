@@ -1,5 +1,5 @@
 // Packs the package as npm would publish it, installs the tarball into an empty project with scripts disabled,
-// imports its entries, and loads it on each tested stock OpenCode release (TESTED_HOSTS: 2.2.3, 2.2.4, 2.2.5, 2.2.6, 2.2.7, 2.3.0, 2.3.1 and 2.3.2).
+// imports its entries, and loads it on the tested stock OpenCode release (TESTED_HOSTS: 2.4.1).
 // Run `npm run build` first. OPENCODE_BIN_<version> (OPENCODE_BIN_2_2_3 to OPENCODE_BIN_2_3_2) name the stock
 // `opencode` binaries when set. When unset, each release is installed into this test's temp project with
 // --ignore-scripts, once per version.
@@ -23,7 +23,7 @@ import { wav } from "../fixtures.js"
 
 setDefaultTimeout(300_000)
 const repo = fileURLToPath(new URL("../../", import.meta.url))
-const NAME = "@joe-broadhead/opencode-utilities"
+const NAME = "@we-the-rebel-alliance/utilities-plugin"
 const VERSIONS = TESTED_HOSTS
 const source = JSON.parse(readFileSync(join(repo, "package.json"), "utf8")) as { version: string }
 const target = detectTarget()
@@ -112,8 +112,9 @@ describe("the tarball", () => {
     for (const entry of ["index.js", "tui.js"]) {
       const imports = scanner.scanImports(readFileSync(join(installed, "dist", entry), "utf8"))
       expect(imports.filter(i => i.path.startsWith(".") || i.path.startsWith("/")).map(i => `${i.kind} ${i.path}`), entry).toEqual([])
-      expect(imports.filter(i => i.kind === "dynamic-import" || i.kind === "require-call").map(i => i.path), entry).toEqual([])
-      const host = /^(?:node:|@opencode\/plugin(?:\/|$)|@opentui\/|solid-js(?:\/|$))/
+      // The one dynamic import is the host's own SQLite built-in, loaded only when a session search runs.
+      expect(imports.filter(i => (i.kind === "dynamic-import" || i.kind === "require-call") && i.path !== "bun:sqlite").map(i => i.path), entry).toEqual([])
+      const host = /^(?:node:|bun:|@opencode\/plugin(?:\/|$)|@opentui\/|solid-js(?:\/|$))/
       expect(imports.map(i => i.path).filter(path => !host.test(path)), entry).toEqual([])
     }
     expect(scanner.scanImports(readFileSync(join(installed, "dist/tui.js"), "utf8")).map(i => i.path)).toContain("@opentui/solid")
@@ -144,7 +145,7 @@ test("ships no program: its release manifest, when it has one, pins the two prog
   expect(manifest.tag).toBe(`v${source.version}`)
   expect(Object.keys(manifest.modules).sort()).toEqual(["time-keep", "weather-signal"])
   for (const module of ["time-keep", "weather-signal"]) {
-    expect(manifest.modules[module]?.[target]?.url).toBe(`https://github.com/joe-broadhead/opencode-utilities/releases/download/v${source.version}/${module}-${target}.gz`)
+    expect(manifest.modules[module]?.[target]?.url).toBe(`https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v${source.version}/${module}-${target}.gz`)
   }
 })
 
@@ -205,7 +206,7 @@ for (const version of VERSIONS) describe(`stock OpenCode ${version}`, () => {
     const response = await host.api("GET", "/api/skill")
     const list = Array.isArray(response.data) ? response.data : (response.data as { data?: unknown[] }).data ?? []
     const ids = (list as { id?: string; name?: string }[]).map(skill => skill.id ?? skill.name ?? "").filter(id => id.startsWith("utilities-")).sort()
-    expect(ids).toEqual([...speechEngine ? ["utilities-speech"] : [], "utilities-time", "utilities-weather"])
+    expect(ids).toEqual([...speechEngine ? ["utilities-speech"] : [], "utilities-sessions", "utilities-time", "utilities-weather"].sort())
   })
 
   test("inserts the default ask rules after the build agent's base allow", async () => {

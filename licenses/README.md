@@ -22,8 +22,8 @@ These texts are build inputs. They are not in the npm package: each licence ship
 
 | Package or file | Licences beside it |
 | --- | --- |
-| `@joe-broadhead/opencode-utilities` (npm) | `LICENSE` (MIT) for the plugin, and `NOTICE` with the licence of every third-party package bundled into `dist/`, naming the bundle it is in (zod, in `dist/index.js` only; the TUI bundle has no third-party code). The build fails when `NOTICE` and the bundled packages stop matching. Nothing else third-party is in that package. |
-| `@joe-broadhead/opencode-utilities-bin-<platform>` (npm) | `NOTICE`: time-keep and weather-signal, then the licence files of their locked Cargo graph for that platform. |
+| `@we-the-rebel-alliance/utilities-plugin` (npm) | `LICENSE` (MIT) for the plugin, and `NOTICE` with the licence of every third-party package bundled into `dist/`, naming the bundle it is in (zod, in `dist/index.js` only; the TUI bundle has no third-party code). The build fails when `NOTICE` and the bundled packages stop matching. Nothing else third-party is in that package. |
+| `@we-the-rebel-alliance/utilities-plugin-bin-<platform>` (npm) | `NOTICE`: time-keep and weather-signal, then the licence files of their locked Cargo graph for that platform. |
 | `utilities-speech-<platform>` (GitHub Release) | `utilities-speech-NOTICE.txt` in the same release: the bridge, aurum, ONNX Runtime and its third-party notices, the original Misaki lexicon, and the bridge's locked Cargo graph. |
 | The four model files (GitHub Release) | `Whisper-MIT.txt`, `whisper-model-card.md`, `KittenTTS-Apache-2.0.txt`, `kitten-model-card.md`, `misaki-original-LICENSE.txt` and `misaki-original-README.md.txt`, uploaded to the same release. |
 

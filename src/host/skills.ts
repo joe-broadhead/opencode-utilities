@@ -6,11 +6,19 @@ import type { Module } from "../domain/contract.js"
 
 type SkillEditor = Parameters<Parameters<Plugin.Context["skill"]["transform"]>[0]>[0]
 
-/** The hand-written skills and the module each one teaches. */
-export const SKILLS = { "utilities-time": "time", "utilities-weather": "weather", "utilities-speech": "speech" } as const satisfies Record<string, Module>
+/**
+ * The hand-written skills and the module each one teaches. `utilities-sessions` teaches the two session stopgaps,
+ * which have no module: it is always offered, like status.
+ */
+export const SKILLS = {
+  "utilities-time": "time",
+  "utilities-weather": "weather",
+  "utilities-speech": "speech",
+  "utilities-sessions": undefined,
+} as const satisfies Record<string, Module | undefined>
 type SkillID = keyof typeof SKILLS
 
-export interface LoadedSkill { readonly id: SkillID; readonly module: Module; readonly info: Skill.Info }
+export interface LoadedSkill { readonly id: SkillID; readonly module?: Module; readonly info: Skill.Info }
 
 /** Reads `skills/<id>/SKILL.md`. A missing or malformed file is skipped with a SKILLS_INVALID warning; setup carries on. */
 export async function loadSkills(packageRoot: string, warn: (message: string) => void = console.warn): Promise<LoadedSkill[]> {
@@ -31,7 +39,7 @@ export async function loadSkills(packageRoot: string, warn: (message: string) =>
   return loaded.filter(skill => skill !== undefined)
 }
 
-/** Registers the skills of modules whose tools are registered. */
+/** Registers the skills of modules whose tools are registered, and the module-less ones always. */
 export function skillTransform(skills: readonly LoadedSkill[], enabled: (module: Module) => boolean) {
-  return (editor: SkillEditor) => { for (const skill of skills) if (enabled(skill.module)) editor.add(skill.info) }
+  return (editor: SkillEditor) => { for (const skill of skills) if (skill.module === undefined || enabled(skill.module)) editor.add(skill.info) }
 }

@@ -20,7 +20,7 @@ interface Deferred { resolve(view: StatusView): void; reject(error: Error): void
 
 const view = (version: string, overrides: Partial<StatusView> = {}): StatusView => ({
   version,
-  host: { version: "2.2.3", range: ">=2.2.3 <2.4.0", tested: true },
+  host: { version: "2.4.1", range: ">=2.4.1 <2.5.0", tested: true },
   state: "ready",
   unguardedAgents: ["reviewer"],
   nextStep: "Add the rules to reviewer's own permissions.",
@@ -32,6 +32,10 @@ const view = (version: string, overrides: Partial<StatusView> = {}): StatusView 
   shadowedSkills: [],
   permissions: { askByDefault: ["utilities_timer_set", "utilities_timer_delete", "utilities_speech_synthesize", "utilities_speech_download"], block: [{ action: "utilities_*", resource: "*", effect: "ask" }, ...DEFAULT_ASK.map(action => ({ action, resource: "*", effect: "ask" as const }))] },
   access: "ask-changes",
+  stopgaps: [
+    { tool: "utilities_sessions", deletedWhen: "OpenCode gives agents a session list or stats tool with outcome, cost and token fields." },
+    { tool: "utilities_sessions_grep", deletedWhen: "OpenCode ships exact-text search over past sessions." },
+  ],
   ...overrides,
 })
 
@@ -121,11 +125,13 @@ test("renders the status lines and the next steps from the status RPC", async ()
     // Wrapped at the dialog's width, so the row is asserted by its start.
     "Asks first: utilities_timer_set, utilities_timer_delete, utilities_speech_synthesize,",
     "Skills: the plugin's own",
-    "Tools: 24 available, 0 unknown",
+    "Tools: 26 available, 0 unknown",
+    // Wrapped at the dialog's width, so the row is asserted by its start.
+    "Stopgaps: utilities_sessions ends when OpenCode gives agents a session list or stats tool with",
     "Agents without default rules: reviewer",
     "  {\"action\":\"utilities_*\",\"resource\":\"*\",\"effect\":\"ask\"},",
     "  {\"action\":\"utilities_speech_download\",\"resource\":\"*\",\"effect\":\"ask\"}",
-    `OpenCode: 2.2.3 (tested). Utilities ${VERSION}`,
+    `OpenCode: 2.4.1 (tested). Utilities ${VERSION}`,
     "Next step: Add the rules to reviewer's own permissions.",
     "r refresh · esc close",
   ]

@@ -5,7 +5,7 @@ import { DEFAULT_ASK, NAMESPACE_ACTION, SPEECH_DOWNLOAD_ACTION, TOOLS, WEATHER_A
 import { FAILURES, formatFailure, UtilitiesError } from "../../src/domain/common.js"
 import { StatusSchema } from "../../src/host/status-schema.js"
 import { STATUS_JSON_SCHEMA } from "../../src/rpc.js"
-import { TOOL_DEFINITIONS } from "../../src/domain/registry.js"
+import { namespaceDescription, TOOL_DEFINITIONS } from "../../src/domain/registry.js"
 import { SKILLS } from "../../src/host/skills.js"
 import { timeInputs, timeOutputs } from "../../src/modules/time/contracts.js"
 import { timeArgv } from "../../src/modules/time/argv.js"
@@ -23,9 +23,9 @@ const fields = (schema: Shape): [string, string | undefined][] => [
   ...[...schema.oneOf ?? [], ...schema.anyOf ?? []].flatMap(fields),
 ]
 
-test("the tool table is the contract's 24 tools, each with a description, bounded schemas and described fields", () => {
+test("the tool table is the contract's 26 tools, each with a description, bounded schemas and described fields", () => {
   expect(TOOL_DEFINITIONS.map(t => t.name)).toEqual(Object.keys(TOOLS))
-  expect(TOOL_DEFINITIONS).toHaveLength(24)
+  expect(TOOL_DEFINITIONS).toHaveLength(26)
   expect(TOOL_DEFINITIONS.filter(t => t.name.startsWith("timer_")).map(t => t.name)).toEqual(["timer_set", "timer_get", "timer_list", "timer_check", "timer_delete"])
   expect(TOOL_DEFINITIONS.filter(t => t.pinned)).toEqual([])
   for (const tool of TOOL_DEFINITIONS) {
@@ -38,6 +38,19 @@ test("the tool table is the contract's 24 tools, each with a description, bounde
   }
 })
 
+test("the fixed context is within budget: the namespace line at most 400 characters, every skill description at most 300 (T0)", async () => {
+  const namespace = namespaceDescription(Object.keys(TOOLS) as ToolName[])
+  expect(namespace).not.toContain("\n")
+  expect(namespace.length).toBeLessThanOrEqual(400)
+  expect(namespace).toContain("opencode.session.search")
+  for (const id of Object.keys(SKILLS)) {
+    const front = /^---\nname: (.+)\ndescription: (.+)\n---\n/.exec(await readFile(new URL(`../../skills/${id}/SKILL.md`, import.meta.url), "utf8"))
+    expect(front?.[1], id).toBe(id)
+    expect(front?.[2]?.length ?? 0, id).toBeGreaterThan(30)
+    expect(front?.[2]?.length ?? 0, id).toBeLessThanOrEqual(300)
+  }
+})
+
 test("every sample input and output fits its tool's schema", () => {
   for (const tool of TOOL_DEFINITIONS) {
     expect(tool.input.safeParse(INPUTS[tool.name]).success, tool.name).toBe(true)
@@ -45,7 +58,7 @@ test("every sample input and output fits its tool's schema", () => {
   }
 })
 
-test("the three skills have valid front matter and name only real tools and actions", async () => {
+test("the four skills have valid front matter and name only real tools and actions", async () => {
   const known = new Set([...Object.keys(TOOLS).map(name => `utilities_${name}`), ...DEFAULT_ASK, SPEECH_DOWNLOAD_ACTION, NAMESPACE_ACTION, "utilities_weather_*"])
   for (const id of Object.keys(SKILLS)) {
     const text = await readFile(new URL(`../../skills/${id}/SKILL.md`, import.meta.url), "utf8")

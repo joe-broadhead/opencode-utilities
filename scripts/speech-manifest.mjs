@@ -20,7 +20,7 @@ const json = async (path) => JSON.parse(await readFile(resolve(root, path), 'utf
 const { version } = await json('package.json');
 const TAG = `v${version}`;
 const { assets: models } = await json('native/model-sources.json');
-const RELEASE = (name) => `https://github.com/joe-broadhead/opencode-utilities/releases/download/${TAG}/${name}`;
+const RELEASE = (name) => `https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/${TAG}/${name}`;
 const ROLES = ['tiny-q5_1', 'kitten-model', 'kitten-voices', 'kitten-config'];
 
 /** The size and SHA-256 of one file. A missing file is an error: the manifest names only files that exist. */

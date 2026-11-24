@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
 import { PLATFORMS } from '../src/domain/contract.ts';
 const root=resolve(dirname(fileURLToPath(import.meta.url)),'..');
-const REPOSITORY='joe-broadhead/opencode-utilities';
+const REPOSITORY='we-the-rebel-alliance/utilities-plugin';
 const json=async path=>JSON.parse(await readFile(resolve(root,path),'utf8'));
 const text=value=>JSON.stringify(value,null,2)+'\n';
 const nativeDir=platform=>`build/native/${platform}`;
