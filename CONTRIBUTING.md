@@ -27,9 +27,8 @@ npm run check
 ```
 
 It runs `native:ensure`, the typecheck, the unit tests, the kit tests, the build, the host tests on the tested OpenCode
-release, the TUI tests, the lint (forbidden APIs, copied files, icons, workflows) and the pack test. The kit stage skips
-two obsolete CI-shape assertions — the old multi-runner/macOS `ci.yml` check and its nested re-run wrapper — which the
-mandated one-job `ci` shape replaces for 4a; 4b replaces the kit. Host and
+release, the TUI tests, the lint (forbidden APIs, copied files, icons, workflows) and the pack test. The copied kit's
+obsolete CI-shape test is deleted, so the kit stage runs every remaining test; 4b replaces the kit. Host and
 pack tests bind ports, so run one repository's check at a time. Do not skip, weaken or delete a test to get green.
 
 Smaller loops:

@@ -87,7 +87,7 @@ const tokensOf = (tokens: SessionInfo["tokens"]): SessionTokens | undefined => {
 const cost = (value: number) => Math.round(value * 1e6) / 1e6
 const modelOf = (model: SessionInfo["model"]) => model === undefined ? undefined : `${model.providerID}/${model.id}`
 const titleOf = (title: string | undefined) => title === undefined ? undefined : cutBytes(mask(title), TITLE)
-const directoryOf = (directory: string | undefined) => directory === undefined ? undefined : cutBytes(directory, DIRECTORY)
+const directoryOf = (directory: string | undefined) => directory === undefined ? undefined : cutBytes(mask(directory), DIRECTORY)
 
 /** One row, without undefined keys so it crosses RPC and storage as plain JSON. Unknown cost and tokens stay absent. */
 function sessionRow(session: SessionInfo): SessionRow {

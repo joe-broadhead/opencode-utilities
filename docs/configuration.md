@@ -53,7 +53,7 @@ The caches are not under `stateRoot`. They are under `$XDG_CACHE_HOME/opencode-u
 
 ### Symbolic links
 
-At startup the plugin resolves each of its roots once with `realpath`: `stateRoot`, the cache, `speech.assetsDir` and the installed package. A link above a root, or the root itself, is fine. Examples are macOS `/tmp` (a link to `/private/tmp`), Fedora Atomic and Silverblue `/home` (a link to `/var/home`), and a dotfile setup that links `~/.local` or `~/.cache`. Status shows the resolved paths.
+At startup the plugin resolves each of its roots once with `realpath`: `stateRoot`, the cache, `speech.assetsDir` and the installed package. A link above a root, or the root itself, is fine. Examples are macOS `/tmp` (a link to `/private/tmp`), Fedora Atomic and Silverblue `/home` (a link to `/var/home`), and a dotfile setup that links `~/.local` or `~/.cache`. Status shows the cache and output directories and the timer store.
 
 Inside those roots, the plugin refuses every symbolic link: a timer store, a job folder, a cached or pre-seeded speech file, a program. The error is `UNSAFE_PATH`, never `INTEGRITY_MISMATCH`.
 
@@ -140,10 +140,10 @@ skill state the same sentence.
   `session`, `directory` and `limit`. It searches each part's tool name, its input values and its output text, and each
   message's text; a matching input path is reported as a file touch. A snippet is at most 512 bytes, cut on a UTF-8
   boundary and marked; an answer over 64 KiB is refused with `OUTPUT_LIMIT` and a next step instead of being truncated.
-  Credentials in the text (AWS key ids, `sk-` and `sk-proj-` keys, GitHub `ghp_`/`github_pat_` tokens, bearer tokens, and
+  Credentials in the text (`AKIA…` access key ids, `sk-`/`sk-proj-` keys, `ghp_`/`github_pat_` tokens, bearer tokens, and
   password, token, key and secret assignments in `key=value`, `key: value` or quoted JSON form) are masked in every field
   and in the rendered text, and the echoed query is masked too. The scan is
-  bounded, and `more` says it stopped before the oldest match; `truncated` says some text was longer or deeper than the
+  bounded, and `more` says rows were left out or the scan stopped before the oldest match; `truncated` says some text was longer or deeper than the
   search reads, so a match may be missing. An unknown schema or data shape is `CONTRACT_MISMATCH` and names what was
   found: the tables and columns, and a part's type, text, name or state, or a message's `time.created`. Deleted when
   OpenCode ships exact-text search.

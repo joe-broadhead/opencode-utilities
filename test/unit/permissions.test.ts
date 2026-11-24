@@ -17,7 +17,7 @@ async function setup() {
   return { ...f, outside, repository, location: { directory: f.project, projectDirectory: f.project } }
 }
 
-// Expected values follow anomalyco/opencode@v2.2.3 FileAccess.resolve: a path inside the location directory is a
+// Expected values follow the host's own file resolution: a path inside the location directory is a
 // location-relative resource; outside it, the resource is the absolute path, plus external_directory on `<dir>/*`,
 // saved as `<repository root of dir, or dir>/*`.
 describe("file resources match the host format", () => {

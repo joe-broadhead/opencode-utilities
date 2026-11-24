@@ -135,6 +135,14 @@ describe("utilities_sessions", () => {
     expect(text).toContain("tokens unknown")
   })
 
+  test("a session title or directory holding a secret is masked", async () => {
+    const token = "ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    const { output, text } = await sessions({}, source([[sessionInfo("ses_secret", { title: `Title ${token}`, location: { directory: `/project/${token}` } })]]).read)
+    expect(JSON.stringify(output) + text).not.toContain(token)
+    expect(output.rows[0]!.title).toBe("Title ghp_[redacted]")
+    expect(output.rows[0]!.directory).toBe("/project/ghp_[redacted]")
+  })
+
   test("rows are capped in bytes, with more true, never the totals", async () => {
     const long = sessionInfo("ses_long", { title: "😀".repeat(300), location: { directory: `/${"d".repeat(2000)}` } })
     const many = Array.from({ length: 100 }, (_, index) => ({ ...long, id: `ses_${index}` }))
