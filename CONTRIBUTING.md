@@ -45,4 +45,14 @@ Do not skip, weaken or delete a test to get green.
 ## Pull requests
 
 Conventional commits, one topic per pull request, `npx plugin-kit docs` run when the manifest changes. The release is the
-owner's step: `npx plugin-kit release 0.0.x` cuts a local tag on `master`, and CI publishes it.
+owner's step: `npx plugin-kit release 0.0.x` cuts a local tag on `master`, and CI publishes it. The tag is the approval;
+there is no `release` environment in the way, so the release bot can publish once the tag exists.
+
+## Release assets
+
+The Release carries the pinned native programs and speech files because `native_install` and `speech_install` download
+them from it: `time-keep` and `weather-signal` (gzipped, per platform), the `utilities-speech` engine for each platform,
+and the Whisper and Kitten model files. Each one is verified against the SHA-256 pins in `manifest/native.json` and
+`manifest/speech-assets.json` before it is staged, and `gh release create` receives every file by its exact manifest
+name (`scripts/release-assets.mjs`) — never a directory, `release/*` or a `find` listing. `release/conformance.json`,
+`release/SHA256SUMS` and the tarball are named directly as well; `SHA256SUMS` covers the tarball and the report.

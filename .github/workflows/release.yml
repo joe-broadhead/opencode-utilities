@@ -2,9 +2,11 @@
 #
 # `plugin-kit release` checks the repository, writes the local tag, and refuses anything but the 0.0.x line; pushing the
 # tag is the owner's step. This workflow then checks the tagged commit again, packs it, records the conformance report,
-# and creates the Release with the tarball, SHA256SUMS, the conformance report and dist/.
+# and creates the Release with the tarball, the report and SHA256SUMS. Every native and speech file is named from
+# `manifest/native.json` and `manifest/speech-assets.json`: the release never passes the native directory or a wildcard
+# for those files, so a directory cannot be uploaded as an asset.
 #
-# The `release` environment is the owner's approval: nothing is published before it.
+# The tag is the owner's approval: there is no `release` environment, so the release bot can publish once the tag exists.
 name: release
 on:
   push:
@@ -12,14 +14,13 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 jobs:
-  publish:
-    name: publish the release
+  release:
+    name: release
     runs-on: ubuntu-24.04
     timeout-minutes: 120
-    environment: release
     permissions:
       contents: write # the GitHub Release
     steps:
@@ -29,6 +30,7 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
+          package-manager-cache: false
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.4.5
@@ -55,30 +57,37 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: Check the tagged commit again
         run: npm run check
+      - name: The tag names this package's version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(node -p "require('./package.json').version")"
+          test "v${version}" = "$TAG"
       - name: Pack, and write SHA256SUMS
         run: |
-          mkdir -p "$RUNNER_TEMP/assets"
-          npm pack --ignore-scripts --pack-destination "$RUNNER_TEMP/assets"
-          (cd "$RUNNER_TEMP/assets" && sha256sum ./*.tgz | sed 's#  \./#  #' > SHA256SUMS)
-      - name: Record the conformance report
-        run: npx plugin-kit conformance --json > "$RUNNER_TEMP/assets/conformance-report.json"
-      - name: Keep dist/
-        run: |
-          cd dist && zip -q "$RUNNER_TEMP/assets/dist-${{ github.ref_name }}.zip" index.js
-      # The programs and speech files the release manifest pins, verified against it and attested by the native run.
+          set -euo pipefail
+          mkdir -p release
+          npx plugin-kit check --json > release/conformance.json
+          npm pack --pack-destination release
+          sha256sum release/*.tgz release/conformance.json > release/SHA256SUMS
+      # The programs and speech files the release manifests pin, verified against them and attested by the native run.
       # A tag whose commit carries no manifest/native.json has nothing to attach; `native_install` then reports the
       # programs missing with the install step.
       - name: Attach the pinned native and speech files
         if: hashFiles('manifest/native.json') != ''
         env:
           GH_TOKEN: ${{ github.token }}
-        run: node scripts/attach-native.mjs --out "$RUNNER_TEMP/assets/native"
+        run: node scripts/attach-native.mjs --out release/native
       - name: Create the GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          REPO: ${{ github.repository }}
         run: |
-          notes="$RUNNER_TEMP/notes.md"
-          printf '# %s\n\n%s\n' "${{ github.ref_name }}" "$(git log -1 --format='%s')" > "$notes"
-          mapfile -t files < <(find "$RUNNER_TEMP/assets" -type f | sort)
-          gh release create "${{ github.ref_name }}" "${files[@]}" \
-            --repo "${{ github.repository }}" --title "${{ github.ref_name }}" --notes-file "$notes"
+          set -euo pipefail
+          # Written to a file first, so a failed name check stops the release instead of uploading a partial list.
+          node scripts/release-assets.mjs release/native > "$RUNNER_TEMP/native-files.txt"
+          mapfile -t extras < "$RUNNER_TEMP/native-files.txt"
+          gh release create "$TAG" release/*.tgz release/conformance.json release/SHA256SUMS "${extras[@]}" \
+            --repo "$REPO" --verify-tag --title "$TAG" --generate-notes
