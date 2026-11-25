@@ -8,8 +8,7 @@ import { describe, expect, test } from "vitest"
 // well, made with `npm run speech:manifest -- --from <folder of the release files>`.
 const root = fileURLToPath(new URL("../..", import.meta.url))
 const read = (path: string) => readFileSync(join(root, path), "utf8")
-const version = (JSON.parse(read("package.json")) as { version: string }).version
-const RELEASE = `https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v${version}/`
+const RELEASE = "https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v0.0.0/"
 const file = (name: string, bytes: number, sha256: string) => ({ name, url: `${RELEASE}${name}`, sha256, bytes })
 
 const PINNED = {
@@ -27,7 +26,7 @@ const PINNED = {
 }
 
 describe("the committed speech manifest", () => {
-  test(`pins exactly the seven release files, at the v${version} URLs, with their sizes and SHA-256s`, () => {
+  test("pins exactly the seven release files, at the v0.0.0 URLs, with their sizes and SHA-256s", () => {
     expect(JSON.parse(read("manifest/speech-assets.json"))).toEqual(PINNED)
   })
 

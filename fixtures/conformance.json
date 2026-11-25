@@ -7,7 +7,7 @@
     ],
     "status": {
       "name": "utilities",
-      "version": "0.0.8",
+      "version": "0.0.0",
       "host": {
         "version": "2.4.1",
         "range": ">=2.4.1 <2.5.0",

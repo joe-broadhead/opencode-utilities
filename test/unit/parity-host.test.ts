@@ -18,7 +18,7 @@ const OLD_TOOLS = [
 ] as const
 /** The 3 skills the v0.0.7 manifest declared. */
 const OLD_SKILLS = ["utilities-time", "utilities-weather", "utilities-speech"] as const
-/** The commands v0.0.7 registered; all three are deliberately removed in v0.0.8. */
+/** The commands v0.0.7 registered; all three are deliberately removed in v0.0.0. */
 const OLD_COMMANDS = ["utilities-status", "utilities-install", "utilities-speech-install"] as const
 
 describe("parity with v0.0.7 on the real OpenCode 2.4.1 host", () => {

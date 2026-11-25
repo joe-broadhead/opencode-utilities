@@ -11,7 +11,7 @@ stopgaps carry the OpenCode feature each is deleted by.
 ## Install
 
 ```sh
-opencode plugin add github:we-the-rebel-alliance/utilities-plugin#v0.0.8
+opencode plugin add github:we-the-rebel-alliance/utilities-plugin#v0.0.0
 ```
 
 Then restart OpenCode. The time and weather programs and the speech engine are downloaded from the plugin's own GitHub

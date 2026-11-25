@@ -43,7 +43,7 @@ describe("status", () => {
     const answer = await handlers()["status"]!.run({}, call([], async () => ({ ok: true, agents: ["locked"] })))
     expect(answer).toEqual({
       name: "utilities",
-      version,
+      version: "0.0.0",
       host: { version: "2.4.1", range: ">=2.4.1 <2.5.0", tested: ["2.4.1"] },
       state: "ready",
       accounts: [],
@@ -64,7 +64,7 @@ describe("diagnose", () => {
   test("reports every module, the weather tier, the timers and each stopgap's criterion", async () => {
     const answer = await handlers()["diagnose"]!.run({}, call()) as Record<string, unknown>
     expect(answer).toMatchObject({
-      version,
+      version: "0.0.0",
       host: { version: "2.4.1", range: ">=2.4.1 <2.5.0", tested: true },
       state: "ready",
       access: "all",

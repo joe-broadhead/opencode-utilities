@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.0.8 (2026-11-25)
+## 0.0.0 (2026-11-25)
 
 - Utilities for an OpenCode agent, on plugin-contract v0: 29 methods with no accounts, no sources and no actions.
 - Exact times and time zones, dates, holidays, working days and project timers through the local `time-keep` program.
