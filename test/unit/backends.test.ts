@@ -4,7 +4,7 @@ import { describe, expect, test } from "vitest"
 import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { NativeBinaries, detectTarget } from "../../src/domain/backends.js"
+import { NativeBinaries, detectTarget } from "../../src/provider/backends.js"
 import { PLATFORMS } from "../../src/domain/contract.js"
 
 const repo = fileURLToPath(new URL("../../", import.meta.url))

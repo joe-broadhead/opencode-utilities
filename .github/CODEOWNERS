@@ -1,0 +1,6 @@
+# The plugin's maintainer owns the code; the contract maintainers own the manifest, the agent guide and the docs, so a
+# change to what a plugin declares or promises is reviewed against the standard.
+* @we-the-rebel-alliance/plugin-maintainers
+package.json @we-the-rebel-alliance/contract-maintainers
+AGENTS.md @we-the-rebel-alliance/contract-maintainers
+docs/ @we-the-rebel-alliance/contract-maintainers

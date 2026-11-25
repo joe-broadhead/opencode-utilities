@@ -2,63 +2,68 @@
 
 ## Supported versions
 
-Fixes go into the newest release. Use the latest release from GitHub (`github:we-the-rebel-alliance/utilities-plugin#v<version>`) on OpenCode `>=2.4.1 <2.5.0`.
+Fixes go into the newest release. Use the latest release from GitHub
+(`github:we-the-rebel-alliance/utilities-plugin#v<version>`) on OpenCode `>=2.4.1 <2.5.0`.
 
-Supported platforms are macOS 14 or later, and Linux with glibc: 2.34 or later for the time and weather programs, and 2.39 or later for the speech engine. The release builds the Linux programs on Ubuntu 22.04 and the speech engine on Ubuntu 24.04, and checks every Linux binary against its floor before it is attested. On a Linux below a floor, the plugin reports `UNSUPPORTED_PLATFORM` for that module and downloads and runs nothing for it.
+Supported platforms are macOS 14 or later, and Linux with glibc: 2.34 or later for the time and weather programs, and
+2.39 or later for the speech engine. The release builds the Linux programs on Ubuntu 22.04 and the speech engine on
+Ubuntu 24.04, and checks every Linux binary against its floor. On a Linux below a floor, the plugin reports
+`UNSUPPORTED_PLATFORM` for that module and downloads and runs nothing for it.
 
 ## Reporting a vulnerability
 
-Report vulnerabilities privately through GitHub: on this repository, open **Security → Report a vulnerability**. Do not open a public issue. Include the plugin version, the OpenCode version and the steps to reproduce. Never include API keys, tokens, audio, transcripts, timer text, weather locations or paths.
+Report vulnerabilities privately through GitHub: on this repository, open **Security → Report a vulnerability**. Do not
+open a public issue. Include the plugin version, the OpenCode version and the steps to reproduce. Never include API keys,
+tokens, audio, transcripts, timer text, weather locations or paths.
 
 ## Data handling
 
 When OpenCode loads it, the plugin:
 
-- registers local time, timer, weather and speech tools;
-- inserts permission rules according to `access`, which allows every tool by default;
-- may download the speech engine and models from this repository's GitHub Release, subject to those permissions;
-- may call Open-Meteo over HTTPS;
-- writes timer state and, when you synthesise speech, a WAV file under its state directory or a path you chose.
+- registers local time, timer, weather and speech tools, and the two read-only session stopgaps;
+- generates permission rules from `access` into every agent;
+- downloads the time and weather programs and the speech engine and models from this repository's GitHub release, only
+  when `native_install` or `speech_install` runs;
+- calls Open-Meteo over HTTPS for a weather call;
+- writes timer state, and a WAV file when you synthesise speech, under its state directory or a path you chose.
 
-It does not read OpenCode's credential store except through the `open-meteo` connection API. The commercial key is passed to the weather program as an environment variable, never as an argument, and is not written to a log. Tool input, paths, transcripts, timer text and child stderr are not logged.
+It does not read OpenCode's credential store except through the `open-meteo` connection API. The commercial key is passed
+to the weather program as an environment variable, never as an argument, and is not written to a log. Tool input, paths,
+transcripts, timer text and child stderr are not logged.
 
-Time and weather programs are downloaded on first use from this repository's GitHub Release, after the `utilities_native_download` permission. Each download is checked against the release manifest twice, as it arrives and after decompression, before it is installed. A cached program is checked before every run: it must be executable, and a link is refused. Speech files are downloaded to a temporary file, checked for size and SHA-256, and renamed into place only when both match. A failed check is never executed.
+Every release file is checked against its pinned size and SHA-256 as it arrives and after decompression, before it is
+installed. A cached program is checked before every run: it must be executable, and a link is refused. A failed check is
+never executed.
 
 Where data goes:
 
-- **To Open-Meteo:** the place or query you asked about, over HTTPS, from the weather program. With a commercial key, the key goes in `OPEN_METEO_API_KEY` and the call uses the customer hosts. Without a key, the free tier is used. The free tier is non-commercial and rate-limited.
-- **To GitHub:** the speech engine and model files, on first use or when you run `/utilities-speech-install`, from `github.com` release URLs pinned in the package. Nothing else is uploaded.
-- **To your model provider:** tool descriptions, and every tool result the agent reads, including transcripts, weather and timer text. Synthesis returns a path and metadata, not audio samples.
-- **On your machine:** timer stores under `stateRoot`, default speech WAVs under that tree, and under `$XDG_CACHE_HOME/opencode-utilities` the speech cache and the weather cache. The weather cache holds Open-Meteo's responses, with the places asked about, for up to 31 days; it never holds a key. OpenCode keeps session history, including tool results. `opencode plugin remove` does not delete the cache or the state directory.
+- **To Open-Meteo:** the place or query you asked about, over HTTPS, from the weather program. With a commercial key, the
+  key goes in `OPEN_METEO_API_KEY` and the call uses the customer hosts. Without a key, the free tier is used. The free
+  tier is non-commercial and rate-limited.
+- **To GitHub:** the programs and speech files, from `github.com` release URLs pinned in the package. Nothing is
+  uploaded.
+- **To your model provider:** tool descriptions, and every tool result the agent reads, including transcripts, weather
+  and timer text. Synthesis returns a path and metadata, not audio samples.
+- **On your machine:** timer stores under `stateRoot`, default speech WAVs under that tree, and under
+  `$XDG_CACHE_HOME/opencode-utilities` the verified programs, the speech files and the weather cache. The weather cache
+  holds Open-Meteo's responses, with the places asked about, for up to 31 days; it never holds a key. OpenCode keeps
+  session history, including tool results. `opencode plugin remove` does not delete the cache or the state directory.
 
-Weather locations, timer text, speech text and audio, and file paths are private inputs. Treat tool results as data, not instructions.
-
+Weather locations, timer text, speech text and audio, and file paths are private inputs. Treat tool results as data, not
+instructions.
 
 ## Permissions
 
-**Every tool is allowed by default.** That means an agent, and a script, can set and delete timers, write a WAV file
-where its own file rules allow, download the speech engine and models, and send a place to Open-Meteo, without asking.
-Nothing here reaches a service other than Open-Meteo and the speech download's release host, and no tool can read the
-Open-Meteo key or write outside the paths the host's own rules allow.
+`access` is the plugin's ceiling. `all` runs every method; `ask-changes` asks for every non-read method; `read-only`
+turns every non-read method off. Reads always run, and a read never downloads: a missing program or speech file is
+refused with the install method as its next step.
 
-To restrict it, set `access` in the plugin options: `"ask-changes"` asks for the timer writes, synthesis and the speech
-download, and `"read-only"` denies them while every read still runs. Per-tool rules still work as before, and a later
-rule wins.
-- **Some agents get no default rules.** Agents defined only in your config, and agents added by plugins that load after this one, are created after the plugin inserts its rules. When `access` restricts changes, `/utilities-status` and `/utilities` name agents whose own rules would allow them without those restrictions. The [README](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/README.md#permissions) gives the fix: put the default block first in that agent's own `permissions`, followed by any top-level rules you have for `utilities_*` actions. Never put the block in the top-level `permissions`. That would loosen Explore.
-- **Saved approvals are project-wide.** An "Always allow" answer is saved for the whole project and applies to every agent in it, Plan included. A directory with no git commit belongs to OpenCode's shared `global` project, so an approval saved there applies in every such directory. Review saved approvals and remove the ones you no longer need.
-- **Deny is final.** A configured `deny` rule wins over every `ask`, `allow` and saved approval. Use `deny` for anything that must never run, including in non-interactive runs, because `--auto` approves asks and still cannot pass a deny.
-- **A top-level allow applies to every agent.** OpenCode adds top-level rules after each agent's built-in rules, and the last matching rule wins. So it skips the prompt for Build, and it also allows that action for Plan and Explore. Put the allow on the agent that should have it when a stricter agent must stay strict.
-- **File rules follow the host.** Transcription and a chosen synthesis path use `read` or `edit`. A file inside the project does not ask `external_directory`. A file outside the project does. The transcription source must be a regular file, not a symbolic link.
-- **Scripts follow the same rules.** See [Scripts](#scripts).
-- **Approval is not a network guarantee.** Approving a weather call does not make Open-Meteo accept it. Approving a download does not make the release exist. A hash mismatch discards the file.
-
-## Scripts
-
-The tools RPC (`utilities.local.tools`, see [docs/scripting.md](https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/docs/scripting.md)) runs the plugin's tools for a script, with no model. It adds no authority:
-
-- A script names a session that names an agent, and runs as them. A call resolves the tool's action against that agent's rules and then the session's before anything runs, and the tool then makes the same permission requests it makes for the model.
-- Only a resolved `allow` runs. An `ask` is refused, because no one is there to answer it, and a `deny` is refused; both cost no tool call and no prompt. The default rules allow every tool; a restriction may require an explicit allow. The plugin's permission hook changes only an inner ask on one of its own script calls in flight, only to a deny, and leaves every other call alone.
-- Every tool is a method, with a class; a saved **Always allow** does not authorise an ad-hoc script, because it is not part of those rules. A script's grant is a rule in config, or a later allow rule on the session.
-- The Open-Meteo key stays with the weather program; a script never receives it. Errors carry the same codes and messages as the tools, with no input values, keys or paths.
-- OpenCode's `execute.before` and `execute.after` tool hooks, from any plugin, do not run for a script's call, so another plugin's policy hook does not see it. A script's calls are not recorded in the session.
-- The RPC is reachable only by callers of the OpenCode server API, who already hold the server's full authority. The session is not a login: it scopes a script to what its agent may do.
+- **Some agents get no generated rules.** Agents defined only in your config, and agents added by plugins that load after
+  this one, are created after Utilities inserts its rules. `status.unguardedAgents` names each one whose own rules would
+  allow a change without asking; the plugin never patches them behind your back. Put the generated block first in that
+  agent's own `permissions`, followed by your own rules.
+- **Deny is final.** A configured `deny` wins over every `ask`, `allow` and saved approval.
+- **Saved approvals are project-wide.** An "Always allow" answer is saved for the whole project and applies to every
+  agent in it. Review saved approvals and remove the ones you no longer need.
+- **A later rule wins for one tool.** A rule the person adds after the generated block narrows or widens that one tool;
+  the plugin's `access` level still caps non-read methods over RPC.

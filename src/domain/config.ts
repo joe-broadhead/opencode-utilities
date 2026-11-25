@@ -2,7 +2,7 @@ import * as z from "zod"
 import { homedir } from "node:os"
 import { isAbsolute, join } from "node:path"
 import { formatFailure } from "./common.js"
-import { ACCESS_VALUES, MODULES, type Access, type Config, type Module } from "./contract.js"
+import { MODULES, type Config, type Module } from "./contract.js"
 
 const absolute = z.string().max(4096).refine(isAbsolute, "must be an absolute path")
 const ConfigSchema = z.strictObject({
@@ -11,7 +11,7 @@ const ConfigSchema = z.strictObject({
   speech: z.strictObject({ assetsDir: absolute.optional() }).optional(),
   sessionsDatabasePath: absolute.optional(),
   allowUntestedHost: z.boolean().optional(),
-  access: z.enum(ACCESS_VALUES).optional(),
+  access: z.enum(["all", "ask-changes", "read-only"]).optional(),
 }) satisfies z.ZodType<Config>
 
 export interface ResolvedConfig {
@@ -19,11 +19,11 @@ export interface ResolvedConfig {
   readonly stateRoot: string
   readonly cacheRoot: string
   readonly speechAssetsDir?: string
-  /** OpenCode's own SQLite database, read read-only by utilities_sessions_grep. */
+  /** OpenCode's own SQLite database, read read-only by sessions_grep. */
   readonly sessionsDatabasePath: string
   readonly allowUntestedHost: boolean
-  /** What the generated default rules allow: everything, changes ask, or read-only. */
-  readonly access: Access
+  /** The level the contract's access module generates its rules from; reported by diagnose. */
+  readonly access: "all" | "ask-changes" | "read-only"
 }
 
 /** Validates the plugin options. An invalid option fails setup with every offending key named, never its value. */
@@ -34,7 +34,7 @@ export function loadConfig(options: unknown, env: Readonly<Record<string, string
       const path = ["options", ...issue.path.map(String)].join(".")
       return issue.code === "unrecognized_keys" ? issue.keys.map(key => `${path}.${key} is not a Utilities option`) : [`${path} ${issue.message.replace(/^Invalid input: /, "is invalid: ")}`]
     })
-    throw new Error(formatFailure({ code: "OPTIONS_INVALID", message: `The plugin options are invalid: ${problems.join("; ")}.`, hint: "Fix the Utilities plugin options in opencode.json (see Configure in the README), then restart OpenCode." }))
+    throw new Error(formatFailure({ code: "OPTIONS_INVALID", message: `The plugin options are invalid: ${problems.join("; ")}.`, hint: "Fix the Utilities plugin options in opencode.json (see docs/configuration.md), then restart OpenCode." }))
   }
   const value = parsed.data
   const xdg = (name: string, fallback: string) => { const dir = env[name]; return dir && isAbsolute(dir) ? dir : join(homedir(), fallback) }

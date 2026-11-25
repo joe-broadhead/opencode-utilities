@@ -6,12 +6,13 @@ import type { AddressInfo } from "node:net"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { createHash } from "node:crypto"
-import { PLATFORMS, type Authorize, type RuntimeOptions, type SpeechAssetManifest, type SpeechAssetRole } from "../src/domain/contract.js"
+import { PLATFORMS, type RuntimeOptions, type SpeechAssetManifest, type SpeechAssetRole } from "../src/domain/contract.js"
 
 /** The package version, read from package.json. */
 export const VERSION = (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version
 export const sha = (data: string | Buffer) => createHash("sha256").update(data).digest("hex")
-export const invocation = (signal = new AbortController().signal) => ({ sessionID: "session-original", agent: "agent-original", messageID: "message-original", id: "call-original", signal })
+/** A call's cancellation signal: the runtime takes it instead of a whole invocation. */
+export const signal = () => new AbortController().signal
 export const calendar = { date: "2026-10-29", weekday: "Thursday", weekday_number_from_monday: 4, iso_week: 44, iso_year: 2026, day_of_year: 302, days_in_month: 31, leap_year: false, quarter: 4 }
 export const place = { id: null, name: "Synthetic", country: null, country_code: null, admin1: null, latitude: -33, longitude: 18, timezone: "Africa/Johannesburg", population: null }
 export const weatherBase = { source: "open-meteo", location: place, fetched_at: "2026-10-29T12:00:00Z", cache: "miss", timezone: "Africa/Johannesburg" }
@@ -111,9 +112,9 @@ export async function fixture(o: FixtureOptions = {}) {
   return {
     root, calls, cache, seed, files, speech, cached, binary, nativeFiles,
     project: join(root, "project"), state: join(root, "state"),
-    options(extra: Partial<Omit<RuntimeOptions, "authorize">> & { authorize?: Authorize } = {}): RuntimeOptions {
+    options(extra: Partial<RuntimeOptions> = {}): RuntimeOptions {
       return {
-        location: { project: "project-a", directory: join(root, "project"), projectDirectory: join(root, "project") }, authorize: async () => {},
+        location: { project: "project-a", directory: join(root, "project"), projectDirectory: join(root, "project") },
         modules: { weather: true, time: true, speech: true }, stateRoot: join(root, "state"), cacheRoot: cache,
         target: "darwin-arm64", packageRoot: root, ...o.speech === "preseed" ? { speechAssetsDir: seed } : {}, ...extra,
       }

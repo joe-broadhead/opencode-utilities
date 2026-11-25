@@ -1,0 +1,39 @@
+{
+  "$comment": "Recorded from the plugin's own handlers: the status answer, the one bus event a write emits, and a valid input per non-read method. Regenerate with UPDATE_FIXTURES=1 npm test.",
+  "plugin": "@we-the-rebel-alliance/utilities-plugin",
+  "events": {
+    "emitted": [
+      "changed"
+    ],
+    "status": {
+      "name": "utilities",
+      "version": "0.0.0",
+      "host": {
+        "version": "2.4.1",
+        "range": ">=2.4.1 <2.5.0",
+        "tested": [
+          "2.4.1"
+        ]
+      },
+      "state": "ready",
+      "accounts": [],
+      "unguardedAgents": [],
+      "nextStep": null
+    }
+  },
+  "rpc": {
+    "inputs": {
+      "timer_set": {
+        "name": "review",
+        "deadline": "2027-01-01T00:00:00Z"
+      },
+      "timer_delete": {
+        "name": "review"
+      },
+      "speech_synthesize": {
+        "text": "hello"
+      }
+    }
+  },
+  "namespace": "Time, holidays, working days, timers, Open-Meteo weather, on-device speech, and read-only past-session status and exact-text search: stopgaps until OpenCode has them. Load the utilities-time, -weather, -speech or -sessions skill for call shapes. To find a session, use opencode.session.search."
+}

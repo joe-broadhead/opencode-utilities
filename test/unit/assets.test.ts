@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { lstat, mkdir, readdir, readFile, rm, rmdir, utimes, writeFile } from "node:fs/promises"
 import { join } from "node:path"
-import { createRuntime } from "../../src/runtime.js"
-import type { Authorize, SpeechAssetRole } from "../../src/domain/contract.js"
-import { ENGINE, VERSION, fixture, invocation, releaseServer, sha, wav, type FixtureOptions, type Serve } from "../fixtures.js"
+import { createRuntime } from "../../src/provider/runtime.js"
+import type { SpeechAssetRole } from "../../src/domain/contract.js"
+import { ENGINE, VERSION, fixture, releaseServer, sha, signal, wav, type FixtureOptions, type Serve } from "../fixtures.js"
 
 const cleanups: Array<() => Promise<unknown>> = []
 afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close() })
@@ -12,69 +12,49 @@ async function setup(o: FixtureOptions & { serve?: (files: Awaited<ReturnType<ty
   const server = await releaseServer(); cleanups.push(server.close)
   const f = await fixture({ speech: "missing", release: server.url, ...o }); cleanups.push(f.cleanup)
   server.use(f.files, o.serve?.(f.files))
-  const authorize = vi.fn<Authorize>(async () => {}), changed = vi.fn()
-  const runtime = await createRuntime(f.options({ authorize })); cleanups.push(() => runtime.close())
-  runtime.onAvailabilityChange(changed)
+  const runtime = await createRuntime(f.options()); cleanups.push(() => runtime.close())
   const name = (role: SpeechAssetRole) => f.files.get(role)!.name
   const bytes = (roles: SpeechAssetRole[]) => roles.reduce((n, role) => n + f.files.get(role)!.content.length, 0)
   /** Everything in the cache: final files and any leftovers (temporary files, locks). */
   // The release programs sit under native/ from the fixture; they are not part of the speech files this lists, or the folder.
   const leftovers = async () => (await readdir(f.cache, { recursive: true }).catch(() => [] as string[])).filter(p => p.includes("/") && !p.startsWith("native/")).sort()
-  return { ...f, server, authorize, changed, runtime, name, bytes, leftovers }
+  return { ...f, server, runtime, name, bytes, leftovers }
 }
 
-describe("first use", () => {
-  test("a transcription checks the WAV before the download ask, so a file it cannot use costs no download prompt", async () => {
+describe("install", () => {
+  test("a speech call with missing files refuses SPEECH_ASSETS_MISSING and downloads nothing", async () => {
     const f = await setup()
-    await writeFile(join(f.project, "voice.m4a"), Buffer.from("not a RIFF file, but long enough to pass the size checks"))
-    await expect(f.runtime.invoke("speech_transcribe", { path: "voice.m4a" }, invocation())).rejects.toMatchObject({ code: "WAV_INVALID" })
-    expect(f.authorize.mock.calls.flatMap(c => c[0]).map(r => r.action)).toEqual(["read"])
-    expect(f.server.requests.size).toBe(0)
     await writeFile(join(f.project, "voice.wav"), wav())
-    await f.runtime.invoke("speech_transcribe", { path: "voice.wav" }, invocation())
-    expect(f.authorize.mock.calls.slice(1).map(c => c[0].map(r => r.action))).toEqual([["read"], ["utilities_speech_download"]])
+    const error = await f.runtime.invoke("speech_transcribe", { path: "voice.wav" }, signal()).catch((e: any) => e)
+    expect(error).toMatchObject({ code: "SPEECH_ASSETS_MISSING", hint: "Call tools.utilities.speech_install to download them, then call this tool again." })
+    expect(f.server.requests.size).toBe(0)
   })
-  test("a speech call asks for the download after its own request, then downloads, verifies and runs", async () => {
-    const f = await setup(), host = new URL(f.server.url).host
-    const result = await f.runtime.invoke("speech_synthesize", { text: "hello" }, invocation())
-    expect(result.output).toMatchObject({ durationMs: 500 })
-    expect(f.authorize.mock.calls.map(c => c[0])).toEqual([
-      [{ action: "utilities_speech_synthesize", resources: ["kitten-nano-int8/Luna"], save: ["*"], metadata: { voice: "Luna", characters: 5 } }],
-      [{ action: "utilities_speech_download", resources: [host], save: [host], metadata: { bytes: f.bytes(KITTEN), files: KITTEN.map(f.name) } }],
-    ])
+  test("installSpeech downloads every file once, verifies it, and the speech call then runs", async () => {
+    const f = await setup()
+    const result = await f.runtime.installSpeech()
+    expect(result).toEqual({ downloaded: [...f.files.values()].map(file => ({ name: file.name, bytes: file.content.length })), bytes: f.bytes([...f.files.keys()]), cacheDirectory: f.cache })
     for (const role of KITTEN) {
       expect(f.server.requests.get(f.name(role))).toBe(1)
       expect((await lstat(f.cached(role))).mode & 0o777).toBe(role === "engine" ? 0o700 : 0o600)
     }
-    expect(f.server.requests.has(f.name("tiny-q5_1"))).toBe(false)
-    expect(await f.leftovers()).toEqual(KITTEN.map(role => `${sha(f.files.get(role)!.content)}/${f.name(role)}`).sort())
-    expect(f.changed).toHaveBeenCalledTimes(1)
+    expect(await f.leftovers()).toEqual([...f.files.keys()].map(role => `${sha(f.files.get(role)!.content)}/${f.name(role)}`).sort())
     const status = await f.runtime.status()
-    expect(status.speech.assets.map(a => [a.role, a.state])).toEqual([["engine", "cached"], ["tiny-q5_1", "missing"], ["kitten-model", "cached"], ["kitten-voices", "cached"], ["kitten-config", "cached"]])
-    expect(status.modules.speech).toEqual({ availability: "SPEECH_ASSETS_MISSING", next: "Run /utilities-speech-install, or download on the first speech call, subject to permissions." })
-    expect(status.speech.next).toBe(`Run /utilities-speech-install to download 1 file (${(f.bytes(["tiny-q5_1"]) / 1e6).toFixed(1)} MB), or pre-seed speech.assetsDir.`)
+    expect(status.speech.assets.map(a => [a.role, a.state])).toEqual([["engine", "cached"], ["tiny-q5_1", "cached"], ["kitten-model", "cached"], ["kitten-voices", "cached"], ["kitten-config", "cached"]])
+    expect(status.modules.speech).toEqual({ availability: "AVAILABLE" })
+    const synthesis = await f.runtime.invoke("speech_synthesize", { text: "hello" }, signal())
+    expect(synthesis).toMatchObject({ durationMs: 500 })
   })
-  test("a refused download propagates the host's error and downloads nothing", async () => {
-    const f = await setup(), denied = { _tag: "Tool.Error", reason: "Denied" }
-    f.authorize.mockImplementation(async () => { throw denied })
-    await expect(f.runtime.invoke("speech_synthesize", { text: "x" }, invocation())).rejects.toBe(denied)
-    expect(f.server.requests.size).toBe(0); expect(await f.leftovers()).toEqual([])
-  })
-  test("/utilities-speech-install asks once, downloads every file, and is a no-op afterwards", async () => {
-    const f = await setup(), authorize = vi.fn(async () => {})
-    const result = await f.runtime.installSpeech({ authorize })
-    expect(authorize).toHaveBeenCalledTimes(1)
-    expect(result.output).toEqual({ downloaded: [...f.files.values()].map(file => ({ name: file.name, bytes: file.content.length })), bytes: f.bytes([...f.files.keys()]), cacheDirectory: f.cache })
-    expect(result.text).toBe(`Downloaded 5 files (${(f.bytes([...f.files.keys()]) / 1e6).toFixed(1)} MB) into the speech cache. Speech tools are ready.`)
-    const again = await f.runtime.installSpeech({ authorize })
-    expect(authorize).toHaveBeenCalledTimes(1); expect(again.text).toBe("All speech files are already installed. Speech tools are ready.")
+  test("a second install is a no-op", async () => {
+    const f = await setup()
+    await f.runtime.installSpeech()
+    expect(await f.runtime.installSpeech()).toEqual({ downloaded: [], bytes: 0, cacheDirectory: f.cache })
     expect((await f.runtime.status()).modules.speech).toEqual({ availability: "AVAILABLE" })
   })
   test("a cached file that no longer verifies is downloaded again", async () => {
     const f = await setup(); await f.runtime.installSpeech()
     await writeFile(f.cached("kitten-config"), "corrupted")
     expect((await f.runtime.status()).speech.assets.find(a => a.role === "kitten-config")?.state).toBe("missing")
-    await f.runtime.invoke("speech_synthesize", { text: "x" }, invocation())
+    await f.runtime.installSpeech()
     expect(f.server.requests.get(f.name("kitten-config"))).toBe(2); expect(await readFile(f.cached("kitten-config"), "utf8")).toBe("synthetic:kitten-config")
   })
 })
@@ -88,12 +68,11 @@ describe("verification", () => {
       const evil = Buffer.from(`#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(marker)}, 'ran')\n//`)
       return { [ENGINE]: Buffer.concat([evil, Buffer.alloc(real.length - evil.length, "x")]) }
     } })
-    const error = await f.runtime.invoke("speech_synthesize", { text: "x" }, invocation()).catch(e => e)
+    const error = await f.runtime.installSpeech().catch((e: any) => e)
     expect(error).toMatchObject({ code: "INTEGRITY_MISMATCH", message: `The downloaded ${ENGINE} does not match its pinned SHA-256 hash, so it was discarded.` })
     expect(await f.leftovers()).toEqual([])
     expect((await readdir(f.cache)).filter(entry => entry !== "native")).toEqual([])
     await expect(lstat(marker)).rejects.toMatchObject({ code: "ENOENT" }); expect(await f.recorded()).toEqual([])
-    expect(f.changed).not.toHaveBeenCalled()
   })
   test.each(["short", "long", "length"] as const)("a %s download has the wrong size and leaves nothing", async mode => {
     const f = await setup({ serve: () => ({ [ENGINE]: mode }) })
@@ -126,11 +105,11 @@ describe("verification", () => {
 })
 
 describe("concurrency", () => {
-  test("concurrent first use downloads each file once, across runtimes", async () => {
+  test("concurrent installs each file once, across runtimes", async () => {
     const f = await setup(), second = await createRuntime(f.options()); cleanups.push(() => second.close())
     const [a, b] = await Promise.all([f.runtime.installSpeech(), second.installSpeech()])
     for (const file of f.files.values()) expect(f.server.requests.get(file.name)).toBe(1)
-    expect(a.output.downloaded.length + b.output.downloaded.length).toBe(5)
+    expect(a.downloaded.length + b.downloaded.length).toBe(5)
   })
   test("a live lock is waited for; a lock older than the install deadline is taken over", async () => {
     const f = await setup(), lock = join(f.cache, sha(f.files.get("engine")!.content), ".lock")
@@ -148,37 +127,35 @@ describe("concurrency", () => {
 })
 
 describe("pre-seed", () => {
-  test("pre-seeded files work offline, verified by hash, and nothing is downloaded or asked", async () => {
+  test("pre-seeded files work offline, verified by hash, and nothing is downloaded", async () => {
     const f = await setup({ speech: "preseed" })
-    await f.runtime.invoke("speech_synthesize", { text: "hello" }, invocation())
+    await f.runtime.invoke("speech_synthesize", { text: "hello" }, signal())
     expect(f.server.requests.size).toBe(0)
-    expect(f.authorize.mock.calls[0]![0].map(r => r.action)).toEqual(["utilities_speech_synthesize"])
     expect((await f.runtime.status()).speech.assets.every(a => a.state === "pre-seeded")).toBe(true)
     const [call] = await f.recorded()
     expect(call!.request!.payload).toMatchObject({ modelPath: join(f.seed, f.name("kitten-model")) })
   })
-  test("a missing or altered pre-seeded file is SPEECH_ASSETS_MISSING, with no prompt and no download", async () => {
+  test("a missing or altered pre-seeded file is SPEECH_ASSETS_MISSING, with no download", async () => {
     const f = await setup({ speech: "preseed" })
     await rm(join(f.seed, f.name("kitten-voices"))); await writeFile(join(f.seed, f.name("kitten-config")), "altered")
-    const error = await f.runtime.invoke("speech_synthesize", { text: "hello" }, invocation()).catch(e => e)
+    const error = await f.runtime.invoke("speech_synthesize", { text: "hello" }, signal()).catch((e: any) => e)
     expect(error).toMatchObject({ code: "SPEECH_ASSETS_MISSING", message: `The speech files ${f.name("kitten-voices")}, ${f.name("kitten-config")} are missing from speech.assetsDir, or do not match their pinned hashes.` })
     await expect(f.runtime.installSpeech()).rejects.toMatchObject({ code: "SPEECH_ASSETS_MISSING" })
-    expect(f.authorize).not.toHaveBeenCalled(); expect(f.server.requests.size).toBe(0)
+    expect(f.server.requests.size).toBe(0)
     expect((await f.runtime.status()).modules.speech).toEqual({ availability: "SPEECH_ASSETS_MISSING", next: "Copy the missing speech files into speech.assetsDir." })
   })
 })
 
 describe("manifest", () => {
-  test("a platform without an engine build reports UNSUPPORTED_PLATFORM before any prompt", async () => {
-    const f = await setup(), runtime = await createRuntime(f.options({ authorize: f.authorize, target: "linux-x64-gnu" })); cleanups.push(() => runtime.close())
-    await expect(runtime.invoke("speech_synthesize", { text: "x" }, invocation())).rejects.toMatchObject({ code: "UNSUPPORTED_PLATFORM", message: "The speech engine has no build for this platform." })
-    expect(f.authorize).not.toHaveBeenCalled()
+  test("a platform without an engine build reports UNSUPPORTED_PLATFORM", async () => {
+    const f = await setup(), runtime = await createRuntime(f.options({ target: "linux-x64-gnu" })); cleanups.push(() => runtime.close())
+    await expect(runtime.invoke("speech_synthesize", { text: "x" }, signal())).rejects.toMatchObject({ code: "UNSUPPORTED_PLATFORM", message: "The speech engine has no build for this platform." })
     expect((await runtime.status()).speech.assets).toEqual([])
   })
-  test("release URLs must be HTTPS, loopback included (UTIL-R18)", async () => {
+  test("release URLs must be HTTPS, loopback included", async () => {
     for (const release of [`http://example.com/v${VERSION}`, `http://127.0.0.1:9/v${VERSION}`]) {
       const f = await setup({ release })
-      await expect(f.runtime.invoke("speech_synthesize", { text: "x" }, invocation())).rejects.toMatchObject({ code: "CONTRACT_MISMATCH" })
+      await expect(f.runtime.invoke("speech_synthesize", { text: "x" }, signal())).rejects.toMatchObject({ code: "CONTRACT_MISMATCH" })
       expect((await f.runtime.status()).modules.speech.availability).toBe("CONTRACT_MISMATCH")
     }
   })

@@ -1,34 +1,40 @@
 # Changelog
 
-All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.0.0 (unreleased)
+## [0.0.0]
 
-### Changed
-
-- The repository moves to `we-the-rebel-alliance/utilities-plugin`, the package is
-  `@we-the-rebel-alliance/utilities-plugin`, and the version restarts at `0.0.0`.
-- OpenCode 2.4.1 only: the `@opencode/*` devDependencies are `2.4.1`, the supported range is `>=2.4.1 <2.5.0`, and the
-  plugin is tested on 2.4.1. The test matrix and the code paths for earlier releases are gone.
-- The fixed context is within the family budget: the namespace line is at most 400 characters, each skill description at
-  most 300, nothing is pinned, and there are no per-request hooks.
-- CI is one `ci` job on Node 24 with `permissions: contents: read`, pinned actions and the family runner rule; it runs
-  the repository's full check.
-- The README and AGENTS.md describe the rebuilt plugin; the full documentation follows with the plugin kit.
+The first release on plugin-contract v0.
 
 ### Added
 
-- `utilities_sessions`: past-session status, outcome, cost in USD, tokens and time windows, over OpenCode's public
-  session list and get. Stopgap: deleted when OpenCode gives agents a session list or stats tool with these fields.
-- `utilities_sessions_grep`: exact text in past sessions' tool calls, their outputs and file touches, read-only over
-  OpenCode's SQLite database, with a clean refusal on an unknown schema. Matching is literal, never a regular
-  expression; snippets and the answer are capped in bytes. Stopgap: deleted when OpenCode ships exact-text search.
-- The `utilities-sessions` skill, and a status row naming each stopgap's deletion criterion.
-- The `sessionsDatabasePath` option, for the database `utilities_sessions_grep` reads.
+- The `capabilities` manifest: 29 methods, no accounts, no sources, no actions, and one bus event (`changed`). The
+  namespace line, the methods' classes, their operations and the options are all declared there, and `plugin-kit docs`
+  generates the tables.
+- `status` in the contract's shape and `diagnose`: module availability, the Open-Meteo tier and key, the speech files and
+  voices, due timers, the access level and each stopgap's deletion criterion.
+- `native_install` and `speech_install`: the time and weather programs and the speech engine and models are downloaded
+  from this repository's release, pinned by SHA-256. A read that needs them refuses with the install as its next step,
+  so `read-only` never downloads.
+- `changed` after every write: `utilities.timers` for a timer write, `utilities.speech` for synthesis and a speech
+  install, `utilities.native` for a program install.
+
+### Changed
+
+- The plugin id, tool namespace and RPC id are `utilities` (they were `utilities.local`, `utilities.local.tui` and
+  `utilities.local.tools`). Every method is reachable as a tool, in Code Mode and over RPC through one `register` call.
+- Doors, access rules, accounts resolution, input and output checks, the bus and the error mapping come from
+  `@we-the-rebel-alliance/plugin-contract`; the plugin keeps only its provider, its handlers and its options.
+- `status` is the contract's own answer; the previous detailed status is now `diagnose`.
+- Time and weather no longer download on first use; `native_install` does, explicitly.
 
 ### Removed
 
-- The deprecated RPC ids `utilities.tools` and `utilities.tools.tools`, the note they left in status, and the code that
-  kept them answering.
-- `docs/jelly.md` and the legacy notes about old app placements. The `jelly` package key stays for the plugin kit to
-  replace.
+- The legacy app declaration key, the `opencode` key and the old `sources` key: everything an app needs is in
+  `capabilities`.
+- The copied release, drift, copies, icons, forbidden, tested-hosts and changelog scripts, `check-copies.mjs`, the
+  family block note, and the tools RPC transport and its `describe` method. `plugin-kit` replaced them.
+- The TUI status dialog: the contract's status is on RPC and `diagnose` is the text view. `/utilities-status`,
+  `/utilities-install` and `/utilities-speech-install` are gone; the methods replaced them.
+- Contract-1 code, permission shims, compatibility aliases and dead code.

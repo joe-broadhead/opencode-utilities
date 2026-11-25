@@ -1,6 +1,7 @@
 ---
 name: utilities-sessions
-description: Past OpenCode session status and exact text: outcome, cost, tokens and time windows, and searching tool calls, outputs and file touches, read-only. Stopgaps until OpenCode's own session stats and search carry them. Not for finding or reading a session: use opencode.session.search first.
+description: Past OpenCode session status and exact text: outcome, cost, tokens, time windows, and searching tool calls, outputs and file touches, read-only. Stopgaps until OpenCode's own stats and search carry them. To find a session, use opencode.session.search first.
+
 ---
 
 # Past session status and exact text
@@ -53,7 +54,7 @@ outputs and file touches, read-only, over OpenCode's database.
 ## When these go away
 
 `utilities_sessions` ends when OpenCode gives agents a session list or stats tool with outcome, cost and token fields;
-`utilities_sessions_grep` ends when OpenCode ships exact-text search over past sessions. `/utilities-status` states both.
+`utilities_sessions_grep` ends when OpenCode ships exact-text search over past sessions. `utilities_diagnose` states both.
 
 ## Errors
 
