@@ -1,7 +1,7 @@
 import * as z from "zod"
 import { lstat } from "node:fs/promises"
 import { hashRegular, identity, noSymlinks, readRegular, sameIdentity, type Identity } from "./process/files.js"
-import { cachePath, installNative, NativeError, readNativeManifest, type NativeCode, type NativeManifest } from "./process/install.js"
+import { cachePath, installNative, NativeError, readNativeManifest, type FetchLike, type NativeCode, type NativeManifest } from "./process/install.js"
 import { fail, UtilitiesError } from "../domain/common.js"
 import { GLIBC_FLOORS, PLATFORMS, type FailureCode, type GlibcBinary, type NativeBinary, type Platform } from "../domain/contract.js"
 
@@ -120,7 +120,7 @@ export interface NativeExecutable { readonly path: string; readonly sha256: stri
  */
 export class NativeBinaries {
   private manifest: Promise<NativeManifest> | undefined
-  constructor(private readonly options: { readonly packageRoot: string; readonly cacheRoot: string; readonly target: string; readonly glibc?: string | null }) {}
+  constructor(private readonly options: { readonly packageRoot: string; readonly cacheRoot: string; readonly target: string; readonly glibc?: string | null; readonly fetchImpl?: FetchLike }) {}
 
   /** UNSUPPORTED_PLATFORM on a Linux system whose glibc is older than the programs' floor, before anything is fetched. */
   private requireGlibc(module: NativeBinary) {
@@ -130,7 +130,7 @@ export class NativeBinaries {
 
   /** The release manifest, read once while it works. A failure is not kept, so a fixed checkout answers on the next call. */
   private release(): Promise<NativeManifest> {
-    this.manifest ??= readNativeManifest(this.options.packageRoot)
+    this.manifest ??= readNativeManifest(this.options.packageRoot, { cacheRoot: this.options.cacheRoot, fetchImpl: this.options.fetchImpl })
       .then(raw => raw ?? refuse(new NativeError(
         "NATIVE_MANIFEST_MISSING",
         "this copy of the plugin has no release manifest, so it names no time or weather program",

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, test } from "vitest"
 import { pinnedNames, pinnedPaths } from "../../scripts/release-assets.mjs"
+import { releaseManifestProblems } from "../../scripts/release-manifest.mjs"
 
 const native = JSON.parse(readFileSync("manifest/native.json", "utf8"))
 const speech = JSON.parse(readFileSync("manifest/speech-assets.json", "utf8"))
@@ -53,5 +54,20 @@ describe("the release asset list", () => {
     expect(() => pinnedPaths(directory, pinnedNames(native, speech))).toThrow(/is not a staged file/)
     expect(() => pinnedNames({ modules: { a: { p: { name: "same" } }, b: { p: { name: "same" } } } })).toThrow(/pin same twice/)
     expect(() => pinnedNames({ modules: { a: { p: { name: "nested/file" } } } })).toThrow(/plain file name/)
+  })
+})
+
+describe("the candidate release manifest", () => {
+  const commit = "0".repeat(40)
+  const built = { ...native, built: { ...native.built, run: 1 } }
+  test("accepts the manifest the native workflow built for this tag and commit", () => {
+    expect(releaseManifestProblems(built, { tag: native.tag, commit, repository: native.repository })).toEqual([])
+  })
+  test("refuses another tag, another commit, a zero run and an empty module set", () => {
+    expect(releaseManifestProblems(built, { tag: "v9.9.9", commit, repository: native.repository })).toContain("tag is v0.0.0; the release tag is v9.9.9")
+    expect(releaseManifestProblems(built, { tag: native.tag, commit: "1".repeat(40), repository: native.repository }).some(problem => problem.includes("built.commit"))).toBe(true)
+    expect(releaseManifestProblems(native, { tag: native.tag, commit, repository: native.repository })).toContain("built.run must be a positive run id")
+    const empty = JSON.parse(JSON.stringify(built)); empty.modules = {}
+    expect(releaseManifestProblems(empty, { tag: native.tag, commit, repository: native.repository })).toContain("modules is empty")
   })
 })

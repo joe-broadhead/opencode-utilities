@@ -2,9 +2,10 @@
 #
 # `plugin-kit release` checks the repository, writes the local tag, and refuses anything but the 0.0.x line; pushing the
 # tag is the owner's step. This workflow then checks the tagged commit again, packs it, records the conformance report,
-# and creates the Release with the tarball, the report and SHA256SUMS. Every native and speech file is named from
-# `manifest/native.json` and `manifest/speech-assets.json`: the release never passes the native directory or a wildcard
-# for those files, so a directory cannot be uploaded as an asset.
+# and creates the Release with the tarball, the report, SHA256SUMS and, when the tagged commit has a successful native
+# run, that run's vetted `native.json` and the pinned native/speech files. Every one is named from `manifest/native.json`
+# and `manifest/speech-assets.json`: the release never passes the native directory or a wildcard for those files, so a
+# directory cannot be uploaded as an asset. A tag with no native run on its commit attaches the three core assets only.
 #
 # The tag is the owner's approval: there is no `release` environment, so the release bot can publish once the tag exists.
 name: release
@@ -23,6 +24,7 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: write # the GitHub Release
+      actions: read # the native run's manifest and pinned files
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -64,18 +66,43 @@ jobs:
           set -euo pipefail
           version="$(node -p "require('./package.json').version")"
           test "v${version}" = "$TAG"
+      # The native workflow uploads the manifest it built for every platform, with the run id the files are pinned to.
+      # It must be the run on the tagged commit: the release uses that manifest and those artifacts, never a locally
+      # generated placeholder (native:ensure writes one with run 0). No successful run means no native or speech extras.
+      - name: Fetch the pinned native manifest from the tagged commit's native run
+        id: native
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          run="$(gh run list --workflow native.yml --branch master --commit "$GITHUB_SHA" --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+          if [ -z "$run" ]; then
+            echo "No successful native run on $GITHUB_SHA: the release carries the tarball, conformance.json and SHA256SUMS only."
+            exit 0
+          fi
+          gh run download "$run" --name native-manifest --dir "$RUNNER_TEMP/native-manifest"
+          node scripts/release-manifest.mjs "$RUNNER_TEMP/native-manifest/native.json" "$TAG" "$GITHUB_SHA"
+          cp "$RUNNER_TEMP/native-manifest/native.json" manifest/native.json
+          echo "present=true" >> "$GITHUB_OUTPUT"
       - name: Pack, and write SHA256SUMS
         run: |
           set -euo pipefail
           mkdir -p release
+          if [ "${{ steps.native.outputs.present }}" = "true" ]; then
+            cp manifest/native.json release/native.json
+          else
+            # native:ensure wrote a placeholder with run 0; it is not a release manifest, so the tarball does not carry it.
+            rm -f manifest/native.json
+          fi
           npx plugin-kit check --json > release/conformance.json
           npm pack --pack-destination release
           sha256sum release/*.tgz release/conformance.json > release/SHA256SUMS
       # The programs and speech files the release manifests pin, verified against them and attested by the native run.
-      # A tag whose commit carries no manifest/native.json has nothing to attach; `native_install` then reports the
-      # programs missing with the install step.
+      # A tag whose commit has no native run has nothing to attach; `native_install` then reports the file missing with
+      # the install step, and the installer can still fetch a `native.json` published by a later release.
       - name: Attach the pinned native and speech files
-        if: hashFiles('manifest/native.json') != ''
+        if: steps.native.outputs.present == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/attach-native.mjs --out release/native
@@ -86,8 +113,13 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          # Written to a file first, so a failed name check stops the release instead of uploading a partial list.
-          node scripts/release-assets.mjs release/native > "$RUNNER_TEMP/native-files.txt"
-          mapfile -t extras < "$RUNNER_TEMP/native-files.txt"
-          gh release create "$TAG" release/*.tgz release/conformance.json release/SHA256SUMS "${extras[@]}" \
+          assets=(release/*.tgz release/conformance.json release/SHA256SUMS)
+          if [ "${{ steps.native.outputs.present }}" = "true" ]; then
+            assets+=(release/native.json)
+            # Written to a file first, so a failed name check stops the release instead of uploading a partial list.
+            node scripts/release-assets.mjs release/native > "$RUNNER_TEMP/native-files.txt"
+            mapfile -t extras < "$RUNNER_TEMP/native-files.txt"
+            assets+=("${extras[@]}")
+          fi
+          gh release create "$TAG" "${assets[@]}" \
             --repo "$REPO" --verify-tag --title "$TAG" --generate-notes

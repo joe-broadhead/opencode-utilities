@@ -8,8 +8,9 @@
   attribution every answer carries and an optional commercial key held by the `open-meteo` integration.
 - On-device transcription and synthesis through the `utilities-speech` bridge; no audio leaves the machine.
 - `native_install` and `speech_install` download the programs and speech files from this repository's release, pinned by
-  SHA-256. A read never downloads: with files missing it refuses with the install as the next step, so `read-only` stays
-  read-only.
+  SHA-256. When the installed package carries no `manifest/native.json`, the plugin fetches the release's `native.json`,
+  checks it with the same parser and caches it under the plugin cache keyed by the tag. A read never downloads: with
+  files missing it refuses with the install as the next step, so `read-only` stays read-only.
 - `status` in the contract's shape and `diagnose` for the detailed state: module availability, the weather tier, the
   speech files and due timers.
 - The two session stopgaps, `sessions` and `sessions_grep`: read-only status, spend, tokens and time windows over

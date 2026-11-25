@@ -26791,7 +26791,7 @@ async function sweep(directory, match, age, kind2) {
 // src/provider/process/install.ts
 import { createHash as createHash4, randomUUID as randomUUID3 } from "node:crypto";
 import { constants as constants2, createReadStream, createWriteStream } from "node:fs";
-import { chmod, mkdir as mkdir2, open as open4, readFile, rename, rm as rm2, stat } from "node:fs/promises";
+import { chmod, mkdir as mkdir2, open as open4, readFile, rename, rm as rm2, stat, writeFile } from "node:fs/promises";
 import { dirname as dirname2, join as join3 } from "node:path";
 import { createGunzip } from "node:zlib";
 var NativeError = class extends Error {
@@ -26807,6 +26807,11 @@ var NativeError = class extends Error {
 var HEX64 = /^[a-f0-9]{64}$/;
 var HEX40 = /^[a-f0-9]{40}$/;
 var DEFAULT_STALL_MS = 12e4;
+var RELEASE_REPOSITORY = "we-the-rebel-alliance/utilities-plugin";
+var RELEASE_BASE = `https://github.com/${RELEASE_REPOSITORY}/releases/download`;
+var MANIFEST_LIMIT = 1e6;
+var MANIFEST_TIMEOUT_MS = 3e4;
+var VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 var isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
 var invalid = (what) => {
   throw new NativeError("NATIVE_MANIFEST_INVALID", `the release manifest ${what}`, "Reinstall the plugin from a release whose manifest is valid.");
@@ -26845,7 +26850,7 @@ function parseNativeManifest(raw) {
       const exe = asset2.executable;
       const name2 = plain5(asset2.name, `${module} ${key}`);
       const url2 = asset2.url;
-      const expected = `https://github.com/${repository}/releases/download/${tag2}/${name2}`;
+      const expected = `${RELEASE_BASE}/${tag2}/${name2}`;
       if (url2 !== expected) invalid(`names a URL other than the release asset for ${module} ${key}`);
       platforms[key] = {
         name: name2,
@@ -26863,13 +26868,91 @@ function parseNativeManifest(raw) {
   const build = built;
   return { schema: 1, plugin: plugin2, repository, tag: tag2, built: { commit: build.commit, run: build.run, workflow: build.workflow }, modules: out };
 }
-async function readNativeManifest(packageRoot2) {
+var manifestCachePath = (cacheRoot, tag2) => join3(cacheRoot, "native", tag2, "native.json");
+async function packageVersion(packageRoot2) {
+  try {
+    const pkg2 = JSON.parse(await readFile(join3(packageRoot2, "package.json"), "utf8"));
+    if (typeof pkg2.version === "string" && VERSION.test(pkg2.version)) return pkg2.version;
+  } catch {
+  }
+  throw new NativeError(
+    "NATIVE_MANIFEST_MISSING",
+    "the plugin package names no version, so no release tag has a manifest",
+    "Reinstall the plugin from a release, or run npm run native:ensure in a checkout."
+  );
+}
+var manifestFetchFailed = (tag2, what, next) => {
+  throw new NativeError("NATIVE_MANIFEST_MISSING", `the ${tag2} release manifest ${what}`, next);
+};
+async function fetchNativeManifest(tag2, fetchImpl) {
+  const url2 = `${RELEASE_BASE}/${tag2}/native.json`;
+  let response2;
+  try {
+    response2 = await (fetchImpl ?? fetch)(url2, { redirect: "follow", signal: AbortSignal.timeout(MANIFEST_TIMEOUT_MS) });
+  } catch (error3) {
+    return manifestFetchFailed(tag2, `could not be downloaded (${error3.message})`, "Check the network or proxy, then call tools.utilities.native_install to fetch the programs.");
+  }
+  if (response2.status === 404) {
+    throw new NativeError(
+      "NATIVE_MANIFEST_MISSING",
+      `the ${tag2} release has no native.json`,
+      "Call tools.utilities.native_install after the release publishes native.json, or install the plugin from a release that has one."
+    );
+  }
+  if (!response2.ok) {
+    return manifestFetchFailed(tag2, `answered HTTP ${response2.status}`, "Check the network or proxy, then call tools.utilities.native_install to fetch the programs.");
+  }
+  let bytes;
+  try {
+    bytes = Buffer.from(await response2.arrayBuffer());
+  } catch (error3) {
+    return manifestFetchFailed(tag2, `could not be read (${error3.message})`, "Check the network or proxy, then call tools.utilities.native_install to fetch the programs.");
+  }
+  if (bytes.byteLength > MANIFEST_LIMIT) invalid("is too large");
+  let raw;
+  try {
+    raw = JSON.parse(bytes.toString("utf8"));
+  } catch {
+    return invalid("is not JSON");
+  }
+  const manifest2 = parseNativeManifest(raw);
+  if (manifest2.plugin !== "utilities" || manifest2.repository !== RELEASE_REPOSITORY || manifest2.tag !== tag2) {
+    invalid(`does not name the ${tag2} release of this plugin`);
+  }
+  return manifest2;
+}
+async function cacheManifest(path, manifest2) {
+  const temporary = `${path}.${randomUUID3()}.part`;
+  try {
+    await mkdir2(dirname2(path), { recursive: true, mode: 448 });
+    await writeFile(temporary, `${JSON.stringify(manifest2)}
+`, { mode: 384 });
+    await rename(temporary, path);
+  } catch {
+    await rm2(temporary, { force: true }).catch(() => void 0);
+  }
+}
+async function readNativeManifest(packageRoot2, options = {}) {
   let text4;
   try {
     text4 = await readFile(join3(packageRoot2, "manifest", "native.json"), "utf8");
   } catch (error3) {
-    if (error3.code === "ENOENT") return void 0;
-    throw error3;
+    if (error3.code !== "ENOENT") throw error3;
+    const tag2 = `v${await packageVersion(packageRoot2)}`;
+    const cached3 = options.cacheRoot === void 0 ? void 0 : manifestCachePath(options.cacheRoot, tag2);
+    if (cached3 !== void 0) {
+      const cachedText = await readFile(cached3, "utf8").catch(() => void 0);
+      if (cachedText !== void 0) {
+        try {
+          const manifest3 = parseNativeManifest(JSON.parse(cachedText));
+          if (manifest3.plugin === "utilities" && manifest3.repository === RELEASE_REPOSITORY && manifest3.tag === tag2) return manifest3;
+        } catch {
+        }
+      }
+    }
+    const manifest2 = await fetchNativeManifest(tag2, options.fetchImpl);
+    if (cached3 !== void 0) await cacheManifest(cached3, manifest2);
+    return manifest2;
   }
   try {
     return parseNativeManifest(JSON.parse(text4));
@@ -27121,7 +27204,7 @@ var NativeBinaries = class {
   }
   /** The release manifest, read once while it works. A failure is not kept, so a fixed checkout answers on the next call. */
   release() {
-    this.manifest ??= readNativeManifest(this.options.packageRoot).then((raw) => raw ?? refuse2(new NativeError(
+    this.manifest ??= readNativeManifest(this.options.packageRoot, { cacheRoot: this.options.cacheRoot, fetchImpl: this.options.fetchImpl }).then((raw) => raw ?? refuse2(new NativeError(
       "NATIVE_MANIFEST_MISSING",
       "this copy of the plugin has no release manifest, so it names no time or weather program",
       "Run npm run native:ensure in a checkout, or install a release of the plugin."
@@ -27921,13 +28004,13 @@ function messageRow(row, query) {
 
 // src/provider/runtime.ts
 import { createHash as createHash7, randomUUID as randomUUID6 } from "node:crypto";
-import { lstat as lstat6, readdir as readdir2, writeFile as writeFile2 } from "node:fs/promises";
+import { lstat as lstat6, readdir as readdir2, writeFile as writeFile3 } from "node:fs/promises";
 import { extname, join as join12, resolve as resolve3 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // src/provider/artifacts/audio.ts
 import { constants as constants4 } from "node:fs";
-import { lstat as lstat4, mkdir as mkdir4, open as open6, writeFile } from "node:fs/promises";
+import { lstat as lstat4, mkdir as mkdir4, open as open6, writeFile as writeFile2 } from "node:fs/promises";
 import { createHash as createHash6 } from "node:crypto";
 import { dirname as dirname4, join as join6 } from "node:path";
 
@@ -27976,7 +28059,7 @@ async function readSource(path, source2, signal2) {
 async function stageSource(path, source2, directory, signal2) {
   const bytes = await readSource(path, source2, signal2);
   const staged = join6(directory, "input.wav");
-  await writeFile(staged, bytes, { flag: "wx", mode: 384 });
+  await writeFile2(staged, bytes, { flag: "wx", mode: 384 });
   fence(signal2);
   return staged;
 }
@@ -28532,7 +28615,7 @@ async function createRuntime(given) {
         job = await stage(paths2.jobs, work);
         fence(work);
         if (module !== "speech") {
-          await writeFile2(join12(job, "empty.toml"), "", { flag: "wx", mode: 384 });
+          await writeFile3(join12(job, "empty.toml"), "", { flag: "wx", mode: 384 });
           fence(work);
         }
         if (module === "weather") {

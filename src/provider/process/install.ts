@@ -6,7 +6,7 @@
 // asset (gzip) by its sha256 and the executable it holds by its size and sha256. Nothing runs until both match.
 import { createHash, randomUUID } from "node:crypto"
 import { constants, createReadStream, createWriteStream } from "node:fs"
-import { chmod, mkdir, open, readFile, rename, rm, stat } from "node:fs/promises"
+import { chmod, mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { createGunzip } from "node:zlib"
 
@@ -24,6 +24,9 @@ export type NativeCode =
   | "NATIVE_WRITE_FAILED"
 
 /** A refusal with a code, what happened, and the next step. The plugin wraps it in its own error shape. */
+/** The fetch seam: the global fetch, or a test double that answers one request. */
+export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
+
 export class NativeError extends Error {
   readonly code: NativeCode
   readonly next: string
@@ -70,7 +73,7 @@ export interface NativeOptions {
   readonly installCommand: string
   readonly signal?: AbortSignal
   /** The network seam. Tests pass a fake; the default is the global fetch. */
-  readonly fetchImpl?: typeof fetch
+  readonly fetchImpl?: FetchLike
   /** Longest silence, in milliseconds, before a download is abandoned. */
   readonly stallMs?: number
   readonly log?: (message: string) => void
@@ -79,6 +82,13 @@ export interface NativeOptions {
 const HEX64 = /^[a-f0-9]{64}$/
 const HEX40 = /^[a-f0-9]{40}$/
 const DEFAULT_STALL_MS = 120_000
+/** The release the programs and their manifest come from. The one place these URLs are written. */
+const RELEASE_REPOSITORY = "we-the-rebel-alliance/utilities-plugin"
+const RELEASE_BASE = `https://github.com/${RELEASE_REPOSITORY}/releases/download`
+/** A fetched manifest is small; anything larger is not one. */
+const MANIFEST_LIMIT = 1_000_000
+const MANIFEST_TIMEOUT_MS = 30_000
+const VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value)
@@ -125,7 +135,7 @@ export function parseNativeManifest(raw: unknown): NativeManifest {
       const exe = asset.executable as Record<string, unknown>
       const name = plain(asset.name, `${module} ${key}`)
       const url = asset.url
-      const expected = `https://github.com/${repository}/releases/download/${tag}/${name}`
+      const expected = `${RELEASE_BASE}/${tag}/${name}`
       if (url !== expected) invalid(`names a URL other than the release asset for ${module} ${key}`)
       platforms[key] = {
         name,
@@ -144,14 +154,107 @@ export function parseNativeManifest(raw: unknown): NativeManifest {
   return { schema: 1, plugin: plugin as string, repository: repository as string, tag: tag as string, built: { commit: build.commit, run: build.run, workflow: build.workflow }, modules: out }
 }
 
-/** The package's release manifest, or undefined when this copy has none (a development checkout). */
-export async function readNativeManifest(packageRoot: string): Promise<NativeManifest | undefined> {
+/** Where a fetched manifest is kept: under the plugin cache, keyed by the release tag. */
+const manifestCachePath = (cacheRoot: string, tag: string) => join(cacheRoot, "native", tag, "native.json")
+
+/** The installed package's version, which names the release tag its manifest comes from. */
+async function packageVersion(packageRoot: string): Promise<string> {
+  try {
+    const pkg = JSON.parse(await readFile(join(packageRoot, "package.json"), "utf8")) as { version?: unknown }
+    if (typeof pkg.version === "string" && VERSION.test(pkg.version)) return pkg.version
+  } catch {
+    // A package with no readable package.json cannot name a release: the refusal below says how to fix it.
+  }
+  throw new NativeError(
+    "NATIVE_MANIFEST_MISSING",
+    "the plugin package names no version, so no release tag has a manifest",
+    "Reinstall the plugin from a release, or run npm run native:ensure in a checkout.",
+  )
+}
+
+const manifestFetchFailed = (tag: string, what: string, next: string): never => {
+  throw new NativeError("NATIVE_MANIFEST_MISSING", `the ${tag} release manifest ${what}`, next)
+}
+
+/** Downloads the release's `native.json`, validates it against this plugin and tag, and returns it. */
+async function fetchNativeManifest(tag: string, fetchImpl: FetchLike | undefined): Promise<NativeManifest> {
+  const url = `${RELEASE_BASE}/${tag}/native.json`
+  let response: Response
+  try {
+    response = await (fetchImpl ?? fetch)(url, { redirect: "follow", signal: AbortSignal.timeout(MANIFEST_TIMEOUT_MS) })
+  } catch (error) {
+    return manifestFetchFailed(tag, `could not be downloaded (${(error as Error).message})`, "Check the network or proxy, then call tools.utilities.native_install to fetch the programs.")
+  }
+  if (response.status === 404) {
+    throw new NativeError(
+      "NATIVE_MANIFEST_MISSING",
+      `the ${tag} release has no native.json`,
+      "Call tools.utilities.native_install after the release publishes native.json, or install the plugin from a release that has one.",
+    )
+  }
+  if (!response.ok) {
+    return manifestFetchFailed(tag, `answered HTTP ${response.status}`, "Check the network or proxy, then call tools.utilities.native_install to fetch the programs.")
+  }
+  let bytes: Buffer
+  try {
+    bytes = Buffer.from(await response.arrayBuffer())
+  } catch (error) {
+    return manifestFetchFailed(tag, `could not be read (${(error as Error).message})`, "Check the network or proxy, then call tools.utilities.native_install to fetch the programs.")
+  }
+  if (bytes.byteLength > MANIFEST_LIMIT) invalid("is too large")
+  let raw: unknown
+  try {
+    raw = JSON.parse(bytes.toString("utf8"))
+  } catch {
+    return invalid("is not JSON")
+  }
+  const manifest = parseNativeManifest(raw)
+  if (manifest.plugin !== "utilities" || manifest.repository !== RELEASE_REPOSITORY || manifest.tag !== tag) {
+    invalid(`does not name the ${tag} release of this plugin`)
+  }
+  return manifest
+}
+
+/** Writes the fetched manifest for the next process. A cache that cannot be written is not a failed install. */
+async function cacheManifest(path: string, manifest: NativeManifest): Promise<void> {
+  const temporary = `${path}.${randomUUID()}.part`
+  try {
+    await mkdir(dirname(path), { recursive: true, mode: 0o700 })
+    await writeFile(temporary, `${JSON.stringify(manifest)}\n`, { mode: 0o600 })
+    await rename(temporary, path)
+  } catch {
+    await rm(temporary, { force: true }).catch(() => undefined)
+  }
+}
+
+/**
+ * The release manifest: the package's `manifest/native.json` when it has one, otherwise the `native.json` asset of
+ * this version's release, validated and cached under the plugin cache keyed by the tag. A missing release manifest is a
+ * NATIVE_MANIFEST_MISSING refusal with the install next step, never a crash.
+ */
+export async function readNativeManifest(packageRoot: string, options: { readonly cacheRoot?: string; readonly fetchImpl?: FetchLike } = {}): Promise<NativeManifest | undefined> {
   let text: string
   try {
     text = await readFile(join(packageRoot, "manifest", "native.json"), "utf8")
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return undefined
-    throw error
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error
+    const tag = `v${await packageVersion(packageRoot)}`
+    const cached = options.cacheRoot === undefined ? undefined : manifestCachePath(options.cacheRoot, tag)
+    if (cached !== undefined) {
+      // An unreadable cache is not a failed install: the release is fetched and replaces it.
+      const cachedText = await readFile(cached, "utf8").catch(() => undefined)
+      if (cachedText !== undefined) {
+        try {
+          const manifest = parseNativeManifest(JSON.parse(cachedText))
+          if (manifest.plugin === "utilities" && manifest.repository === RELEASE_REPOSITORY && manifest.tag === tag) return manifest
+        } catch {
+          // A stale or corrupt cache is replaced by the release's asset below.
+        }
+      }
+    }
+    const manifest = await fetchNativeManifest(tag, options.fetchImpl)
+    if (cached !== undefined) await cacheManifest(cached, manifest)
+    return manifest
   }
   try {
     return parseNativeManifest(JSON.parse(text))

@@ -35,9 +35,11 @@ manifest has no skills key, so this is the plugin's own code.
 - **The runtime** (`provider/runtime.ts`) parses the input with the module's zod schema, checks availability, admits the
   call to a per-module queue, starts the module's deadline, stages a private job directory, runs the program and removes
   the job. A timer write that fails after the program started is `TIMER_STATE_UNKNOWN`, never a retryable failure.
-- **The programs** (`provider/backends.ts`) are read from `manifest/native.json`, cached under
-  `<cacheRoot>/native/<release tag>/<module>/<platform>/<name>`, and verified against their pinned SHA-256 before every run. A
-  linked or non-executable file is refused; a changed one is not the program.
+- **The programs** (`provider/backends.ts`) are read from `manifest/native.json` when the installed package has one;
+  otherwise `readNativeManifest` fetches `native.json` from this version's release, checks it with the same parser, and
+  caches it under `<cacheRoot>/native/<release tag>/native.json`. The programs are cached under
+  `<cacheRoot>/native/<release tag>/<module>/<platform>/<name>`, and verified against their pinned SHA-256 before every
+  run. A linked or non-executable file is refused; a changed one is not the program.
 - **The speech files** (`provider/speech-assets/`) are read from `manifest/speech-assets.json`, cached under
   `<cacheRoot>/<sha256>/<name>`, and verified the same way. `speech.assetsDir` makes them pre-seeded: nothing is
   downloaded.

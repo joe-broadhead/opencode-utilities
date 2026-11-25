@@ -1,13 +1,18 @@
 // The time and weather programs are downloaded on first use, pinned by manifest/native.json. A checkout with no
 // release manifest names no program and says so: NATIVE_FILES_MISSING, not a clash with the contract.
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test } from "vitest"
 import { copyFileSync, existsSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { NativeBinaries, detectTarget } from "../../src/provider/backends.js"
 import { PLATFORMS } from "../../src/domain/contract.js"
+import { VERSION, fixture, releaseServer } from "../fixtures.js"
 
 const repo = fileURLToPath(new URL("../../", import.meta.url))
+const cleanups: Array<() => unknown> = []
+afterEach(() => { for (const close of cleanups.splice(0).reverse()) void close() })
+/** A release answer that has no asset: the manifest fetch must refuse, not reach the network. */
+const notFound = async () => new Response(null, { status: 404 })
 const TEMP = existsSync("/private/tmp") ? "/private/tmp" : "/tmp"
 const target = detectTarget()
 // A platform other than this one. A manifest for it names nothing here, whatever platform the runner is on (CI runs linux-x64-gnu).
@@ -37,7 +42,7 @@ describe("the release programs", () => {
   test("a checkout with no manifest says the native files are missing, not that the contract clashed", async () => {
     const { root, cache } = packageRoot(undefined)
     try {
-      await expect(new NativeBinaries({ packageRoot: root, cacheRoot: cache, target }).platform()).rejects.toMatchObject({ code: "NATIVE_FILES_MISSING" })
+      await expect(new NativeBinaries({ packageRoot: root, cacheRoot: cache, target, fetchImpl: notFound }).platform()).rejects.toMatchObject({ code: "NATIVE_FILES_MISSING" })
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -56,12 +61,55 @@ describe("the release programs", () => {
 
   test("a failure is not cached: once the manifest appears, the same instance answers", async () => {
     const { root, cache } = packageRoot(undefined)
-    const binaries = new NativeBinaries({ packageRoot: root, cacheRoot: cache, target })
+    const binaries = new NativeBinaries({ packageRoot: root, cacheRoot: cache, target, fetchImpl: notFound })
     try {
       await expect(binaries.platform()).rejects.toMatchObject({ code: "NATIVE_FILES_MISSING" })
       // The manifest arrives after the plugin loaded, as when the native build finishes after OpenCode started.
       writeFileSync(join(root, "manifest", "native.json"), manifestFor(other))
       await expect(binaries.platform()).rejects.toMatchObject({ code: "UNSUPPORTED_PLATFORM" })
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  test("a package with no local manifest fetches native.json, caches it by tag, and installs", async () => {
+    const server = await releaseServer(); cleanups.push(server.close)
+    const f = await fixture(); cleanups.push(f.cleanup)
+    const released = readFileSync(join(f.root, "manifest", "native.json"), "utf8")
+    server.add([...f.nativeFiles, { name: "native.json", content: Buffer.from(released) }])
+    const { root, cache } = packageRoot(undefined)
+    try {
+      const binaries = new NativeBinaries({ packageRoot: root, cacheRoot: cache, target: "darwin-arm64" })
+      await expect(binaries.platform()).resolves.toBeUndefined()
+      expect(server.requests.get("native.json")).toBe(1)
+      const cached = join(cache, "native", `v${VERSION}`, "native.json")
+      expect(JSON.parse(readFileSync(cached, "utf8"))).toEqual(JSON.parse(released))
+      const installed = await binaries.install("time-keep")
+      expect(existsSync(installed.path)).toBe(true)
+      expect(installed.sha256).toBe(JSON.parse(released).modules["time-keep"]["darwin-arm64"].executable.sha256)
+      // The cache is keyed by the tag and read before any request: the next process answers with no network.
+      const offline = new NativeBinaries({ packageRoot: root, cacheRoot: cache, target: "darwin-arm64", fetchImpl: async () => { throw new TypeError("offline") } })
+      await expect(offline.platform()).resolves.toBeUndefined()
+      expect(server.requests.get("native.json")).toBe(1)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  test("a package with no local manifest refuses cleanly when native.json is 404, offline or not JSON", async () => {
+    const server = await releaseServer(); cleanups.push(server.close)
+    const { root, cache } = packageRoot(undefined)
+    try {
+      const missing = await new NativeBinaries({ packageRoot: root, cacheRoot: cache, target: "darwin-arm64" }).platform().catch(error => error)
+      expect(missing).toMatchObject({ code: "NATIVE_FILES_MISSING" })
+      expect(missing.message).toContain("has no native.json")
+      expect(missing.hint).toContain("native_install")
+      const offline = await new NativeBinaries({ packageRoot: root, cacheRoot: cache, target: "darwin-arm64", fetchImpl: async () => { throw new TypeError("offline") } }).platform().catch(error => error)
+      expect(offline).toMatchObject({ code: "NATIVE_FILES_MISSING" })
+      expect(offline.hint).toContain("Check the network")
+      const invalid = await new NativeBinaries({ packageRoot: root, cacheRoot: cache, target: "darwin-arm64", fetchImpl: async () => new Response("{", { status: 200 }) }).platform().catch(error => error)
+      expect(invalid).toMatchObject({ code: "CONTRACT_MISMATCH" })
+      expect(invalid.hint).toContain("manifest is valid")
     } finally {
       rmSync(root, { recursive: true, force: true })
     }

@@ -1,6 +1,6 @@
 // The two session stopgaps' logic: the schemas and dates, the public-session totals, and the read-only search's SQL,
-// schema and data-shape refusal, masking and byte caps. The real `bun:sqlite` path is a host test
-// (test/host/utilities.spec.ts); here the opener is injected with `node:sqlite`, so the same SQL runs against a synthetic
+// schema and data-shape refusal, masking and byte caps. The bundle's one dynamic import, `bun:sqlite`, is asserted in
+// test/pack/install.spec.ts; here the opener is injected with `node:sqlite`, so the same SQL runs against a synthetic
 // database under vitest's Node. Every fixture builds from the recorded 2.4.1 schema in test/fixtures/, never from the
 // production column list, so a fixture cannot silently drift from the host's own DDL.
 import { afterEach, describe, expect, test } from "vitest"
