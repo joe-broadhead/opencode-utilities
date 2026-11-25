@@ -26,7 +26,7 @@ export function manifestProblems(manifest, { plugin, tag, commit, repository } =
   if (tag !== undefined && manifest.tag !== tag) problems.push(`tag is ${manifest.tag}; the release tag is ${tag}`)
   const built = manifest.built ?? {}
   if (!SHA1.test(built.commit ?? "")) problems.push("built.commit must be a full sha")
-  else if (commit !== undefined && built.commit !== commit) problems.push(`built.commit is ${built.commit.slice(0, 12)}; the tag's parent is ${commit.slice(0, 12)}`)
+  else if (commit !== undefined && built.commit !== commit) problems.push(`built.commit is ${built.commit.slice(0, 12)}; the tagged commit is ${commit.slice(0, 12)}`)
   if (!isBytes(built.run)) problems.push("built.run must be a positive run id")
   if (built.workflow !== "native") problems.push(`built.workflow is ${built.workflow}; it must be native`)
 
