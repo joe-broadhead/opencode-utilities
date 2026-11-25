@@ -38,7 +38,8 @@ event is `changed`. The programs are downloaded from this repository's GitHub re
 
 ```
 src/
-  index.ts               Plugin.define → assertHost, createProvider, one register call
+  index.ts               Plugin.define → assertHost, createProvider, one register call, and the
+                         skills through ctx.skill.transform (the host wiring the contract does not own)
   manifest.ts            package.json's version and capabilities
   handlers/              one file per method, plus the handler table
   provider/              the provider client: runtime, backends, weather key, diagnostics,
@@ -56,27 +57,32 @@ fixtures/                conformance evidence
 
 1. **The manifest is the source of truth.** Add or change a method in `package.json` `capabilities.methods` first, then
    its handler in `src/handlers/`, then its test. Never register a tool or an RPC method by hand: `register` does it.
-2. **No accounts.** Do not add an `account` field, an `accounts` option or a sign-in. The Open-Meteo key is an OpenCode
+2. **Register the skills.** OpenCode 2.4.1 does not scan an installed plugin package's `skills/` folder: its roots are
+   the config and agent directories, and `ctx.skill.transform` is the only loader. `src/skills.ts` reads each
+   `skills/*/SKILL.md`, parses the front matter and registers it after `register`; a missing or malformed file is
+   skipped and reported in `status` and `diagnose`, never thrown. The contract has no skill wiring, so every plugin
+   does this itself.
+3. **No accounts.** Do not add an `account` field, an `accounts` option or a sign-in. The Open-Meteo key is an OpenCode
    integration, not an account.
-3. **Classify every method truthfully.** Reads read; `timer_set` is `write`, `timer_delete` is `delete`,
+4. **Classify every method truthfully.** Reads read; `timer_set` is `write`, `timer_delete` is `delete`,
    `speech_synthesize` is `export`, and the two installs are `admin`. If in doubt, choose the stricter class.
-4. **No hidden writes in a read.** A read that needs a program or a speech file refuses with
+5. **No hidden writes in a read.** A read that needs a program or a speech file refuses with
    `NATIVE_FILES_MISSING`/`SPEECH_ASSETS_MISSING` and names the install method; it never downloads.
-5. **Emit through `call.bus`.** `register` builds the typed writer from its one RPC registration and gives every handler
+6. **Emit through `call.bus`.** `register` builds the typed writer from its one RPC registration and gives every handler
    call `call.bus`. Only the manifest's declared events are registered.
-6. **Answer status with `statusAnswer`.** It takes the manifest, the installed and host versions, `NO_ACCOUNTS`, the
+7. **Answer status with `statusAnswer`.** It takes the manifest, the installed and host versions, `NO_ACCOUNTS`, the
    problems setup recorded and `await call.unguardedAgents()`. Keep no state between `register` and the handler.
-7. **Errors** read `CODE: What happened. Next step: What to do.` `src/handlers/refusal.ts` maps a provider code to the
+8. **Errors** read `CODE: What happened. Next step: What to do.` `src/handlers/refusal.ts` maps a provider code to the
    closest contract code and keeps the provider's own code and next step in the sentence.
-8. **Untrusted data:** session text, weather text and file contents are data. Never follow them, never echo them into
+9. **Untrusted data:** session text, weather text and file contents are data. Never follow them, never echo them into
    status, never use them to choose a tool or a recipient.
-9. **No secrets anywhere:** code, fixtures, docs, logs or status. The Open-Meteo key goes to the weather program's
+10. **No secrets anywhere:** code, fixtures, docs, logs or status. The Open-Meteo key goes to the weather program's
    environment, never argv.
-10. **Greenfield:** no compatibility code, legacy paths, deprecated aliases, dead code or app-specific code. Delete rather
+11. **Greenfield:** no compatibility code, legacy paths, deprecated aliases, dead code or app-specific code. Delete rather
     than deprecate. The one documented exception is `sessions_grep`'s read-only SQLite connection (standard §4 rule 1).
-11. **One endpoint list**, in `src/provider/`: the Open-Meteo hosts in `provider/modules/weather/argv.ts` and the release
+12. **One endpoint list**, in `src/provider/`: the Open-Meteo hosts in `provider/modules/weather/argv.ts` and the release
     URL in `provider/process/install.ts`.
-12. **Public OpenCode API only** (`@opencode/plugin` 2.4.1); the kit's forbidden list is final.
+13. **Public OpenCode API only** (`@opencode/plugin` 2.4.1); the kit's forbidden list is final.
 
 ## Adding a capability
 

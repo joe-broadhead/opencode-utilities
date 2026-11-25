@@ -1,6 +1,11 @@
 # The one check, on Node 24: `npm ci --ignore-scripts`, then `npm run check`. The check builds the native files it needs
-# (scripts/native-ensure.mjs) and runs the typecheck, the unit tests, the build, the pack test and `plugin-kit check`
-# (T0, T1 on OpenCode 2.4.1, the generated docs, the forbidden patterns, no bundled kit).
+# (scripts/native-ensure.mjs) and runs the typecheck, the unit tests (including the real 2.4.1 host skill test), the
+# build, the pack test and `plugin-kit check` (T0, T1 on OpenCode 2.4.1, the generated docs, the forbidden patterns, no
+# bundled kit).
+#
+# The runner rule is the family's: the org's `CI_RUNNER_PUBLIC` (the public self-hosted runner) when it is set, and
+# `ubuntu-24.04` otherwise or for a pull request from a fork. The native prerequisites step keeps the no-root fallback,
+# because that runner grants no passwordless sudo.
 name: CI
 on:
   pull_request:
@@ -10,12 +15,13 @@ on:
 permissions:
   contents: read
 concurrency:
+  # The event is part of the group, so a run by hand on master never cancels the push run a release stands on.
   group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   ci:
     name: ci
-    runs-on: ubuntu-24.04
+    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (vars.CI_RUNNER_PUBLIC || 'ubuntu-24.04') || 'ubuntu-24.04' }}
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -33,6 +39,7 @@ jobs:
           if command -v rustup >/dev/null 2>&1; then
             rustup toolchain install 1.96.0 --profile minimal
           else
+            # A self-hosted runner may have no rustup: install it and put it on PATH for the native build.
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.96.0
             echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
           fi
@@ -47,7 +54,42 @@ jobs:
             exit 0
           fi
           echo "Missing native prerequisites: ${missing[*]}"
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends "${missing[@]}"
+          if sudo -n true 2>/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends "${missing[@]}"
+            exit 0
+          fi
+          # A self-hosted runner may grant no sudo. cmake and libclang come from PyPI wheels, unpacked without pip.
+          unsupported=()
+          for package in "${missing[@]}"; do
+            case "$package" in
+              cmake|libclang-dev) ;;
+              *) unsupported+=("$package") ;;
+            esac
+          done
+          if [ ${#unsupported[@]} -ne 0 ]; then
+            echo "No passwordless sudo, and there is no user-space fallback for: ${unsupported[*]}" >&2
+            exit 1
+          fi
+          tools="$RUNNER_TEMP/native-tools"
+          mkdir -p "$tools"
+          for package in "${missing[@]}"; do
+            case "$package" in
+              cmake)
+                wheel="$RUNNER_TEMP/cmake-3.31.10.whl"
+                curl -sSfL "https://files.pythonhosted.org/packages/f4/2e/cefc60143950ca1a8dda26d4c8484e6fc406db16e7ca098ebae549de35f9/cmake-3.31.10-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl" -o "$wheel"
+                printf '%s  %s\n' "2f766bb46367e5e0559fa33184653754bce044583a06014dcaebf8e6dff8a1f1" "$wheel" | sha256sum -c -
+                unzip -q -o "$wheel" -d "$tools/cmake"
+                echo "$tools/cmake/cmake/data/bin" >> "$GITHUB_PATH"
+                ;;
+              libclang-dev)
+                wheel="$RUNNER_TEMP/libclang-18.1.1.whl"
+                curl -sSfL "https://files.pythonhosted.org/packages/1d/fc/716c1e62e512ef1c160e7984a73a5fc7df45166f2ff3f254e71c58076f7c/libclang-18.1.1-py2.py3-none-manylinux2010_x86_64.whl" -o "$wheel"
+                printf '%s  %s\n' "c533091d8a3bbf7460a00cb6c1a71da93bffe148f172c7d03b1c31fbf8aa2a0b" "$wheel" | sha256sum -c -
+                unzip -q -o "$wheel" -d "$tools/libclang"
+                echo "LIBCLANG_PATH=$tools/libclang/libclang-18.1.1.data/platlib/clang/native" >> "$GITHUB_ENV"
+                ;;
+            esac
+          done
       - run: npm ci --ignore-scripts
       - run: npm run check
