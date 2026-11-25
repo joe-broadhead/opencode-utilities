@@ -1,6 +1,8 @@
 // One real embedded OpenCode 2.4.1 host in a fresh process, so no skill registered by another host can leak in.
 // The parent test sets an isolated HOME/XDG and passes the plugin entry and the location directory.
 // Usage: node test/support/skills-host-probe.mjs <entry> <directory>
+import { randomUUID } from "node:crypto"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 
@@ -12,7 +14,7 @@ const plugin = (await import(pathToFileURL(entry).href)).default
 const host = await OpenCode.create({
   app: { name: "opencode", version: "2.4.1" },
   plugins: [plugin],
-  database: { path: join(directory, "opencode-probe.db") },
+  database: { path: join(process.env.TMPDIR ?? tmpdir(), `opencode-probe-${randomUUID()}.db`) },
   models: { fetch: false },
   fs: { filewatcher: false },
   config: { directory },

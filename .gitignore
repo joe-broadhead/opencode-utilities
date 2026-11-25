@@ -5,3 +5,4 @@ node_modules/
 build/
 manifest/native.json
 test/.skills-host-*
+opencode-probe.db
