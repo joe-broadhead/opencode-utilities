@@ -1,3 +1,0 @@
-# The kit's one denylist, narrowed only where this repository must name the thing it is about.
-licenses/upstream/misaki-original-README.md.txt:main-branch An upstream licence copy is reproduced verbatim; its links are not ours to rewrite.
-licenses/upstream/whisper-model-card.md:main-branch An upstream licence copy is reproduced verbatim; its links are not ours to rewrite.
