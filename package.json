@@ -339,13 +339,13 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=2",
-    "build": "node scripts/build.mjs",
+    "bundle": "node scripts/build.mjs",
     "test:pack": "bun test test/pack",
     "native:build": "bash scripts/native-build.sh",
     "native:ensure": "node scripts/native-ensure.mjs",
     "speech:manifest": "node scripts/speech-manifest.mjs",
     "kit:check": "plugin-kit check",
-    "check": "npm run native:ensure && npm run typecheck && npm run build && npm test && npm run test:pack && npm run kit:check"
+    "check": "npm run native:ensure && npm run typecheck && npm run bundle && npm test && npm run test:pack && npm run kit:check"
   },
   "devDependencies": {
     "@opencode/client": "2.4.1",

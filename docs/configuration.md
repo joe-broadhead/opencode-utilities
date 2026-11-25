@@ -1,6 +1,6 @@
 # Configuration
 
-Utilities' options live in the plugin's entry in `opencode.json` (or the `plugin` block of `opencode.jsonc`). Every
+Utilities' options live in the plugin's entry in the `plugins` list of `opencode.json` (or `opencode.jsonc`). Every
 option is optional, and the defaults are the narrowest that work for a fresh install.
 
 <!-- generated:configuration -->
@@ -20,9 +20,9 @@ Every module on, changes asked for:
 
 ```json
 {
-  "plugin": {
-    "@we-the-rebel-alliance/utilities-plugin": { "access": "ask-changes" }
-  }
+  "plugins": [
+    { "package": "github:we-the-rebel-alliance/utilities-plugin#v0.0.0", "options": { "access": "ask-changes" } }
+  ]
 }
 ```
 
@@ -30,13 +30,16 @@ Reads only, with time and weather on and speech off, and timers under a chosen f
 
 ```json
 {
-  "plugin": {
-    "@we-the-rebel-alliance/utilities-plugin": {
-      "access": "read-only",
-      "modules": { "speech": false },
-      "stateRoot": "/home/me/.local/share/utilities"
+  "plugins": [
+    {
+      "package": "github:we-the-rebel-alliance/utilities-plugin#v0.0.0",
+      "options": {
+        "access": "read-only",
+        "modules": { "speech": false },
+        "stateRoot": "/home/me/.local/share/utilities"
+      }
     }
-  }
+  ]
 }
 ```
 
@@ -44,11 +47,12 @@ A folder of pre-seeded speech files, so nothing is ever downloaded:
 
 ```json
 {
-  "plugin": {
-    "@we-the-rebel-alliance/utilities-plugin": {
-      "speech": { "assetsDir": "/srv/utilities-speech" }
+  "plugins": [
+    {
+      "package": "github:we-the-rebel-alliance/utilities-plugin#v0.0.0",
+      "options": { "speech": { "assetsDir": "/srv/utilities-speech" } }
     }
-  }
+  ]
 }
 ```
 

@@ -2,7 +2,7 @@
 // proves the installed files: the manifest, the one self-contained server bundle, no dependencies, and a server entry
 // that loads. Loading the bundle in the real OpenCode 2.4.1 host is `plugin-kit check`'s T1.
 //
-// Run `npm run build` first. PACKED_DIR names a folder with the tarball already packed, as a release does: the test then
+// Run `npm run bundle` first. PACKED_DIR names a folder with the tarball already packed, as a release does: the test then
 // checks that exact file.
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from "bun:test"
 import { execFileSync } from "node:child_process"
@@ -40,7 +40,7 @@ const existing = (): Packed => {
 }
 
 beforeAll(() => {
-  if (!PACKED_DIR && !existsSync(join(repo, "dist/index.js"))) throw new Error("dist/ is missing: run npm run build first")
+  if (!PACKED_DIR && !existsSync(join(repo, "dist/index.js"))) throw new Error("dist/ is missing: run npm run bundle first")
   main = PACKED_DIR ? existing() : pack()
   const tarball = join(temp, main.filename)
   mkdirSync(project)

@@ -31,7 +31,7 @@ event is `changed`. The programs are downloaded from this repository's GitHub re
 | `npm run check` | everything: native files, typecheck, build, unit, pack, `plugin-kit check` |
 | `npm run kit:check` | T0, T1 on 2.4.1, the docs sections, forbidden patterns, no bundled kit |
 | `npx plugin-kit docs` | regenerates the generated doc sections from the manifest |
-| `npm run typecheck`, `npm test`, `npm run build`, `npm run test:pack` | the smaller loops |
+| `npm run typecheck`, `npm test`, `npm run bundle`, `npm run test:pack` | the smaller loops |
 | `npm run native:build`, `npm run native:ensure`, `npm run speech:manifest` | the native and speech build (specific to this plugin) |
 
 ## Layout

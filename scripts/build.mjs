@@ -1,6 +1,6 @@
 // Builds dist/ with esbuild: one self-contained file, dist/index.js, with all first-party code and zod inlined, no
 // chunks and no relative imports, so an in-place update can never mix a new entry with a cached old sibling module.
-// No declarations ship. Run it with `node scripts/build.mjs` (npm run build).
+// No declarations ship. Run it with `node scripts/build.mjs` (npm run bundle).
 //
 // Sources import zod as `import * as z`. A named `import { z }` makes the bundler keep every locale.
 import { build } from "esbuild"
@@ -22,7 +22,7 @@ const allowed = path => path.startsWith("node:") || BUILTIN.includes(path) || HO
 if (!existsSync(join(root, "manifest", "native.json"))) {
   console.warn(
     "NATIVE_FILES_MISSING: manifest/native.json is not there, so this build's time and weather tools refuse to run. " +
-      "Next step: Run npm run native:ensure, then npm run build. The build continues.",
+      "Next step: Run npm run native:ensure, then npm run bundle. The build continues.",
   )
 }
 rmSync(dist, { recursive: true, force: true })

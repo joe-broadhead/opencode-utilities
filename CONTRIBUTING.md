@@ -35,7 +35,7 @@ Smaller loops:
 ```sh
 npx tsc --noEmit
 npm test
-npm run build
+npm run bundle
 npm run test:pack
 npm run kit:check
 ```

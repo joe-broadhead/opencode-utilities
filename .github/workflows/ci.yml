@@ -92,4 +92,6 @@ jobs:
             esac
           done
       - run: npm ci --ignore-scripts
+      - name: The committed dist/ is current
+        run: npm run bundle && git diff --exit-code dist/
       - run: npm run check
