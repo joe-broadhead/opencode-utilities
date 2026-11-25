@@ -15,7 +15,13 @@ describe("the skills on the real host", () => {
     const { skills } = skillsOf(join(packageRoot, "dist/index.js"), directory)
     const found = skills.filter(skill => SKILLS.includes(skill.id))
     expect(found.map(skill => skill.id).sort()).toEqual([...SKILLS].sort())
-    for (const skill of found) expect(skill.description, skill.id).toBe(description(skill.id))
+    for (const skill of found) {
+      const expected = description(skill.id)
+      expect(skill.description, skill.id).toBe(expected)
+      // A YAML block scalar must never reach an agent as the marker itself.
+      expect(["", ">", "|"].includes(skill.description ?? ""), `${skill.id} description`).toBe(false)
+      expect(/^[>|]/.test(skill.description ?? ""), `${skill.id} block marker`).toBe(false)
+    }
     expect(found.every(skill => skill.autoinvoke === true), "autoinvoke").toBe(true)
   }, 120_000)
 })

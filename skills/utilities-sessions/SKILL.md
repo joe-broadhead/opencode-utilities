@@ -1,6 +1,6 @@
 ---
 name: utilities-sessions
-description: Past OpenCode session status and exact text: outcome, cost, tokens, time windows, and searching tool calls, outputs and file touches, read-only. Stopgaps until OpenCode's own stats and search carry them. To find a session, use opencode.session.search first.
+description: "Past OpenCode session status and exact text: outcome, cost, tokens, time windows, and searching tool calls, outputs and file touches, read-only. Stopgaps until OpenCode's own stats and search carry them. To find a session, use opencode.session.search first."
 
 ---
 

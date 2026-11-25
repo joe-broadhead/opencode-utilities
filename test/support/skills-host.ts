@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process"
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { parse as parseYaml } from "yaml"
 
 export const repo = fileURLToPath(new URL("../../", import.meta.url))
 const bundle = join(repo, "dist", "index.js")
@@ -36,11 +37,13 @@ export const SKILLS: readonly string[] = readdirSync(join(repo, "skills"), { wit
   .map(entry => entry.name)
   .sort()
 
+/** The description from a SKILL.md's front matter, parsed by a real YAML parser. */
 export const description = (name: string) => {
   const text = readFileSync(join(repo, "skills", name, "SKILL.md"), "utf8").replace(/\r\n/g, "\n")
   const front = /^---\n([\s\S]*?)\n---/.exec(text)![1]!
-  const line = front.split("\n").find(entry => entry.startsWith("description:"))!
-  return line.slice("description:".length).trim()
+  const parsed = parseYaml(front) as { description?: unknown }
+  if (typeof parsed.description !== "string") throw new Error(`skills/${name}/SKILL.md has no description`)
+  return parsed.description
 }
 
 /** A copy of the installed package: the built bundle, its manifest, and every skill, one of them with an empty body. */

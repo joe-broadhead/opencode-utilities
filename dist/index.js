@@ -21429,6 +21429,7 @@ function parseSkill(name2, path, text4) {
   if (fields.get("name") !== name2) return fail3(`must be named ${name2} in its front matter`);
   const description = fields.get("description");
   if (description === void 0 || description === "") return fail3("has no description");
+  if (/^[>|]/.test(description)) return fail3("has a YAML block scalar description, which this loader does not fold; write the description on one line");
   const content = match[2].trim();
   if (content === "") return fail3("has an empty body");
   return {

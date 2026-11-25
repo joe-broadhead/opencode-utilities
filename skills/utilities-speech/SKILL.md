@@ -1,6 +1,6 @@
 ---
 name: utilities-speech
-description: On-device speech: transcribe a WAV file, write text to a spoken WAV file, and check whether speech is set up here. Nothing is sent to a service. Use instead of installing whisper.
+description: "On-device speech: transcribe a WAV file, write text to a spoken WAV file, and check whether speech is set up here. Nothing is sent to a service. Use instead of installing whisper."
 ---
 
 # Speech

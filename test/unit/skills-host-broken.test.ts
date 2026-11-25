@@ -8,8 +8,8 @@ import { cleanup, packageCopy, skillsOf, SKILLS, root } from "../support/skills-
 
 afterAll(cleanup)
 
-describe("an empty-body skill on the real host", () => {
-  test("is skipped, the others register, and status records the problem", () => {
+describe("a broken skill on the real host", () => {
+  test("an empty body is skipped, the others register, and status records the problem", () => {
     const broken = "utilities-time"
     expect(SKILLS).toContain(broken)
     const packageRoot = packageCopy("broken-package", broken)
@@ -22,5 +22,21 @@ describe("an empty-body skill on the real host", () => {
     expect(answer.state).toBe("error")
     expect(String(answer.nextStep)).toContain(`SKILLS_INVALID: The ${broken} skill was not loaded`)
     expect(String(answer.nextStep)).toContain("has an empty body")
+  }, 120_000)
+
+  test("a folded-block description is skipped, never registered as a marker", () => {
+    const folded = "utilities-speech"
+    const packageRoot = packageCopy("folded-package")
+    writeFileSync(join(packageRoot, "skills", folded, "SKILL.md"), `---\nname: ${folded}\ndescription: >\n  A folded description a first-line reader would register as a marker.\n---\nBody.\n`)
+    const directory = join(root, "folded-project"); mkdirSync(directory, { recursive: true }); writeFileSync(join(directory, "opencode.json"), "{}")
+    const { skills, status } = skillsOf(join(packageRoot, "dist/index.js"), directory)
+    const speech = skills.find(skill => skill.id === folded)
+    expect(speech).toBeUndefined()
+    expect(skills.some(skill => skill.description === ">" || skill.description === "|")).toBe(false)
+    for (const name of SKILLS.filter(skill => skill !== folded)) expect(skills.map(skill => skill.id)).toContain(name)
+    const answer = status as { state: string; nextStep: string | null }
+    expect(answer.state).toBe("error")
+    expect(String(answer.nextStep)).toContain(`SKILLS_INVALID: The ${folded} skill was not loaded`)
+    expect(String(answer.nextStep)).toContain("YAML block scalar")
   }, 120_000)
 })

@@ -30,6 +30,7 @@ export function parseSkill(name: string, path: string, text: string): Skill.Info
   if (fields.get("name") !== name) return fail(`must be named ${name} in its front matter`)
   const description = fields.get("description")
   if (description === undefined || description === "") return fail("has no description")
+  if (/^[>|]/.test(description)) return fail("has a YAML block scalar description, which this loader does not fold; write the description on one line")
   const content = match[2]!.trim()
   if (content === "") return fail("has an empty body")
   return {

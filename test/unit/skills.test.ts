@@ -39,6 +39,18 @@ describe("the skill loader", () => {
       expect(problems[0]).toMatch(/^SKILLS_INVALID: The utilities-empty skill was not loaded: skills\/utilities-empty\/SKILL\.md has an empty body\. Next step: /)
     } finally { rmSync(root, { recursive: true, force: true }) }
   })
+  test.each([[""], [">\n  A folded line.\n"], ["|\n  A literal line.\n"], [">-\n  A chomped folded line.\n"]])("a description of %j is skipped, never registered as a marker", async description => {
+    const root = mkdtempSync(join(tmpdir(), "utilities-skills-description-"))
+    try {
+      const name = "utilities-description"
+      mkdirSync(join(root, name), { recursive: true })
+      writeFileSync(join(root, name, "SKILL.md"), `---\nname: ${name}\ndescription: ${description}${description.endsWith("\n") ? "" : "\n"}---\nBody.\n`)
+      const { skills, problems } = await loadSkills(root)
+      expect(skills).toEqual([])
+      expect(problems).toHaveLength(1)
+      expect(problems[0]).toMatch(description === "" ? /has no description/ : /has a YAML block scalar description, which this loader does not fold/)
+    } finally { rmSync(root, { recursive: true, force: true }) }
+  })
   test("a missing, malformed or misnamed file is skipped and recorded, never thrown", async () => {
     const root = mkdtempSync(join(tmpdir(), "utilities-skills-unit-"))
     try {
