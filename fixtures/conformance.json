@@ -24,11 +24,11 @@
   "rpc": {
     "inputs": {
       "timer_set": {
-        "name": "review",
+        "name": "<redacted:personal>",
         "deadline": "2027-01-01T00:00:00Z"
       },
       "timer_delete": {
-        "name": "review"
+        "name": "<redacted:personal>"
       },
       "speech_synthesize": {
         "text": "hello"

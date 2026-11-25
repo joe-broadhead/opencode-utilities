@@ -47,10 +47,11 @@ function call(emitted: string[]): Pick<MethodCall, "account" | "signal" | "ungua
   }
 }
 
-/** The inputs T1 needs to reach the permission gate of each non-read method without running it. */
+/** The inputs T1 needs to reach the permission gate of each non-read method without running it. The recorder redacts the
+ * timer name as personal data, so the fixture carries its placeholder and this test uses the same value. */
 const RPC_INPUTS = {
-  timer_set: { name: "review", deadline: "2027-01-01T00:00:00Z" },
-  timer_delete: { name: "review" },
+  timer_set: { name: "<redacted:personal>", deadline: "2027-01-01T00:00:00Z" },
+  timer_delete: { name: "<redacted:personal>" },
   speech_synthesize: { text: "hello" },
 }
 

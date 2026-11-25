@@ -15,6 +15,10 @@ afterEach(() => { for (const close of cleanups.splice(0).reverse()) void close()
 const notFound = async () => new Response(null, { status: 404 })
 const TEMP = existsSync("/private/tmp") ? "/private/tmp" : "/tmp"
 const target = detectTarget()
+// The tests below that read the repository's real native build skip a clean clone without Rust; the fetch tests use a
+// synthetic release and always run.
+const realBuild = existsSync(join(repo, "manifest", "native.json")) && existsSync(join(repo, "build/native", target, "time-keep"))
+if (!realBuild) console.warn(`SKIP the real native-build tests in backends.test.ts: no manifest/native.json or build/native/${target}/time-keep. Run npm run native:ensure with Rust 1.96.0; CI and the release always run them.`)
 // A platform other than this one. A manifest for it names nothing here, whatever platform the runner is on (CI runs linux-x64-gnu).
 const other = Object.keys(PLATFORMS).find(platform => platform !== target)
 if (other === undefined) throw new Error("PLATFORMS names only this platform")
@@ -59,7 +63,7 @@ describe("the release programs", () => {
     }
   })
 
-  test("a failure is not cached: once the manifest appears, the same instance answers", async () => {
+  test.skipIf(!realBuild)("a failure is not cached: once the manifest appears, the same instance answers", async () => {
     const { root, cache } = packageRoot(undefined)
     const binaries = new NativeBinaries({ packageRoot: root, cacheRoot: cache, target, fetchImpl: notFound })
     try {
@@ -115,7 +119,7 @@ describe("the release programs", () => {
     }
   })
 
-  test("the repository's own build names this platform, and an empty cache has no program to run", async () => {
+  test.skipIf(!realBuild)("the repository's own build names this platform, and an empty cache has no program to run", async () => {
     const { root, cache } = packageRoot(undefined)
     try {
       const binaries = new NativeBinaries({ packageRoot: repo, cacheRoot: cache, target })
@@ -128,7 +132,7 @@ describe("the release programs", () => {
     }
   })
 
-  test("a cached program that holds the pinned bytes is used as it is; a link to it is UNSAFE_PATH", async () => {
+  test.skipIf(!realBuild)("a cached program that holds the pinned bytes is used as it is; a link to it is UNSAFE_PATH", async () => {
     const { root, cache } = packageRoot(manifestFor(target))
     try {
       const tag = built().tag, source = join(repo, "build/native", target, "time-keep")

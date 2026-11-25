@@ -57,6 +57,9 @@ jobs:
       - name: Fetch the contract over HTTPS
         run: git config --global url."https://github.com/".insteadOf "ssh://git@github.com/"
       - run: npm ci --ignore-scripts
+      # Strict: the release job has Rust 1.96.0 and the native prerequisites, so the full native gate runs and nothing skips.
+      - name: Build the native files (strict)
+        run: npm run native:ensure
       - name: Check the tagged commit again
         run: npm run check
       - name: The tag names this package's version

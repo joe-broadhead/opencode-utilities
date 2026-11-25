@@ -3,6 +3,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
+import { existsSync } from "node:fs"
 import { chmod, copyFile, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
@@ -14,6 +15,10 @@ import { timeFailure } from "../../src/provider/modules/time/failures.js"
 import { signal, VERSION } from "../fixtures.js"
 
 const repo = fileURLToPath(new URL("../../", import.meta.url))
+// The real program is what these tests pin. A clean clone without Rust has no build: skip the file, and say why.
+const realBuild = existsSync(join(repo, "manifest", "native.json")) && existsSync(join(repo, "build/native", detectTarget(), "time-keep"))
+if (!realBuild) console.warn(`SKIP the real time-keep tests: no build/native/${detectTarget()}/time-keep. Run npm run native:ensure with Rust 1.96.0; CI and the release always run these tests.`)
+describe.skipIf(!realBuild)("the real time-keep program", () => {
 /** The release copy this platform's build made, where the first-use path looks for it under a cache root. */
 async function seedCache(cache: string) {
   const program = join(cache, "native", `v${VERSION}`, "time-keep", detectTarget(), "time-keep")
@@ -212,3 +217,4 @@ describe("timers belong to the project (UTIL-5)", () => {
   })
 })
 const present = (store: string) => readdir(store).then(names => names.filter(name => name.startsWith("timers.db")))
+})

@@ -94,4 +94,7 @@ jobs:
       - run: npm ci --ignore-scripts
       - name: The committed dist/ is current
         run: npm run bundle && git diff --exit-code dist/
+      # Strict: CI has Rust 1.96.0 and the native prerequisites, so the full native gate runs and nothing skips.
+      - name: Build the native files (strict)
+        run: npm run native:ensure
       - run: npm run check

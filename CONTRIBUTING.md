@@ -11,10 +11,11 @@ cd utilities-plugin
 npm ci --ignore-scripts
 ```
 
-Node 24 and Bun 1.4 or later. A clean clone also needs the native prerequisites before `npm run check`: the Rust 1.96.0
-toolchain from rustup, a C toolchain, `libclang-dev`, `cmake` and `pkg-config`. `npm run check` runs
-`scripts/native-ensure.mjs`, which builds the native files this machine needs and does nothing when they are current; it
-fails, and so does the check, when the toolchain is missing. CI (and the release job) installs the same prerequisites.
+Node 24 and Bun 1.4 or later. The full native gate needs the Rust 1.96.0 toolchain from rustup, a C toolchain,
+`libclang-dev`, `cmake` and `pkg-config`; install them and run `npm run native:ensure` once, then `npm run check`. A clean
+clone without them still runs `npm run check`: `native:ensure:optional` prints a `NATIVE_FILES_MISSING` notice and
+continues, and the tests that need the real programs skip with that reason. CI (and the release job) installs the same
+prerequisites and runs the strict `npm run native:ensure` first, so nothing skips there.
 
 The committed speech manifest (`manifest/speech-assets.json`) is written only by
 `npm run speech:manifest -- --from <folder of the release files>`; no build or check step writes it.
@@ -27,9 +28,10 @@ The committed speech manifest (`manifest/speech-assets.json`) is written only by
 npm run check
 ```
 
-It runs `native:ensure`, the typecheck, the build, the unit tests, the pack test, and `plugin-kit check` (T0, T1 on
-OpenCode 2.4.1, the generated docs, the forbidden patterns and the no-bundled-kit check). Host and pack tests read
-and write an isolated home, but run one repository's check at a time.
+It runs `native:ensure:optional` (the strict `native:ensure` when the toolchain is there), the typecheck, the build,
+the unit tests, the pack test, `plugin-kit record --check` (the redacted conformance fixture is current) and
+`plugin-kit check` (T0, T1 on OpenCode 2.4.1, the generated docs, the forbidden patterns and the no-bundled-kit check).
+Host and pack tests read and write an isolated home, but run one repository's check at a time.
 
 Smaller loops:
 
@@ -41,7 +43,7 @@ npm run test:pack
 npm run kit:check
 ```
 
-Do not skip, weaken or delete a test to get green.
+Do not skip, weaken or delete a test to get green. The only skip is automatic when the native build is absent; CI and the release always build it.
 
 ## Pull requests
 

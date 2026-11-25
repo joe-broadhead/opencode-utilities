@@ -1,13 +1,30 @@
 // The release asset list: every native and speech file is passed to `gh release create` by the exact name both
 // manifests pin. A directory or a glob is never used, so `release/native` cannot be uploaded as an asset.
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, describe, expect, test } from "vitest"
 import { pinnedNames, pinnedPaths } from "../../scripts/release-assets.mjs"
 import { releaseManifestProblems } from "../../scripts/release-manifest.mjs"
 
-const native = JSON.parse(readFileSync("manifest/native.json", "utf8"))
+// The native manifest is built, not committed. CI always has it; a clean clone without Rust uses this synthetic one for
+// the generic checks, and the shipped-name assertion is skipped with the reason below.
+const shipped = existsSync("manifest/native.json") ? JSON.parse(readFileSync("manifest/native.json", "utf8")) : undefined
+if (shipped === undefined) console.warn("SKIP the shipped native-name assertion: no manifest/native.json. Run npm run native:ensure with Rust 1.96.0; CI and the release always run it.")
+const version = "0.0.0"
+const synthetic = {
+  schema: 1, plugin: "utilities", repository: "we-the-rebel-alliance/utilities-plugin", tag: `v${version}`,
+  built: { commit: "0".repeat(40), run: 1, workflow: "native" },
+  modules: Object.fromEntries(["time-keep", "weather-signal"].map(module => [module, {
+    "linux-x64-gnu": {
+      name: `${module}-linux-x64-gnu.gz`,
+      url: `https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v${version}/${module}-linux-x64-gnu.gz`,
+      bytes: 1, sha256: "0".repeat(64),
+      executable: { name: module, bytes: 1, sha256: "0".repeat(64) },
+    },
+  }])),
+}
+const native = shipped ?? synthetic
 const speech = JSON.parse(readFileSync("manifest/speech-assets.json", "utf8"))
 
 const cleanups: string[] = []
@@ -22,8 +39,8 @@ function staged(extra: readonly string[] = []): string {
 }
 
 describe("the release asset list", () => {
-  test("names every pinned native, licence and speech file, exactly", () => {
-    expect(pinnedNames(native, speech)).toEqual([
+  test.skipIf(shipped === undefined)("names every pinned native, licence and speech file, exactly", () => {
+    expect(pinnedNames(shipped!, speech)).toEqual([
       "time-keep-linux-x64-gnu.gz",
       "weather-signal-linux-x64-gnu.gz",
       "utilities-speech-darwin-arm64",
@@ -66,7 +83,8 @@ describe("the candidate release manifest", () => {
   test("refuses another tag, another commit, a zero run and an empty module set", () => {
     expect(releaseManifestProblems(built, { tag: "v9.9.9", commit, repository: native.repository })).toContain("tag is v0.0.0; the release tag is v9.9.9")
     expect(releaseManifestProblems(built, { tag: native.tag, commit: "1".repeat(40), repository: native.repository }).some(problem => problem.includes("built.commit"))).toBe(true)
-    expect(releaseManifestProblems(native, { tag: native.tag, commit, repository: native.repository })).toContain("built.run must be a positive run id")
+    const zero = JSON.parse(JSON.stringify(built)); zero.built.run = 0
+    expect(releaseManifestProblems(zero, { tag: native.tag, commit, repository: native.repository })).toContain("built.run must be a positive run id")
     const empty = JSON.parse(JSON.stringify(built)); empty.modules = {}
     expect(releaseManifestProblems(empty, { tag: native.tag, commit, repository: native.repository })).toContain("modules is empty")
   })
