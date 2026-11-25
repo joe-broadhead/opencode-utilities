@@ -86,7 +86,7 @@ export async function fixture(o: FixtureOptions = {}) {
   await writeFile(join(root, "package.json"), JSON.stringify({ name: "github:we-the-rebel-alliance/utilities-plugin#v0.0.0", version: VERSION }))
   const gz = gzipSync(Buffer.from(code), { level: 9 })
   const native = (module: string) => ({ name: `${module}-darwin-arm64.gz`, url: `https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v${VERSION}/${module}-darwin-arm64.gz`, bytes: gz.length, sha256: sha(gz), executable: { name: module, bytes: Buffer.byteLength(code), sha256: sha(code) } })
-  await writeFile(join(root, "manifest/native.json"), JSON.stringify({ schema: 1, plugin: "opencode-utilities", repository: "we-the-rebel-alliance/utilities-plugin", tag: `v${VERSION}`, built: { commit: "0".repeat(40), run: 0, workflow: "native" }, modules: { "time-keep": { "darwin-arm64": native("time-keep") }, "weather-signal": { "darwin-arm64": native("weather-signal") } } }))
+  await writeFile(join(root, "manifest/native.json"), JSON.stringify({ schema: 1, plugin: "utilities", repository: "we-the-rebel-alliance/utilities-plugin", tag: `v${VERSION}`, built: { commit: "0".repeat(40), run: 0, workflow: "native" }, modules: { "time-keep": { "darwin-arm64": native("time-keep") }, "weather-signal": { "darwin-arm64": native("weather-signal") } } }))
   const files = new Map<SpeechAssetRole, { name: string; content: Buffer }>([["engine", { name: ENGINE, content: Buffer.from(o.engine ?? code) }]])
   for (const [role, name] of Object.entries(MODELS)) files.set(role as SpeechAssetRole, { name, content: Buffer.from(`synthetic:${role}`) })
   const release = o.release ?? `https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v${VERSION}`

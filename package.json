@@ -2,7 +2,7 @@
   "name": "@we-the-rebel-alliance/utilities-plugin",
   "version": "0.0.0",
   "private": true,
-  "description": "OpenCode utilities plugin: time, holidays, timers, weather, on-device speech and two read-only session stopgaps.",
+  "description": "Local time, date, holiday, timer, weather and on-device speech tools for an OpenCode agent.",
   "keywords": [
     "opencode",
     "opencode-plugin",
@@ -25,10 +25,10 @@
   "files": [
     "dist",
     "skills",
-    "assets/icon.svg",
-    "manifest",
+    "assets",
     "README.md",
     "LICENSE",
+    "manifest",
     "NOTICE",
     "CHANGELOG.md"
   ],
@@ -47,6 +47,14 @@
         {
           "src": "assets/icon.svg",
           "type": "image/svg+xml"
+        },
+        {
+          "src": "assets/icon-128.png",
+          "type": "image/png"
+        },
+        {
+          "src": "assets/icon-256.png",
+          "type": "image/png"
         }
       ],
       "host": {
@@ -103,7 +111,7 @@
         },
         "stateRoot": {
           "type": "string",
-          "description": "Where timers and default speech files are kept. Default: $XDG_DATA_HOME/opencode-utilities."
+          "description": "Where timers and default speech files are kept. Default: $XDG_DATA_HOME/utilities."
         },
         "speech": {
           "type": "object",
@@ -349,5 +357,8 @@
     "typescript": "5.9.3",
     "vitest": "5.0.5",
     "zod": "4.6.7"
+  },
+  "engines": {
+    "node": ">=24"
   }
 }

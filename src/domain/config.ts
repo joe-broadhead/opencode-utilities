@@ -40,8 +40,8 @@ export function loadConfig(options: unknown, env: Readonly<Record<string, string
   const xdg = (name: string, fallback: string) => { const dir = env[name]; return dir && isAbsolute(dir) ? dir : join(homedir(), fallback) }
   return {
     modules: Object.fromEntries(MODULES.map(m => [m, value.modules?.[m] ?? true])) as { [M in Module]: boolean },
-    stateRoot: value.stateRoot ?? join(xdg("XDG_DATA_HOME", ".local/share"), "opencode-utilities"),
-    cacheRoot: join(xdg("XDG_CACHE_HOME", ".cache"), "opencode-utilities"),
+    stateRoot: value.stateRoot ?? join(xdg("XDG_DATA_HOME", ".local/share"), "utilities"),
+    cacheRoot: join(xdg("XDG_CACHE_HOME", ".cache"), "utilities"),
     ...(value.speech?.assetsDir ? { speechAssetsDir: value.speech.assetsDir } : {}),
     sessionsDatabasePath: value.sessionsDatabasePath ?? join(xdg("XDG_DATA_HOME", ".local/share"), "opencode", "opencode.db"),
     allowUntestedHost: value.allowUntestedHost ?? false,

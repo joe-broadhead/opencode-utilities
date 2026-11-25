@@ -45,7 +45,7 @@ Where data goes:
 - **To your model provider:** tool descriptions, and every tool result the agent reads, including transcripts, weather
   and timer text. Synthesis returns a path and metadata, not audio samples.
 - **On your machine:** timer stores under `stateRoot`, default speech WAVs under that tree, and under
-  `$XDG_CACHE_HOME/opencode-utilities` the verified programs, the speech files and the weather cache. The weather cache
+  `$XDG_CACHE_HOME/utilities` the verified programs, the speech files and the weather cache. The weather cache
   holds Open-Meteo's responses, with the places asked about, for up to 31 days; it never holds a key. OpenCode keeps
   session history, including tool results. `opencode plugin remove` does not delete the cache or the state directory.
 

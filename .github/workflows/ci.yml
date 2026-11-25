@@ -6,7 +6,7 @@
 # The runner rule is the family's: the org's `CI_RUNNER_PUBLIC` (the public self-hosted runner) when it is set, and
 # `ubuntu-24.04` otherwise or for a pull request from a fork. The native prerequisites step keeps the no-root fallback,
 # because that runner grants no passwordless sudo.
-name: CI
+name: ci
 on:
   pull_request:
   push:

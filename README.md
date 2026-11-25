@@ -4,8 +4,9 @@ Local, offline-first tools for OpenCode: exact times and time zones, dates, holi
 Open-Meteo weather, on-device speech, and two read-only stopgaps over past sessions. Every call runs on this machine
 except the weather request, and each tool says what it does and what it refuses.
 
-Utilities is a tools-only plugin on the plugin contract: no accounts, no sources, no actions. Its methods are reached as
-agent tools, in Code Mode and over RPC, and the two session stopgaps carry the OpenCode feature each is deleted by.
+Utilities is a tools-only plugin on [plugin-contract](https://github.com/we-the-rebel-alliance/plugin-contract) v0: no
+accounts, no sources, no actions. Its methods are reached as agent tools, in Code Mode and over RPC, and the two session
+stopgaps carry the OpenCode feature each is deleted by.
 
 ## Install
 
@@ -34,6 +35,21 @@ accepted; every weather answer carries the attribution the licence asks for.
 `access` is `all` (the default), `ask-changes` or `read-only`. Reads always run. A change — a timer write, a speech
 file, an install — runs under `all`, asks under `ask-changes`, and is off under `read-only`. A later rule for one tool
 wins, and a `deny` is final.
+
+## Options
+
+Every option is optional; the defaults are the narrowest that work.
+
+| Option | Type | Default | Meaning |
+|---|---|---|---|
+| `access` | `all` \| `ask-changes` \| `read-only` | `all` | How much the methods may do. |
+| `allowUntestedHost` | boolean | `false` | Start on an OpenCode release outside the tested range. |
+| `modules` | `{ time, weather, speech }` booleans | all `true` | Turn a module off; its methods refuse with `DISABLED`. |
+| `stateRoot` | string | `$XDG_DATA_HOME/utilities` | Where timers and default speech files are kept; must be private (700). |
+| `speech.assetsDir` | string | — | Pre-seeded speech files, verified by SHA-256; nothing is downloaded. |
+| `sessionsDatabasePath` | string | `$XDG_DATA_HOME/opencode/opencode.db` | OpenCode's database, opened read-only by `sessions_grep`. |
+
+The full schema, with descriptions, is in [Configuration](docs/configuration.md).
 
 ## Capabilities
 
@@ -117,6 +133,18 @@ sentence, so a tool can say `INPUT_INVALID: TIME_AMBIGUOUS: …` while the envel
 | `UNAVAILABLE` | the provider could not be reached |
 <!-- /generated:errors -->
 
+## Troubleshooting
+
+| What you see | What to do |
+|---|---|
+| `NATIVE_FILES_MISSING` on a time or weather call | Run `tools.utilities.native_install` once, or set `modules` to turn that module off. |
+| `SPEECH_ASSETS_MISSING` on a speech call | Run `tools.utilities.speech_install` once, or pre-seed `speech.assetsDir`. |
+| `HOST_UNTESTED` at startup | Use OpenCode `>=2.4.1 <2.5.0`, or set `allowUntestedHost` if you accept an untested release. |
+| `WEATHER_KEY_REJECTED` | Run `/connect` and choose Open-Meteo with a valid key, or `opencode auth logout open-meteo` for the free tier. |
+| `PERMISSION_DENIED` | The `access` level or the session's rules refuse the call; lower `access` is final, a later rule may narrow. |
+| `STATE_NOT_PRIVATE` | `chmod 700` the `stateRoot` directory, or remove it so the plugin recreates it privately. |
+| Any other failure | `tools.utilities.diagnose` names the module, the weather tier, the speech files and the next step. |
+
 ## Docs
 
 - [Capabilities](docs/capabilities.md)
@@ -125,6 +153,7 @@ sentence, so a tool can say `INPUT_INVALID: TIME_AMBIGUOUS: …` while the envel
 - [Automations](docs/automations.md)
 - [Architecture](docs/architecture.md)
 - [Security](docs/security.md)
+- [plugin-contract](https://github.com/we-the-rebel-alliance/plugin-contract): the manifest, doors, access and bus this plugin follows
 
 ## Stopgaps
 

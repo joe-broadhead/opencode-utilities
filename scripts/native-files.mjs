@@ -55,7 +55,7 @@ async function native(built) {
     }
     if(Object.keys(platforms).length)modules[name]=platforms;
   }
-  return {schema:1,plugin:'opencode-utilities',repository:REPOSITORY,tag:TAG,built,modules};
+  return {schema:1,plugin:'utilities',repository:REPOSITORY,tag:TAG,built,modules};
 }
 
 /** The speech engine and the models, as release files under the same tag. */

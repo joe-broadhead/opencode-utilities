@@ -9,7 +9,7 @@ option is optional, and the defaults are the narrowest that work for a fresh ins
 | `access` | `all` \| `ask-changes` \| `read-only` | `"all"` | How much the plugin's methods may do: reads always run; a change runs under all, asks under ask-changes, and is off under read-only. |
 | `allowUntestedHost` | boolean | `false` | Start on an OpenCode release outside the tested range, instead of refusing with HOST_UNTESTED. |
 | `modules` | object | `{"time":true,"weather":true,"speech":true}` | Turn a module off; its methods refuse with DISABLED and its programs are never inspected. |
-| `stateRoot` | string | — | Where timers and default speech files are kept. Default: $XDG_DATA_HOME/opencode-utilities. |
+| `stateRoot` | string | — | Where timers and default speech files are kept. Default: $XDG_DATA_HOME/utilities. |
 | `speech` | object | — | Speech file options. |
 | `sessionsDatabasePath` | string | — | OpenCode's SQLite database, opened read-only by sessions_grep. Default: $XDG_DATA_HOME/opencode/opencode.db. |
 <!-- /generated:configuration -->
@@ -34,7 +34,7 @@ Reads only, with time and weather on and speech off, and timers under a chosen f
     "@we-the-rebel-alliance/utilities-plugin": {
       "access": "read-only",
       "modules": { "speech": false },
-      "stateRoot": "/home/me/.local/share/opencode-utilities"
+      "stateRoot": "/home/me/.local/share/utilities"
     }
   }
 }
@@ -59,8 +59,8 @@ With `speech.assetsDir` set, `speech_install` refuses rather than downloading, a
 
 - `stateRoot` holds this project's timers (`projects/<hash>/timers`) and the default synthesised WAVs
   (`speech/<hash>/`). It must be private (mode 700); a wider one is refused with `STATE_NOT_PRIVATE` before any state is
-  created. `$XDG_DATA_HOME/opencode-utilities` when unset.
-- The cache (`$XDG_CACHE_HOME/opencode-utilities`) holds the verified programs, the speech files and Open-Meteo's
+  created. `$XDG_DATA_HOME/utilities` when unset.
+- The cache (`$XDG_CACHE_HOME/utilities`) holds the verified programs, the speech files and Open-Meteo's
   response cache. It is not an option.
 - `sessionsDatabasePath` is OpenCode's own database, opened read-only by `sessions_grep`. An unknown schema is refused
   cleanly; the plugin never writes it.

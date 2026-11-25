@@ -192,19 +192,19 @@ describe("links above the plugin's directories", () => {
     // A user folder "u" under each home; joined from parts, so the forbidden-path scan sees no home path literal.
     const user = (...parts: string[]) => join(f.root, ...parts, "u")
     await layout(f, { home: join("var", "home") }); await mkdir(user("var", "home"), { mode: 0o700 })
-    const runtime = await another(f, { stateRoot: join(user("home"), ".local/share/opencode-utilities"), cacheRoot: join(user("home"), ".cache/opencode-utilities") })
+    const runtime = await another(f, { stateRoot: join(user("home"), ".local/share/utilities"), cacheRoot: join(user("home"), ".cache/utilities") })
     const status = await runtime.status()
     // No release copy in a cache that does not exist yet: time says how to get one, and looking creates nothing.
     expect(status.modules.time.availability).toBe("NATIVE_FILES_MISSING"); expect(status.modules.speech.availability).toBe("SPEECH_ASSETS_MISSING")
-    expect(status.speech.cacheDirectory).toBe(join(user("var", "home"), ".cache/opencode-utilities"))
+    expect(status.speech.cacheDirectory).toBe(join(user("var", "home"), ".cache/utilities"))
     // The release copies go where the links lead, as installNatives would put them; the tools then run through them.
     for (const module of ["time-keep", "weather-signal"] as const) {
-      const program = join(user("home"), ".cache/opencode-utilities/native", `v${VERSION}`, module, "darwin-arm64", module)
+      const program = join(user("home"), ".cache/utilities/native", `v${VERSION}`, module, "darwin-arm64", module)
       await mkdir(dirname(program), { recursive: true, mode: 0o700 }); await copyFile(f.binary(module), program); await chmod(program, 0o755)
     }
-    expect((await runtime.status()).modules.time).toEqual({ availability: "AVAILABLE" }); expect(status.speech.cacheDirectory).toBe(join(user("var", "home"), ".cache/opencode-utilities"))
+    expect((await runtime.status()).modules.time).toEqual({ availability: "AVAILABLE" }); expect(status.speech.cacheDirectory).toBe(join(user("var", "home"), ".cache/utilities"))
     await works(runtime)
-    expect((await lstat(join(user("var", "home"), ".local/share/opencode-utilities"))).mode & 0o777).toBe(0o700)
+    expect((await lstat(join(user("var", "home"), ".local/share/utilities"))).mode & 0o777).toBe(0o700)
   })
   test("a state root under a linked /tmp-like path works", async () => {
     const f = await fixture(); cleanups.push(f.cleanup)

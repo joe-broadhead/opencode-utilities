@@ -73,7 +73,7 @@ export interface UtilitiesFailure { readonly code: FailureCode; readonly message
 
 /** `path` is relative to the location directory, or absolute. */
 export interface TranscriptionInput { readonly path: string; readonly language?: string }
-/** Without `path`, the WAV goes to `$XDG_DATA_HOME/opencode-utilities/speech/<project-scope>/<id>.wav`. */
+/** Without `path`, the WAV goes to `$XDG_DATA_HOME/utilities/speech/<project-scope>/<id>.wav`. */
 export interface SynthesisInput { readonly text: string; readonly voice?: string; readonly path?: string }
 export interface SynthesisOutput {
   readonly path: string
@@ -129,7 +129,7 @@ export interface DiagnoseView {
 
 // Configuration and runtime
 
-/** Plugin options. Defaults: every module on; stateRoot `$XDG_DATA_HOME/opencode-utilities`. */
+/** Plugin options. Defaults: every module on; stateRoot `$XDG_DATA_HOME/utilities`. */
 export interface Config {
   readonly modules?: { readonly [M in Module]?: boolean }
   readonly stateRoot?: string
@@ -147,7 +147,7 @@ export interface RuntimeOptions {
   readonly location: ProjectLocation
   readonly modules: { readonly [M in Module]: boolean }
   readonly stateRoot: string
-  /** `$XDG_CACHE_HOME/opencode-utilities` by default. */
+  /** `$XDG_CACHE_HOME/utilities` by default. */
   readonly cacheRoot: string
   /** Pre-seeded speech assets, verified by hash; nothing is downloaded. */
   readonly speechAssetsDir?: string

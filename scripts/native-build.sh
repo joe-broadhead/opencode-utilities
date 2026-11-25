@@ -19,7 +19,7 @@
 # has no prebuilt static library for it (native/onnx-provenance.json).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd -P)"
-NATIVE_BUILD_ROOT="${NATIVE_BUILD_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/opencode-utilities-native-build}"
+NATIVE_BUILD_ROOT="${NATIVE_BUILD_ROOT:-${XDG_CACHE_HOME:-$HOME/.cache}/utilities-native-build}"
 # The platform table is PLATFORMS in src/domain/contract.ts; node reads it (Node 24 strips the types).
 platforms() { node --input-type=module -e 'const [root, key, field] = process.argv.slice(1), { PLATFORMS } = await import(`${root}/src/domain/contract.ts`); console.log(key ? PLATFORMS[key]?.[field] ?? "" : Object.keys(PLATFORMS).join(" "))' "$ROOT" "$@"; }
 PLATFORM="$(node -p "process.platform === 'linux' ? 'linux-' + process.arch + '-gnu' : process.platform + '-' + process.arch")"

@@ -126,8 +126,8 @@ test("one walker checks components: links are rejected, missing components are a
 test("a root resolves its existing part through links once, keeps the missing rest, and later walks pass", async () => {
   const root = await scratch("utilities-root-"), target = join(root, "var", "home"), link = join(root, "home")
   await mkdir(target, { recursive: true }); await symlink(join("var", "home"), link)
-  const resolved = await resolveRoot(join(link, "u", ".local", "share", "opencode-utilities"))
-  expect(resolved).toBe(join(target, "u", ".local", "share", "opencode-utilities"))
+  const resolved = await resolveRoot(join(link, "u", ".local", "share", "utilities"))
+  expect(resolved).toBe(join(target, "u", ".local", "share", "utilities"))
   await expect(privateDirectory(join(resolved, "projects"))).resolves.toBe(join(resolved, "projects"))
   await expect(resolveRoot(join(link, ".."))).resolves.toBe(root)
   await symlink(join(root, "absent"), join(target, "dangling"))

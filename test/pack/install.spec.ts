@@ -59,7 +59,7 @@ describe("the tarball", () => {
     expect(files.filter(file => /^bin\//.test(file) || /(?:^|\/)(?:time-keep|weather-signal|utilities-speech-[a-z0-9-]+|ggml-[^/]+|kitten[^/]*)$/.test(file))).toEqual([])
     expect(files).toEqual([...files].filter(file =>
       file === "package.json" || file === "dist/index.js" || file === "README.md" || file === "LICENSE" || file === "NOTICE" || file === "CHANGELOG.md" ||
-      file === "assets/icon.svg" || file.startsWith("skills/") || file.startsWith("manifest/")))
+      file.startsWith("assets/") || file.startsWith("skills/") || file.startsWith("manifest/")))
     // Every skill the plugin ships is packed, with its SKILL.md.
     expect(files.filter(file => /^skills\/[^/]+\/SKILL\.md$/.test(file)).length).toBeGreaterThan(0)
   })
@@ -73,7 +73,7 @@ describe("the tarball", () => {
       exports: { "./server": "./dist/index.js" },
       capabilities: { version: 1, plugin: { name: "utilities", host: { opencode: ">=2.4.1 <2.5.0", tested: ["2.4.1"] } } },
     })
-    for (const field of ["workspaces", "dependencies", "peerDependencies", "peerDependenciesMeta", "bundleDependencies", "bundledDependencies", "optionalDependencies", "overrides", "engines", "main", "types"]) {
+    for (const field of ["workspaces", "dependencies", "peerDependencies", "peerDependenciesMeta", "bundleDependencies", "bundledDependencies", "optionalDependencies", "overrides", "main", "types"]) {
       expect(manifest[field], field).toBeUndefined()
     }
     const capabilities = manifest.capabilities as { accounts?: unknown; sources: unknown[]; actions: unknown[]; events: Record<string, unknown>; methods: Record<string, { class: string; accounts: string }> }
@@ -83,6 +83,7 @@ describe("the tarball", () => {
     expect(Object.keys(capabilities.events)).toEqual(["changed"])
     expect(Object.values(capabilities.methods).every(method => method.accounts === "none")).toBe(true)
     expect(capabilities.methods["status"]).toMatchObject({ class: "read", accounts: "none" })
+    expect(manifest["engines"]).toEqual({ node: ">=24" })
   })
 
   test("dist/ holds exactly index.js, self-contained", () => {
