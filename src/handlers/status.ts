@@ -1,4 +1,4 @@
-import { NO_ACCOUNTS, redactReason, STATUS_SCHEMA, statusAnswer } from "@we-the-rebel-alliance/plugin-contract/accounts"
+import { NO_ACCOUNTS, STATUS_SCHEMA, statusAnswer } from "@we-the-rebel-alliance/plugin-contract/accounts"
 import type { MethodHandler } from "@we-the-rebel-alliance/plugin-contract/register"
 import type { Manifest } from "@we-the-rebel-alliance/plugin-contract/manifest"
 import { TEXTS } from "./texts.js"
@@ -23,14 +23,13 @@ export function status(deps: StatusDeps): MethodHandler {
     input: NO_INPUT,
     output: STATUS_SCHEMA,
     async run(_input, call) {
-      const agents = await unguarded(call)
       return statusAnswer({
         manifest: deps.manifest,
         version: deps.version,
         hostVersion: deps.hostVersion,
         accounts: NO_ACCOUNTS,
-        problems: [...deps.problems, ...(agents.problem === undefined ? [] : [redactReason(agents.problem)])],
-        unguardedAgents: agents.agents,
+        problems: deps.problems,
+        unguardedAgents: await unguarded(call),
       })
     },
   }

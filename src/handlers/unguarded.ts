@@ -1,16 +1,13 @@
 import type { MethodCall } from "@we-the-rebel-alliance/plugin-contract/register"
+import { redactReason } from "@we-the-rebel-alliance/plugin-contract/accounts"
+import type { UnguardedAgentsResult } from "@we-the-rebel-alliance/plugin-contract/access"
 
 /**
- * The agents whose own rules no longer give the generated access rules their effect. The call asks the host's agent
- * list when it runs, so status reads no state kept at setup.
- *
- * A failure here is unknown, never zero: the caller records the reason instead. The freeze change to
- * `{ ok, agents | error }` replaces the try/catch in this one helper.
+ * The agents whose own rules no longer give the generated access rules their effect, asked when status runs. The host
+ * answers `{ ok, agents | error }` and never throws: `ok` is the list, and a failure is one redacted line the status
+ * answer reports as a problem, with an empty list rather than a zero it did not read.
  */
-export async function unguarded(call: Pick<MethodCall, "unguardedAgents">): Promise<{ readonly agents: readonly string[]; readonly problem?: string }> {
-  try {
-    return { agents: await call.unguardedAgents() }
-  } catch (error) {
-    return { agents: [], problem: error instanceof Error ? error.message : String(error) }
-  }
+export async function unguarded(call: Pick<MethodCall, "unguardedAgents">): Promise<UnguardedAgentsResult> {
+  const result = await call.unguardedAgents()
+  return result.ok ? { ok: true, agents: [...result.agents] } : { ok: false, error: redactReason(result.error) }
 }

@@ -39,7 +39,7 @@ function call(emitted: string[]): Pick<MethodCall, "account" | "signal" | "ungua
   return {
     account: "default",
     signal: new AbortController().signal,
-    unguardedAgents: async () => [],
+    unguardedAgents: async () => ({ ok: true as const, agents: [] }),
     bus: {
       name: "utilities",
       emit: async (event: string) => { emitted.push(event); return { ok: true as const, event } },

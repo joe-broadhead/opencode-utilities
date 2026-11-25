@@ -28,7 +28,8 @@ function provider(overrides: Partial<Provider> = {}): Provider {
   }
 }
 const handlers = (overrides: Partial<Provider> = {}) => createHandlers({ provider: provider(overrides), manifest, version, hostVersion: "2.4.1", access: "all", skillProblems: [] })
-function call(emitted: { event: string; data: unknown }[] = [], agents: () => Promise<readonly string[]> = async () => []) {
+type Unguarded = { readonly ok: true; readonly agents: readonly string[] } | { readonly ok: false; readonly error: string }
+function call(emitted: { event: string; data: unknown }[] = [], agents: () => Promise<Unguarded> = async () => ({ ok: true, agents: [] })) {
   return {
     account: "default",
     signal: new AbortController().signal,
@@ -39,7 +40,7 @@ function call(emitted: { event: string; data: unknown }[] = [], agents: () => Pr
 
 describe("status", () => {
   test("is the contract's answer: identity, host range, no accounts, and the unguarded agents", async () => {
-    const answer = await handlers()["status"]!.run({}, call([], async () => ["locked"]))
+    const answer = await handlers()["status"]!.run({}, call([], async () => ({ ok: true, agents: ["locked"] })))
     expect(answer).toEqual({
       name: "utilities",
       version: "0.0.0",
@@ -51,7 +52,7 @@ describe("status", () => {
     })
   })
   test("an agent list that cannot be read is unknown, never zero: state is error with a redacted next step", async () => {
-    const answer = await handlers()["status"]!.run({}, call([], async () => { throw new Error("the agent list failed with ghp_token_value_that_is_long_enough_to_mask") }))
+    const answer = await handlers()["status"]!.run({}, call([], async () => ({ ok: false, error: "the agent list failed with ghp_token_value_that_is_long_enough_to_mask" })))
     expect(answer).toMatchObject({ state: "error" })
     expect(String((answer as { nextStep: string }).nextStep)).toContain("the agent list failed")
     expect(String((answer as { nextStep: string }).nextStep)).not.toContain("ghp_token_value_that_is_long_enough_to_mask")
