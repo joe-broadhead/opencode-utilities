@@ -21411,11 +21411,11 @@ async function createProvider({ context, config: config3, packageRoot: packageRo
 }
 
 // src/skills.ts
-import { readFile as readFile2 } from "node:fs/promises";
+import { readdir as readdir3, readFile as readFile2 } from "node:fs/promises";
 import { join as join13 } from "node:path";
 import { Skill } from "@opencode/plugin";
-var SKILL_NAMES = ["utilities", "utilities-time", "utilities-weather", "utilities-speech", "utilities-sessions"];
-var notLoaded = (name2, detail2) => `The ${name2} skill was not loaded: skills/${name2}/SKILL.md ${detail2}. Next step: reinstall the plugin, or fix the file in a checkout and restart OpenCode.`;
+var notLoaded = (name2, detail2) => `SKILLS_INVALID: The ${name2} skill was not loaded: skills/${name2}/SKILL.md ${detail2}. Next step: reinstall the plugin, or fix the file in a checkout and restart OpenCode.`;
+var folderUnreadable = (detail2) => `SKILLS_INVALID: The skills folder was not read: ${detail2}. Next step: reinstall the plugin.`;
 function parseSkill(name2, path, text4) {
   const fail3 = (detail2) => {
     throw new Error(notLoaded(name2, detail2));
@@ -21429,19 +21429,28 @@ function parseSkill(name2, path, text4) {
   if (fields.get("name") !== name2) return fail3(`must be named ${name2} in its front matter`);
   const description = fields.get("description");
   if (description === void 0 || description === "") return fail3("has no description");
+  const content = match[2].trim();
+  if (content === "") return fail3("has an empty body");
   return {
     id: Skill.ID.make(name2),
     name: Skill.Name.make(name2),
     description,
     autoinvoke: true,
     path: Skill.Info.fields.path.make(path),
-    content: match[2].trim()
+    content
   };
 }
 async function loadSkills(directory) {
   const skills = [];
   const problems = [];
-  for (const name2 of SKILL_NAMES) {
+  let entries;
+  try {
+    entries = await readdir3(directory, { withFileTypes: true });
+  } catch (error3) {
+    const code = error3.code;
+    return { skills, problems: [folderUnreadable(code === "ENOENT" ? "it is missing" : `it cannot be read (${code ?? "unknown"})`)] };
+  }
+  for (const name2 of entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name).sort()) {
     const path = join13(directory, name2, "SKILL.md");
     try {
       skills.push(parseSkill(name2, path, await readFile2(path, "utf8")));
