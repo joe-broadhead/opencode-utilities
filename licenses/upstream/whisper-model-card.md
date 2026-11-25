@@ -5,7 +5,7 @@ pipeline_tag: automatic-speech-recognition
 
 # OpenAI's Whisper models converted to ggml format for use with [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
 
-[Available models](https://huggingface.co/ggerganov/whisper.cpp/tree/main)
+[Available models](https://huggingface.co/ggerganov/whisper.cpp)
 
 | Model               | Disk    | SHA                                        |
 | ------------------- | ------- | ------------------------------------------ |

@@ -7,7 +7,7 @@ license = "MIT"
 publish = false
 
 [dependencies]
-aurum-core = { git = "https://github.com/joe-broadhead/aurum", rev = "8e3b70fbb0c76add3cbcf7291098e88f2c8bea70", default-features = false, features = ["tts"] }
+aurum-core = { git = "https://github.com/we-the-rebel-alliance/aurum", rev = "8e3b70fbb0c76add3cbcf7291098e88f2c8bea70", default-features = false, features = ["tts"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.11"
