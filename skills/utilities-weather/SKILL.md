@@ -11,7 +11,7 @@ Call shapes (`?` is optional): `weather_geocode({query, country?, count?})`, `we
 
 ## When the user declines
 
-If the permission is declined, say that no weather was fetched, and stop. Don't get the weather another way (a web search, another site, or `api.open-meteo.com` through a fetch tool), because that goes around the user's choice. They can allow the call next time, or allow `utilities_weather_*` in their permissions.
+If the permission is declined, say that no weather was fetched, and stop. Don't get the weather another way (a web search, another site, or `api.open-meteo.com` through a fetch tool), because that goes around the user's choice. They can allow the call next time, or allow the weather tools in their permissions.
 
 ## Pick the place
 
@@ -35,7 +35,7 @@ If the permission is declined, say that no weather was fetched, and stop. Don't 
 
 ## Free tier and business use
 
-Without a key, Open-Meteo's free tier is for non-commercial use only and is rate-limited. Business use, such as a shop's staffing sheet, needs an Open-Meteo API key: the user runs `/connect` and chooses Open-Meteo. The key goes nowhere else: not in an environment variable, and not in the plugin options. `utilities_status` shows the tier in use and whether the key works. Answer such questions from it, with no weather call.
+Without a key, Open-Meteo's free tier is for non-commercial use only and is rate-limited. Business use, such as a shop's staffing sheet, needs an Open-Meteo API key: the user runs `/connect` and chooses Open-Meteo. The key goes nowhere else: not in an environment variable, and not in the plugin options. `utilities_diagnose` shows the tier in use and whether the key works. Answer such questions from it, with no weather call.
 
 ## Errors
 
@@ -43,4 +43,5 @@ Without a key, Open-Meteo's free tier is for non-commercial use only and is rate
 - `BACKEND_FAILED`, "rate limit was reached": tell the user and wait. Don't loop.
 - `WEATHER_KEY_REJECTED`: the user runs `/connect` again with a valid key, or `opencode auth logout open-meteo` for the free tier.
 
-An OpenCode automation or a script can call the weather tools with no model, through the RPC `utilities.local.tools`. It uses a session created for it (`opencode api post /api/session …`, keep `data.id`), and so does a test of a script. Never borrow an existing session found by searching past sessions or a session list: the script would run as that session's agent, under its rules. A script can't answer a prompt, so it needs an allow rule, such as `{"action": "utilities_weather_daily", "resource": "*", "effect": "allow"}`, in its session's agent or in the session. Details: https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/docs/scripting.md.
+An OpenCode automation can call the weather methods with no model: it runs as the agent of the session it names, under
+that session's rules, so a `deny` or an `ask` still applies and an ask is refused when no one is there to answer it.

@@ -9,13 +9,21 @@
 // gzip decompresses to the executable the manifest pins (size and sha256). Any mismatch stops the release. A repository
 // with no manifest has nothing to attach: the script says so and exits 0.
 import { createHash } from "node:crypto"
+import { spawnSync } from "node:child_process"
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs"
 import { gunzipSync } from "node:zlib"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { tmpdir } from "node:os"
 import { fileURLToPath } from "node:url"
 import { assetUrl, manifestProblems, MANIFEST_PATH } from "./native-manifest.mjs"
-import { ghOutput } from "./release-rules.mjs"
+
+/** One `gh` call: its stdout, or a failure that names the call. The release workflow passes GH_TOKEN. */
+function ghOutput(args, { inherit = false } = {}) {
+  const result = spawnSync("gh", args, { encoding: "utf8", maxBuffer: 256 * 1024 * 1024, stdio: inherit ? ["ignore", "inherit", "inherit"] : "pipe" })
+  if (result.error) throw new Error(`gh could not run: ${result.error.message}`)
+  if (result.status !== 0) throw new Error(`gh ${args.slice(0, 2).join(" ")} failed (exit ${result.status})`)
+  return inherit ? "" : result.stdout
+}
 
 function parseArgs(argv) {
   const options = { out: undefined, repo: process.env.GITHUB_REPOSITORY, manifest: MANIFEST_PATH }
@@ -81,6 +89,23 @@ function main() {
       ghOutput(["attestation", "verify", path, "--repo", options.repo], { inherit: true })
       copyFileSync(path, join(options.out, entry.name))
       console.log(`ok   ${label}: ${entry.name} (${bytes.length} bytes, attested) from ${assetUrl(manifest, entry)}`)
+    }
+    // The speech files are pinned in their own committed manifest. They are not attested: the native run uploads them
+    // as artifacts, and the pins in manifest/speech-assets.json are the check.
+    const speechPath = join(dirname(options.manifest), "speech-assets.json")
+    if (existsSync(speechPath)) {
+      const speech = JSON.parse(readFileSync(speechPath, "utf8"))
+      const files = [...Object.values(speech.engines ?? {}), ...Object.values(speech.models ?? {})]
+      for (const entry of files) {
+        const candidates = found.get(entry.name) ?? []
+        if (candidates.length !== 1) throw new Error(`speech ${entry.name}: the run's artifacts hold ${candidates.length} files with that name; one is needed`)
+        const bytes = readFileSync(candidates[0])
+        if (bytes.length !== entry.bytes) throw new Error(`speech ${entry.name}: ${bytes.length} bytes; the manifest pins ${entry.bytes}`)
+        if (sha256(bytes) !== entry.sha256) throw new Error(`speech ${entry.name}: does not match the manifest's sha256`)
+        copyFileSync(candidates[0], join(options.out, entry.name))
+        console.log(`ok   speech ${entry.name}: ${bytes.length} bytes, verified against manifest/speech-assets.json`)
+      }
+      entries.push(...files.map(entry => ({ label: `speech ${entry.name}`, entry, gzipped: false })))
     }
     staged = entries.length
   } finally {

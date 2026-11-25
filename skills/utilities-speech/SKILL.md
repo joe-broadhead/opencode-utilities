@@ -1,6 +1,6 @@
 ---
 name: utilities-speech
-description: On-device speech: transcribe a WAV file, write text to a spoken WAV file, and check whether speech is set up here. Nothing is sent to a service. Use instead of installing whisper.
+description: "On-device speech: transcribe a WAV file, write text to a spoken WAV file, and check whether speech is set up here. Nothing is sent to a service. Use instead of installing whisper."
 ---
 
 # Speech
@@ -9,22 +9,23 @@ Transcription and synthesis run on this machine with a local engine and models. 
 
 Call shapes (`?` is optional): `speech_transcribe({path, language?})`, `speech_synthesize({text, voice?, path?})`.
 
-## The first call and its prompts
+## Installing the files
 
-When the user asks for a transcription or for speech, the first call can download missing speech files (the engine and models, about 105 MB) from the plugin's GitHub Release, checked by SHA-256. By default this download runs without a prompt; `access: "ask-changes"` asks, and `read-only` denies it. Tell the user about the download before the call. If they require approval before downloads, get it before calling.
+Transcription and synthesis need the speech engine and models (about 105 MB), which a release does not carry. Install
+them first with `utilities_speech_install`; it downloads from the plugin's GitHub release and checks every file by
+SHA-256. A speech call with files missing refuses `SPEECH_ASSETS_MISSING` and names that method; it never downloads by
+itself, so `read-only` stays read-only and `ask-changes` asks at the install, once.
 
-The checks come in this order:
-1. a file outside the project may need permission to be read (`external_directory`, then `read`);
-2. for a transcription, the tool checks the WAV itself before the download, so don't inspect the file in the shell;
-3. the download, if files are missing and permission allows it.
+An offline machine can pre-seed the files instead: the `speech.assetsDir` plugin option points at copies already on
+disk, verified by the same hashes.
 
-If the user declines the download, nothing was downloaded or transcribed. Say so, and name `/utilities-speech-install` (and `speech.assetsDir` for offline use). Don't retry, and don't transcribe another way.
+If the user declines the install, nothing was downloaded or transcribed. Say so, and leave the choice with them; don't
+transcribe another way.
 
 ## Is speech set up?
 
-For a question about the setup, not a request to transcribe, `utilities_status` is the whole answer. Its speech section lists each file as missing, cached or pre-seeded, with sizes, and the voices. Don't make a trial transcription to find out (it can download 105 MB), and don't look for other transcribers in the shell. When files are missing, there are three ways in:
-- download on the first transcription or synthesis, subject to permissions;
-- run `/utilities-speech-install` beforehand;
+For a question about the setup, not a request to transcribe, `utilities_diagnose` is the whole answer. Its speech section lists each file as missing, cached or pre-seeded, with sizes, and the voices. Don't make a trial transcription to find out (it can download 105 MB), and don't look for other transcribers in the shell. When files are missing, there are three ways in:
+- run `utilities_speech_install`, subject to the access level;
 - for an offline machine, the `speech.assetsDir` plugin option, pointing at copies already on disk.
 
 ## Transcribe

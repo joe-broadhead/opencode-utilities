@@ -5,10 +5,10 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
-import { createRuntime } from "../../src/runtime.js"
-import { belowGlibcFloor, detectGlibc, olderGlibc } from "../../src/domain/backends.js"
-import { GLIBC_FLOORS, type Authorize } from "../../src/domain/contract.js"
-import { fixture, invocation, VERSION } from "../fixtures.js"
+import { createRuntime } from "../../src/provider/runtime.js"
+import { belowGlibcFloor, detectGlibc, olderGlibc } from "../../src/provider/backends.js"
+import { GLIBC_FLOORS } from "../../src/domain/contract.js"
+import { fixture, signal, VERSION } from "../fixtures.js"
 
 const cleanups: Array<() => Promise<unknown>> = []
 afterEach(async () => { for (const close of cleanups.splice(0).reverse()) await close() })
@@ -26,9 +26,8 @@ async function linux(glibc: string | null) {
   }
   // The engine's file name names its platform too, and the cache keeps a file under its name.
   await rename(f.cached("engine"), f.cached("engine").replace("darwin-arm64", "linux-x64-gnu"))
-  const authorize = vi.fn<Authorize>(async () => {})
-  const runtime = await createRuntime(f.options({ authorize, target: "linux-x64-gnu", glibc })); cleanups.push(() => runtime.close())
-  return { ...f, authorize, runtime }
+  const runtime = await createRuntime(f.options({ target: "linux-x64-gnu", glibc })); cleanups.push(() => runtime.close())
+  return { ...f, runtime }
 }
 
 describe("the floors", () => {
@@ -62,18 +61,17 @@ describe("the floors", () => {
 describe("a Linux below the speech engine's floor", () => {
   test("reports speech UNSUPPORTED_PLATFORM with the floor, before any prompt or download, and time and weather still run", async () => {
     const f = await linux("2.35")
-    await expect(f.runtime.invoke("speech_synthesize", { text: "x" }, invocation())).rejects.toMatchObject({
+    await expect(f.runtime.invoke("speech_synthesize", { text: "x" }, signal())).rejects.toMatchObject({
       code: "UNSUPPORTED_PLATFORM",
       message: "The speech engine needs glibc 2.39 or later, and this system has glibc 2.35.",
       hint: "Time and weather tools are unaffected. Speech needs a Linux such as Ubuntu 24.04, Debian 13 or Fedora 40.",
     })
-    expect(f.authorize).not.toHaveBeenCalled()
-    expect(await f.runtime.installSpeech().catch(e => e)).toMatchObject({ code: "UNSUPPORTED_PLATFORM" })
+    expect(await f.runtime.installSpeech().catch((e: any) => e)).toMatchObject({ code: "UNSUPPORTED_PLATFORM" })
     const status = await f.runtime.status()
     expect(status.modules.speech).toEqual({ availability: "UNSUPPORTED_PLATFORM", next: "The speech engine needs glibc 2.39 or later, and this system has glibc 2.35." })
     expect(status.platform).toEqual({ target: "linux-x64-gnu", availability: "AVAILABLE" })
     expect(status.modules.time.availability).toBe("AVAILABLE")
-    expect((await f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).output).toBeDefined()
+    expect(await f.runtime.invoke("time_calendar", { date: "2026-10-29" }, signal())).toBeDefined()
   })
 })
 
@@ -85,14 +83,14 @@ describe("RHEL 9 and its rebuilds (glibc 2.34)", () => {
     expect(status.modules.time.availability).toBe("AVAILABLE")
     expect(status.modules.weather.availability).toBe("AVAILABLE")
     expect(status.modules.speech).toEqual({ availability: "UNSUPPORTED_PLATFORM", next: "The speech engine needs glibc 2.39 or later, and this system has glibc 2.34." })
-    expect((await f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).output).toBeDefined()
+    expect(await f.runtime.invoke("time_calendar", { date: "2026-10-29" }, signal())).toBeDefined()
   })
 })
 
 describe("a Linux below the programs' floor", () => {
   test("reports every module UNSUPPORTED_PLATFORM with its floor, and runs and downloads nothing", async () => {
     const f = await linux("2.31")
-    await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, invocation())).rejects.toMatchObject({
+    await expect(f.runtime.invoke("time_calendar", { date: "2026-10-29" }, signal())).rejects.toMatchObject({
       code: "UNSUPPORTED_PLATFORM",
       message: "The time-keep program needs glibc 2.34 or later, and this system has glibc 2.31.",
     })
@@ -113,6 +111,6 @@ describe("a Linux at the floors", () => {
     expect(status.platform.availability).toBe("AVAILABLE")
     expect(status.modules.time.availability).toBe("AVAILABLE")
     expect(status.modules.speech.availability).toBe("AVAILABLE")
-    expect((await f.runtime.invoke("speech_synthesize", { text: "hello" }, invocation())).output).toMatchObject({ durationMs: 500 })
+    expect(await f.runtime.invoke("speech_synthesize", { text: "hello" }, signal())).toMatchObject({ durationMs: 500 })
   })
 })

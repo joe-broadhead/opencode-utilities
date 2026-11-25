@@ -39,7 +39,7 @@ describe("the committed speech manifest", () => {
   })
 
   test("no build, pack or release step writes it: only the maintainer command names it as a file to write", () => {
-    const steps = ["scripts/native-files.mjs", "scripts/native-ensure.mjs", "scripts/native-build.sh", "scripts/build.mjs", "scripts/pack.mjs", "scripts/release-pack.mjs", "scripts/release-commit.mjs", "scripts/publish-release.mjs"]
+    const steps = ["scripts/native-files.mjs", "scripts/native-ensure.mjs", "scripts/native-build.sh", "scripts/build.mjs", "scripts/native-notices.mjs"]
     for (const path of steps) expect({ path, names: /["'`]manifest\/speech-assets\.json["'`]/.test(read(path)) }).toEqual({ path, names: false })
   })
 

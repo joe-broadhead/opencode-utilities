@@ -7,7 +7,7 @@ description: Exact times, time zones, dates, holidays, working days and project 
 
 Use the Utilities time tools below whenever a date or time matters. Mental arithmetic and the shell's `date` get daylight saving, holidays and weekday counts wrong.
 
-Call shapes (`?` is optional): `status({})`, `time_now({timezones?, format?})`, `time_zones({region?})`, `time_zone_info({timezone})`, `time_convert({datetime, from_timezone, to_timezone})`, `time_calendar({date})`, `time_add({date, operation, amount, unit})`, `time_between({from, to})`, `time_format({input, output_format})`, `time_holidays({mode: "check", date, country, region?} | {mode: "list", year, country, region?})`, `time_business_days({mode: "between", from, to, country?, region?} | {mode: "next" | "prev", date, country?, region?})`, `timer_set({name, deadline, description?, tags?, replace?})`, `timer_get({name})`, `timer_list({tag?, offset?, limit?})`, `timer_check({offset?, limit?})`, `timer_delete({name})`.
+Call shapes (`?` is optional): `diagnose({})`, `time_now({timezones?, format?})`, `time_zones({region?})`, `time_zone_info({timezone})`, `time_convert({datetime, from_timezone, to_timezone})`, `time_calendar({date})`, `time_add({date, operation, amount, unit})`, `time_between({from, to})`, `time_format({input, output_format})`, `time_holidays({mode: "check", date, country, region?} | {mode: "list", year, country, region?})`, `time_business_days({mode: "between", from, to, country?, region?} | {mode: "next" | "prev", date, country?, region?})`, `timer_set({name, deadline, description?, tags?, replace?})`, `timer_get({name})`, `timer_list({tag?, offset?, limit?})`, `timer_check({offset?, limit?})`, `timer_delete({name})`.
 
 ## Times and zones
 
@@ -48,4 +48,4 @@ Timers belong to the current project and never alert on their own: they are chec
 
 For an alert that fires by itself, suggest OpenCode's automations (`automation_*` tools), which need `"experimental": { "automations": true }` in `opencode.json`.
 
-An OpenCode automation or a script can call the read tools (not timer writes) with no model, through the RPC `utilities.local.tools`. It uses a session created for it (`opencode api post /api/session …`, keep `data.id`), and so does a test of a script. Never borrow an existing session found by searching past sessions or a session list: the script would run as that session's agent, under its rules. Details: https://github.com/we-the-rebel-alliance/utilities-plugin/blob/master/docs/scripting.md.
+An OpenCode automation can call the read tools (and a timer write, when its rules allow it) with no model. The call runs as the agent of the session the automation names, under that session's rules, so a `deny` or an `ask` still applies; an ask is refused when no one is there to answer it.

@@ -2,10 +2,11 @@
   "name": "@we-the-rebel-alliance/utilities-plugin",
   "version": "0.0.0",
   "private": true,
-  "description": "OpenCode utilities plugin: time, holidays, timers, weather, on-device speech and past-session lookups.",
+  "description": "Local time, date, holiday, timer, weather and on-device speech tools for an OpenCode agent.",
   "keywords": [
     "opencode",
     "opencode-plugin",
+    "plugin-contract",
     "utilities"
   ],
   "homepage": "https://github.com/we-the-rebel-alliance/utilities-plugin#readme",
@@ -19,295 +20,348 @@
   "license": "MIT",
   "type": "module",
   "exports": {
-    ".": "./dist/index.js",
-    "./tui": "./dist/tui.js",
-    "./icon.svg": "./assets/icon.svg",
-    "./icon-128.png": "./assets/icon-128.png",
-    "./icon-256.png": "./assets/icon-256.png"
+    "./server": "./dist/index.js"
   },
   "files": [
     "dist",
-    "assets/icon.svg",
-    "assets/icon-128.png",
-    "assets/icon-256.png",
     "skills",
-    "manifest",
+    "assets",
     "README.md",
     "LICENSE",
+    "manifest",
     "NOTICE",
     "CHANGELOG.md"
   ],
-  "opencode": {
-    "host": ">=2.4.1 <2.5.0",
-    "icons": [
-      {
-        "src": "assets/icon.svg",
-        "mimeType": "image/svg+xml",
-        "sizes": [
-          "any"
-        ]
+  "capabilities": {
+    "version": 1,
+    "plugin": {
+      "name": "utilities",
+      "title": "Utilities",
+      "summary": "Time, holidays, working days, timers, Open-Meteo weather, on-device speech, and read-only past-session status and exact-text search: stopgaps until OpenCode has them. Load the utilities-time, -weather, -speech or -sessions skill for call shapes. To find a session, use opencode.session.search.",
+      "vendor": {
+        "id": "utilities",
+        "name": "Utilities",
+        "domain": "utilities.invalid"
       },
-      {
-        "src": "assets/icon-128.png",
-        "mimeType": "image/png",
-        "sizes": [
-          "128x128"
-        ]
-      },
-      {
-        "src": "assets/icon-256.png",
-        "mimeType": "image/png",
-        "sizes": [
-          "256x256"
+      "icons": [
+        {
+          "src": "assets/icon.svg",
+          "type": "image/svg+xml"
+        },
+        {
+          "src": "assets/icon-128.png",
+          "type": "image/png"
+        },
+        {
+          "src": "assets/icon-256.png",
+          "type": "image/png"
+        }
+      ],
+      "host": {
+        "opencode": ">=2.4.1 <2.5.0",
+        "tested": [
+          "2.4.1"
         ]
       }
-    ]
+    },
+    "options": {
+      "type": "object",
+      "properties": {
+        "access": {
+          "type": "string",
+          "enum": [
+            "all",
+            "ask-changes",
+            "read-only"
+          ],
+          "default": "all",
+          "description": "How much the plugin's methods may do: reads always run; a change runs under all, asks under ask-changes, and is off under read-only."
+        },
+        "allowUntestedHost": {
+          "type": "boolean",
+          "default": false,
+          "description": "Start on an OpenCode release outside the tested range, instead of refusing with HOST_UNTESTED."
+        },
+        "modules": {
+          "type": "object",
+          "properties": {
+            "time": {
+              "type": "boolean",
+              "default": true,
+              "description": "Register the time and timer methods."
+            },
+            "weather": {
+              "type": "boolean",
+              "default": true,
+              "description": "Register the weather methods."
+            },
+            "speech": {
+              "type": "boolean",
+              "default": true,
+              "description": "Register the speech methods."
+            }
+          },
+          "additionalProperties": false,
+          "default": {
+            "time": true,
+            "weather": true,
+            "speech": true
+          },
+          "description": "Turn a module off; its methods refuse with DISABLED and its programs are never inspected."
+        },
+        "stateRoot": {
+          "type": "string",
+          "description": "Where timers and default speech files are kept. Default: $XDG_DATA_HOME/utilities."
+        },
+        "speech": {
+          "type": "object",
+          "properties": {
+            "assetsDir": {
+              "type": "string",
+              "description": "A folder of pre-seeded speech files, verified by SHA-256; when set, nothing is downloaded."
+            }
+          },
+          "additionalProperties": false,
+          "description": "Speech file options."
+        },
+        "sessionsDatabasePath": {
+          "type": "string",
+          "description": "OpenCode's SQLite database, opened read-only by sessions_grep. Default: $XDG_DATA_HOME/opencode/opencode.db."
+        }
+      },
+      "additionalProperties": false
+    },
+    "methods": {
+      "status": {
+        "class": "read",
+        "accounts": "none"
+      },
+      "diagnose": {
+        "class": "read",
+        "accounts": "none"
+      },
+      "sessions": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "sessions.list"
+        ]
+      },
+      "sessions_grep": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "sessions.database"
+        ]
+      },
+      "time_now": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "time.local"
+        ]
+      },
+      "time_zones": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "time.local"
+        ]
+      },
+      "time_zone_info": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "time.local"
+        ]
+      },
+      "time_convert": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "time.local"
+        ]
+      },
+      "time_calendar": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "time.local"
+        ]
+      },
+      "time_add": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "time.local"
+        ]
+      },
+      "time_between": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "time.local"
+        ]
+      },
+      "time_format": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "time.local"
+        ]
+      },
+      "time_holidays": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "time.local"
+        ]
+      },
+      "time_business_days": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "time.local"
+        ]
+      },
+      "timer_set": {
+        "class": "write",
+        "accounts": "none",
+        "operations": [
+          "time.timers.write"
+        ]
+      },
+      "timer_get": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "time.timers.read"
+        ]
+      },
+      "timer_list": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "time.timers.read"
+        ]
+      },
+      "timer_check": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "time.timers.read"
+        ]
+      },
+      "timer_delete": {
+        "class": "delete",
+        "accounts": "none",
+        "operations": [
+          "time.timers.delete"
+        ]
+      },
+      "native_install": {
+        "class": "admin",
+        "accounts": "none",
+        "operations": [
+          "native.files"
+        ]
+      },
+      "weather_geocode": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "weather.geocode"
+        ]
+      },
+      "weather_current": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "weather.forecast"
+        ]
+      },
+      "weather_daily": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "weather.forecast"
+        ]
+      },
+      "weather_hourly": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "weather.forecast"
+        ]
+      },
+      "weather_demand_signal": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "weather.forecast"
+        ]
+      },
+      "weather_summary": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "weather.forecast"
+        ]
+      },
+      "speech_transcribe": {
+        "class": "read",
+        "accounts": "none",
+        "operations": [
+          "speech.transcribe"
+        ]
+      },
+      "speech_synthesize": {
+        "class": "export",
+        "accounts": "none",
+        "operations": [
+          "speech.synthesize"
+        ]
+      },
+      "speech_install": {
+        "class": "admin",
+        "accounts": "none",
+        "operations": [
+          "speech.files"
+        ]
+      }
+    },
+    "sources": [],
+    "actions": [],
+    "events": {
+      "changed": {}
+    }
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run --maxWorkers=2",
-    "test:kit": "node --test scripts/release-kit.test.mjs",
-    "build": "node scripts/build.mjs",
-    "test:host": "node scripts/host-tests.mjs",
-    "test:tui": "bun test test/tui",
+    "bundle": "node scripts/build.mjs",
     "test:pack": "bun test test/pack",
-    "drift": "bun scripts/drift.mjs",
-    "lint": "node scripts/check-forbidden.mjs && node scripts/check-copies.mjs && node scripts/check-icons.mjs && node scripts/check-workflows.mjs",
     "native:build": "bash scripts/native-build.sh",
     "native:ensure": "node scripts/native-ensure.mjs",
+    "native:ensure:optional": "node scripts/native-ensure.mjs --allow-missing",
     "speech:manifest": "node scripts/speech-manifest.mjs",
-    "check": "npm run native:ensure && npm run typecheck && npm test && npm run test:kit && npm run build && npm run test:host && npm run test:tui && npm run lint && npm run test:pack",
-    "capture": "node scripts/capture-tools.mjs"
+    "kit:check": "plugin-kit check",
+    "record:check": "plugin-kit record --check",
+    "check": "npm run native:ensure:optional && npm run typecheck && npm run bundle && npm test && npm run test:pack && npm run record:check && npm run kit:check"
   },
   "devDependencies": {
-    "@babel/core": "7.29.7",
-    "@babel/preset-typescript": "7.27.1",
+    "@opencode/client": "2.4.1",
     "@opencode/plugin": "2.4.1",
     "@opencode/sdk": "2.4.1",
-    "@opencode/util": "2.4.1",
-    "@opentui/core": "0.8.0",
-    "@opentui/solid": "0.8.0",
     "@types/bun": "1.4.4",
-    "@we-the-rebel-alliance/source-contract": "github:we-the-rebel-alliance/source-contract#v0.3.0",
-    "babel-preset-solid": "1.9.16",
+    "@we-the-rebel-alliance/plugin-contract": "github:we-the-rebel-alliance/plugin-contract#v0.0.0",
     "esbuild": "0.28.2",
-    "solid-js": "1.9.18",
     "typescript": "5.9.3",
     "vitest": "5.0.5",
+    "yaml": "2.9.1",
     "zod": "4.6.7"
   },
-  "jelly": {
-    "title": "Utilities",
-    "summary": "Time, holidays, timers, weather, on-device speech and past-session lookups.",
-    "icon": "assets/icon.svg",
-    "tools": [
-      {
-        "name": "utilities.status",
-        "permission": "utilities_status",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.sessions",
-        "permission": "utilities_sessions",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.sessions_grep",
-        "permission": "utilities_sessions_grep",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.time_now",
-        "permission": "utilities_time_now",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.time_zones",
-        "permission": "utilities_time_zones",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.time_zone_info",
-        "permission": "utilities_time_zone_info",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.time_convert",
-        "permission": "utilities_time_convert",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.time_calendar",
-        "permission": "utilities_time_calendar",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.time_add",
-        "permission": "utilities_time_add",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.time_between",
-        "permission": "utilities_time_between",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.time_format",
-        "permission": "utilities_time_format",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.time_holidays",
-        "permission": "utilities_time_holidays",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.time_business_days",
-        "permission": "utilities_time_business_days",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.timer_set",
-        "permission": "utilities_timer_set",
-        "effect": "allow",
-        "readOnly": false
-      },
-      {
-        "name": "utilities.timer_get",
-        "permission": "utilities_timer_get",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.timer_list",
-        "permission": "utilities_timer_list",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.timer_check",
-        "permission": "utilities_timer_check",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.timer_delete",
-        "permission": "utilities_timer_delete",
-        "effect": "allow",
-        "readOnly": false
-      },
-      {
-        "name": "utilities.weather_geocode",
-        "permission": "utilities_weather_geocode",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.weather_current",
-        "permission": "utilities_weather_current",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.weather_daily",
-        "permission": "utilities_weather_daily",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.weather_hourly",
-        "permission": "utilities_weather_hourly",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.weather_demand_signal",
-        "permission": "utilities_weather_demand_signal",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.weather_summary",
-        "permission": "utilities_weather_summary",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.speech_transcribe",
-        "permission": "utilities_speech_transcribe",
-        "effect": "allow",
-        "readOnly": true
-      },
-      {
-        "name": "utilities.speech_synthesize",
-        "permission": "utilities_speech_synthesize",
-        "effect": "allow",
-        "readOnly": false
-      }
-    ],
-    "skills": [
-      "utilities-time",
-      "utilities-weather",
-      "utilities-speech",
-      "utilities-sessions"
-    ],
-    "rpc": [],
-    "views": [],
-    "signIns": [
-      {
-        "id": "open-meteo",
-        "label": "Open-Meteo",
-        "integration": "open-meteo",
-        "required": false,
-        "help": {
-          "url": "https://open-meteo.com/en/pricing",
-          "label": "Commercial use needs a key from Open-Meteo"
-        }
-      }
-    ],
-    "contributes": {
-      "homeFeeds": [],
-      "homeWidgets": [],
-      "workKinds": [],
-      "settings": [
-        {
-          "key": "access",
-          "label": "Access",
-          "type": "string",
-          "description": "How much the plugin's tools may do. Generates default rules for agents with a base allow rule.",
-          "choices": [
-            {
-              "value": "all",
-              "label": "Allowed",
-              "description": "Every tool runs without asking, reads and changes alike."
-            },
-            {
-              "value": "ask-changes",
-              "label": "Ask before changes",
-              "description": "Reads run without asking. Each change asks you first."
-            },
-            {
-              "value": "read-only",
-              "label": "Read only",
-              "description": "Reads run. Changes never run."
-            }
-          ],
-          "default": "all"
-        }
-      ]
-    }
+  "engines": {
+    "node": ">=24"
   }
 }

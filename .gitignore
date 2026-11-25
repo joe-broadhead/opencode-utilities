@@ -1,7 +1,8 @@
 node_modules/
-dist/
 *.tgz
 .DS_Store
 # Native build outputs (npm run native:build): binaries, speech engine and models, notices, provenance and manifests.
 build/
 manifest/native.json
+test/.skills-host-*
+opencode-probe.db

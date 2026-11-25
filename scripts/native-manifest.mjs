@@ -1,6 +1,5 @@
-// The rules for `manifest/native.json` (NATIVE-DESIGN §2.2), shared by release-commit.mjs, release-github.mjs,
-// check-release-shape.mjs and attach-native.mjs. A plugin with no native part has no manifest, and none of this applies
-// to it.
+// The rules for `manifest/native.json` (NATIVE-DESIGN §2.2), shared by attach-native.mjs, release-assets.mjs and
+// release-manifest.mjs. A plugin with no native part has no manifest, and none of this applies to it.
 //
 // The manifest names the tag, the master commit and the native run its binaries were built from. Each module lists per
 // platform the release asset (a gzip, served from this repository's release on the tag) and the executable it holds,
@@ -27,7 +26,7 @@ export function manifestProblems(manifest, { plugin, tag, commit, repository } =
   if (tag !== undefined && manifest.tag !== tag) problems.push(`tag is ${manifest.tag}; the release tag is ${tag}`)
   const built = manifest.built ?? {}
   if (!SHA1.test(built.commit ?? "")) problems.push("built.commit must be a full sha")
-  else if (commit !== undefined && built.commit !== commit) problems.push(`built.commit is ${built.commit.slice(0, 12)}; the tag's parent is ${commit.slice(0, 12)}`)
+  else if (commit !== undefined && built.commit !== commit) problems.push(`built.commit is ${built.commit.slice(0, 12)}; the tagged commit is ${commit.slice(0, 12)}`)
   if (!isBytes(built.run)) problems.push("built.run must be a positive run id")
   if (built.workflow !== "native") problems.push(`built.workflow is ${built.workflow}; it must be native`)
 

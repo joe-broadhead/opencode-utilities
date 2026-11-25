@@ -1,16 +1,14 @@
-// Shared contract for runtime, host, RPC, TUI and native packaging: types, constant tables and the registration rule.
+// Shared contract for the provider, the handlers and the native packaging: types, constant tables and the routing rule.
 
-export const PLUGIN_ID = "utilities.local"
-export const TUI_ID = "utilities.local.tui"
-export const NAMESPACE = "utilities"
-export const COMMANDS = { status: "utilities-status", speechInstall: "utilities-speech-install", nativeInstall: "utilities-install" } as const
+/** The plugin's one name (contract §3): plugin id, tool namespace, RPC id and bus prefix. */
+export const NAME = "utilities"
+/** The Open-Meteo integration that holds the optional commercial API key. */
 export const WEATHER_INTEGRATION = "open-meteo"
 export const WEATHER_ATTRIBUTION = "Weather data by Open-Meteo.com (CC BY 4.0)"
 
 /**
- * The two session stopgaps. Each names the OpenCode feature whose arrival deletes it; status and the utilities-sessions
- * skill state the same sentence. They cover what OpenCode's own session search and stats do not yet, and are deleted
- * when it ships them.
+ * The two session stopgaps. Each names the OpenCode feature whose arrival deletes it; the utilities-sessions skill and
+ * the diagnose view state the same sentence. They cover what OpenCode's own session tools do not yet.
  */
 export const STOPGAPS = [
   { tool: "utilities_sessions", deletedWhen: "OpenCode gives agents a session list or stats tool with outcome, cost and token fields." },
@@ -20,87 +18,36 @@ export const STOPGAPS = [
 export const MODULES = ["weather", "time", "speech"] as const
 export type Module = typeof MODULES[number]
 
-/** What a call does. compute and read-state assert nothing; the other classes decide the permission requests. */
-const EFFECTS = ["compute", "read-state", "write-state", "network", "read-file", "write-file"] as const
-export type Effect = typeof EFFECTS[number]
-
-/** The 26 tools, registered in NAMESPACE as `utilities_<name>`. `module` and `operation` route a call to its adapter. */
+/**
+ * The 23 methods the runtime runs, by name: the provider's module and operation route a call to its adapter. The
+ * remaining methods (status, diagnose, the two session stopgaps and the two installs) are composed by the handlers.
+ */
 export const TOOLS = {
-  status: { effect: "compute" },
-  sessions: { effect: "read-state" },
-  sessions_grep: { effect: "read-state" },
-  time_now: { effect: "compute", module: "time", operation: "current_time" },
-  time_zones: { effect: "compute", module: "time", operation: "list_timezones" },
-  time_zone_info: { effect: "compute", module: "time", operation: "timezone_info" },
-  time_convert: { effect: "compute", module: "time", operation: "convert_timezone" },
-  time_calendar: { effect: "compute", module: "time", operation: "calendar_query" },
-  time_add: { effect: "compute", module: "time", operation: "date_arithmetic" },
-  time_between: { effect: "compute", module: "time", operation: "date_diff" },
-  time_format: { effect: "compute", module: "time", operation: "date_format" },
-  time_holidays: { effect: "compute", module: "time", operation: "holidays" },
-  time_business_days: { effect: "compute", module: "time", operation: "business_days" },
-  timer_set: { effect: "write-state", module: "time", operation: "timer_set" },
-  timer_get: { effect: "read-state", module: "time", operation: "timer_get" },
-  timer_list: { effect: "read-state", module: "time", operation: "timer_list" },
-  timer_check: { effect: "read-state", module: "time", operation: "timer_check" },
-  timer_delete: { effect: "write-state", module: "time", operation: "timer_delete" },
-  weather_geocode: { effect: "network", module: "weather", operation: "geocode" },
-  weather_current: { effect: "network", module: "weather", operation: "current" },
-  weather_daily: { effect: "network", module: "weather", operation: "daily" },
-  weather_hourly: { effect: "network", module: "weather", operation: "hourly" },
-  weather_demand_signal: { effect: "network", module: "weather", operation: "demand_signal" },
-  weather_summary: { effect: "network", module: "weather", operation: "summary" },
-  speech_transcribe: { effect: "read-file", module: "speech", operation: "transcribe" },
-  speech_synthesize: { effect: "write-file", module: "speech", operation: "synthesize" },
-} as const satisfies Record<string, { readonly effect: Effect; readonly module?: Module; readonly operation?: string }>
-export type ToolName = keyof typeof TOOLS
-export type EffectiveToolName = `${typeof NAMESPACE}_${ToolName}`
-
-/** What a tool can do, for the tools RPC's describe and a job's approval: the worst thing its call does. */
-export type MethodClass = "read" | "write" | "export"
-export function methodClass(name: ToolName): MethodClass {
-  const effect = TOOLS[name].effect
-  if (effect === "write-state") return "write"
-  if (effect === "write-file") return "export"
-  return "read"
-}
-
-// Permissions
-
-export const SPEECH_DOWNLOAD_ACTION = "utilities_speech_download"
-/** The first-use download of a time or weather program: it writes an executable the plugin then runs. */
-export const NATIVE_DOWNLOAD_ACTION = "utilities_native_download"
-/** Inserted as `{ action, resource: "*", effect: "ask" }` directly after each agent's base `* * allow` rule. */
-/** How much the generated default rules allow. `all` is the default; the other two are how a user restricts the plugin. */
-export const ACCESS_VALUES = ["all", "ask-changes", "read-only"] as const
-export type Access = typeof ACCESS_VALUES[number]
-
-/** The actions that change something: a timer, a file, or a download. Everything else is a read. */
-export const CHANGING_ACTIONS = [
-  "utilities_timer_set", "utilities_timer_delete", "utilities_speech_synthesize", SPEECH_DOWNLOAD_ACTION, NATIVE_DOWNLOAD_ACTION,
-] as const
-/** The reads: every time tool, every timer read, every weather tool and transcription. */
-export const READ_ACTIONS = Object.keys(TOOLS)
-  .filter(name => !(CHANGING_ACTIONS as readonly string[]).includes(`utilities_${name}`))
-  .map(name => `utilities_${name}`)
-/** The plugin's namespace: a tool Utilities adds later follows the same effect. */
-export const NAMESPACE_ACTION = `${NAMESPACE}_*`
-/** The actions the default block holds back whenever `access` is not `all`: status and the docs list them. */
-export const DEFAULT_ASK = [...CHANGING_ACTIONS] as const
-type DefaultAskAction = typeof DEFAULT_ASK[number]
-
-type AssertedTool = { [K in ToolName]: typeof TOOLS[K]["effect"] extends "write-state" | "network" | "write-file" ? K : never }[ToolName]
-/** Tool actions for write-state, network and write-file calls; host `read`, `edit` and `external_directory` for file paths. */
-type PermissionAction = `${typeof NAMESPACE}_${AssertedTool}` | typeof SPEECH_DOWNLOAD_ACTION | typeof NATIVE_DOWNLOAD_ACTION | "read" | "edit" | "external_directory"
-export interface PermissionRequest {
-  readonly action: PermissionAction
-  readonly resources: readonly string[]
-  readonly save?: readonly string[]
-  readonly metadata?: Readonly<Record<string, unknown>>
-}
-export interface Invocation { readonly sessionID: string; readonly agent: string; readonly messageID: string; readonly id: string; readonly signal: AbortSignal }
-/** Asserts each request in order. Host permission errors propagate unchanged. */
-export type Authorize = (requests: readonly PermissionRequest[], invocation: Invocation) => Promise<void>
+  time_now: { module: "time", operation: "current_time" },
+  time_zones: { module: "time", operation: "list_timezones" },
+  time_zone_info: { module: "time", operation: "timezone_info" },
+  time_convert: { module: "time", operation: "convert_timezone" },
+  time_calendar: { module: "time", operation: "calendar_query" },
+  time_add: { module: "time", operation: "date_arithmetic" },
+  time_between: { module: "time", operation: "date_diff" },
+  time_format: { module: "time", operation: "date_format" },
+  time_holidays: { module: "time", operation: "holidays" },
+  time_business_days: { module: "time", operation: "business_days" },
+  timer_set: { module: "time", operation: "timer_set" },
+  timer_get: { module: "time", operation: "timer_get" },
+  timer_list: { module: "time", operation: "timer_list" },
+  timer_check: { module: "time", operation: "timer_check" },
+  timer_delete: { module: "time", operation: "timer_delete" },
+  weather_geocode: { module: "weather", operation: "geocode" },
+  weather_current: { module: "weather", operation: "current" },
+  weather_daily: { module: "weather", operation: "daily" },
+  weather_hourly: { module: "weather", operation: "hourly" },
+  weather_demand_signal: { module: "weather", operation: "demand_signal" },
+  weather_summary: { module: "weather", operation: "summary" },
+  speech_transcribe: { module: "speech", operation: "transcribe" },
+  speech_synthesize: { module: "speech", operation: "synthesize" },
+} as const satisfies Record<string, { readonly module: Module; readonly operation: string }>
+export type ModuleTool = keyof typeof TOOLS
 
 // Availability and failures
 
@@ -110,7 +57,7 @@ export const AVAILABILITY = [
 ] as const
 export type Availability = typeof AVAILABILITY[number]
 export type FailureCode = Exclude<Availability, "AVAILABLE">
-  | "HOST_UNTESTED" | "OPTIONS_INVALID" | "STATUS_UNAVAILABLE" | "SKILLS_INVALID" | "INPUT_INVALID" | "INPUT_LIMIT" | "OUTPUT_LIMIT" | "QUEUE_FULL" | "CANCELLED" | "DEADLINE_EXCEEDED"
+  | "OPTIONS_INVALID" | "INPUT_INVALID" | "INPUT_LIMIT" | "OUTPUT_LIMIT" | "QUEUE_FULL" | "CANCELLED" | "DEADLINE_EXCEEDED"
   | "SPAWN_FAILED" | "BACKEND_FAILED" | "BACKEND_JSON_INVALID" | "STDOUT_LIMIT" | "STDERR_LIMIT"
   | "TIME_NONEXISTENT" | "TIME_AMBIGUOUS" | "TIME_OFFSET_MISMATCH" | "TIME_OUT_OF_RANGE" | "HOLIDAY_COVERAGE"
   | "TIMER_EXISTS" | "TIMER_NOT_FOUND" | "TIMER_QUOTA" | "TIMER_BYTE_QUOTA" | "TIMER_STATE_UNKNOWN"
@@ -124,11 +71,9 @@ export interface UtilitiesFailure { readonly code: FailureCode; readonly message
 
 // Inputs and outputs
 
-/** `output` is the structured tool output; `text` is the content the model reads. */
-export interface AdapterResult<O = unknown> { readonly output: O; readonly text: string }
 /** `path` is relative to the location directory, or absolute. */
 export interface TranscriptionInput { readonly path: string; readonly language?: string }
-/** Without `path`, the WAV goes to `$XDG_DATA_HOME/opencode-utilities/speech/<project-scope>/<id>.wav`. */
+/** Without `path`, the WAV goes to `$XDG_DATA_HOME/utilities/speech/<project-scope>/<id>.wav`. */
 export interface SynthesisInput { readonly text: string; readonly voice?: string; readonly path?: string }
 export interface SynthesisOutput {
   readonly path: string
@@ -143,29 +88,22 @@ export interface SynthesisOutput {
 export type WeatherOutput<T extends object> = T & { readonly attribution: typeof WEATHER_ATTRIBUTION }
 export type GeocodeOutput<L> = WeatherOutput<{ readonly locations: readonly L[] }>
 
-// Status: one view for the utilities_status tool, the utilities-status command, the RPC `status` method and the TUI.
+// Status: the diagnose view. The contract's own status comes from the accounts module's statusAnswer.
 
 /**
- * The plugin's state in the shared machine form (S13). Utilities has no service to connect to, so it is `ready`,
- * unless every enabled module failed, or every module is off. It has no status-only mode: outside the supported range
- * setup refuses, so `host_untested` never occurs; an untested host shows only in `host.tested` and the OpenCode row.
+ * The plugin's state in the shared machine form. Utilities has no service to connect to, so it is `ready`, unless every
+ * enabled module failed, or every module is off.
  */
 export const STATES = ["ready", "failed", "disabled"] as const
 export type StatusState = typeof STATES[number]
 
-/**
- * The shared status fields (S13) come first: `version`, `host`, `state`, `unguardedAgents` and `nextStep`, which is
- * exactly the `Next step` row. Elsewhere, an item's `next` is its own next step, present only when it needs action.
- */
-export interface StatusView {
+/** The diagnose method's answer: what this machine can do, and why not, with one next step per item that needs one. */
+export interface DiagnoseView {
   readonly version: string
-  /** `range` is package.json `opencode.host`; `tested` is true only for a release in the tested list. */
-  readonly host: { readonly version: string | null; readonly range: string; readonly tested: boolean; readonly next?: string }
+  readonly host: { readonly version: string | null; readonly range: string; readonly tested: boolean }
   readonly state: StatusState
-  /** Agents that did not get the default rules and whose own rules would run a Utilities change without asking. */
-  readonly unguardedAgents: readonly string[]
-  /** What the generated default rules allow, from the plugin options. */
-  readonly access: Access
+  /** What the generated access rules allow, from the plugin options. */
+  readonly access: "all" | "ask-changes" | "read-only"
   /** The two session stopgaps and the OpenCode feature each waits on. */
   readonly stopgaps: readonly { readonly tool: string; readonly deletedWhen: string }[]
   readonly nextStep: string
@@ -187,39 +125,18 @@ export interface StatusView {
     readonly next?: string
   }
   readonly timers: { readonly due?: number; readonly directory: string; readonly next?: string }
-  /** Skills with one of the plugin's ids that OpenCode loads instead of the plugin's own; empty when none. */
-  readonly shadowedSkills: readonly { readonly name: string; readonly path: string }[]
-  readonly permissions: {
-    readonly askByDefault: readonly DefaultAskAction[]
-    /** The block the plugin inserts, generated from `defaultRules(access)`: the one an unguarded agent needs. */
-    readonly block: readonly { readonly action: string; readonly resource: string; readonly effect: "allow" | "ask" | "deny" }[]
-  }
-}
-
-/** The status tool's output: the view with the unguarded agents as a count, and a next step that points to /utilities-status for them. */
-export interface StatusSummary extends Omit<StatusView, "unguardedAgents"> {
-  readonly unguardedAgents: number
-}
-
-/** Whether a module's skill and engine tools are registered. Speech and the time and weather programs stay registered while only their files are missing: the first call can download them. */
-export function registrable(module: Module, availability: Availability) {
-  return availability === "AVAILABLE" || (module === "speech" ? availability === "SPEECH_ASSETS_MISSING" : availability === "NATIVE_FILES_MISSING")
-}
-/** Whether a tool is registered: status always, every other tool when its module is registrable. */
-export function toolRegistrable(tool: ToolName, modules: { readonly [M in Module]: { readonly availability: Availability } }) {
-  const entry = TOOLS[tool]
-  return !("module" in entry) || registrable(entry.module, modules[entry.module].availability)
 }
 
 // Configuration and runtime
 
-/** Plugin options. Defaults: every module on; stateRoot `$XDG_DATA_HOME/opencode-utilities`. */
+/** Plugin options. Defaults: every module on; stateRoot `$XDG_DATA_HOME/utilities`. */
 export interface Config {
   readonly modules?: { readonly [M in Module]?: boolean }
   readonly stateRoot?: string
   readonly speech?: { readonly assetsDir?: string }
   readonly sessionsDatabasePath?: string
   readonly allowUntestedHost?: boolean
+  readonly access?: "all" | "ask-changes" | "read-only"
 }
 /**
  * From the public `ctx.location`: the project ID, the location directory and the project's directory. As in the
@@ -228,10 +145,9 @@ export interface Config {
 export interface ProjectLocation { readonly project: string; readonly directory: string; readonly projectDirectory: string }
 export interface RuntimeOptions {
   readonly location: ProjectLocation
-  readonly authorize: Authorize
   readonly modules: { readonly [M in Module]: boolean }
   readonly stateRoot: string
-  /** `$XDG_CACHE_HOME/opencode-utilities` by default. */
+  /** `$XDG_CACHE_HOME/utilities` by default. */
   readonly cacheRoot: string
   /** Pre-seeded speech assets, verified by hash; nothing is downloaded. */
   readonly speechAssetsDir?: string
@@ -244,27 +160,20 @@ export interface RuntimeOptions {
   /** The installed package root, which holds manifest/. */
   readonly packageRoot?: string
 }
-/** Tools that run a module. `status` is composed by the host from `Runtime.status`. */
-export type ModuleTool = { [K in ToolName]: typeof TOOLS[K] extends { readonly module: Module } ? K : never }[ToolName]
-/** The StatusView items the runtime fills; the host fills version, host, weather and permissions. */
-export type RuntimeStatus = Pick<StatusView, "platform" | "modules" | "speech" | "timers">
-/** The view before its derived fields, `state` and `nextStep`, are filled in. */
-export type StatusFacts = Omit<StatusView, "state" | "nextStep">
+/** The StatusView items the runtime fills; the handler fills version, host, weather, access, stopgaps and nextStep. */
+export type RuntimeStatus = Pick<DiagnoseView, "platform" | "modules" | "speech" | "timers">
 export interface NativeInstallOutput { readonly downloaded: readonly { readonly name: string; readonly bytes: number }[]; readonly bytes: number; readonly cacheDirectory: string }
 export interface SpeechInstallOutput { readonly downloaded: readonly { readonly name: string; readonly bytes: number }[]; readonly bytes: number; readonly cacheDirectory: string }
 export interface Runtime {
-  /** Runs a module tool: parse, availability, permission, any speech download, queue, then the deadline-bound work. Every permission request goes through `RuntimeOptions.authorize` before any effect. */
-  invoke(tool: ModuleTool, input: unknown, invocation: Invocation): Promise<AdapterResult>
+  /** Runs a module tool: parse, availability, queue, then the deadline-bound work. */
+  invoke(tool: ModuleTool, input: unknown, signal: AbortSignal): Promise<unknown>
   status(signal?: AbortSignal): Promise<RuntimeStatus>
-  /** Downloads every missing speech file. `authorize`, when given, receives the utilities_speech_download request first. */
-  installSpeech(options?: { readonly signal?: AbortSignal; readonly authorize?: (requests: readonly PermissionRequest[]) => Promise<void> }): Promise<AdapterResult<SpeechInstallOutput>>
-  /** Downloads the time and weather programs that are missing. `authorize`, when given, receives the utilities_native_download request first. */
-  installNatives(options?: { readonly signal?: AbortSignal; readonly authorize?: (requests: readonly PermissionRequest[]) => Promise<void> }): Promise<AdapterResult<NativeInstallOutput>>
-  /** Calls `listener` whenever a module's availability changes, for example after a speech download, so the host can reload its tools. Returns the unsubscribe function. */
-  onAvailabilityChange(listener: () => void): () => void
+  /** Downloads every missing speech file. */
+  installSpeech(options?: { readonly signal?: AbortSignal }): Promise<SpeechInstallOutput>
+  /** Downloads the time and weather programs that are missing. */
+  installNatives(options?: { readonly signal?: AbortSignal }): Promise<NativeInstallOutput>
   close(): Promise<void>
 }
-export type CreateRuntime = (options: RuntimeOptions) => Promise<Runtime>
 
 // Native distribution
 
@@ -282,10 +191,10 @@ export const PLATFORMS = {
 export type Platform = keyof typeof PLATFORMS
 /**
  * The oldest glibc each Linux binary runs on. The time and weather programs are built on Ubuntu 22.04 (glibc 2.35) and
- * require nothing newer than GLIBC_2.34, so they run on RHEL 9 and its rebuilds (2.34) too. The
- * speech engine is built on Ubuntu 24.04 (glibc 2.39), because the ONNX Runtime library it links statically needs glibc
- * 2.38 and GCC 13's libstdc++. scripts/native-closure.mjs refuses a release binary above its floor, and the runtime
- * reports UNSUPPORTED_PLATFORM on a system below it.
+ * require nothing newer than GLIBC_2.34, so they run on RHEL 9 and its rebuilds (2.34) too. The speech engine is built
+ * on Ubuntu 24.04 (glibc 2.39), because the ONNX Runtime library it links statically needs glibc 2.38 and GCC 13's
+ * libstdc++. scripts/native-closure.mjs refuses a release binary above its floor, and the runtime reports
+ * UNSUPPORTED_PLATFORM on a system below it.
  */
 export const GLIBC_FLOORS = { "time-keep": "2.34", "weather-signal": "2.34", "utilities-speech": "2.39" } as const
 export type GlibcBinary = keyof typeof GLIBC_FLOORS

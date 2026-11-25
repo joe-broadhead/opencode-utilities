@@ -1,124 +1,76 @@
 # Architecture
 
-`@we-the-rebel-alliance/utilities-plugin` is a JavaScript OpenCode plugin. Time, weather and speech run as bounded subprocesses. The plugin does not shell out with a user string, and it does not download the time or weather programs.
+## Layers
 
-User-facing options, permission rules and limits are in [configuration.md](configuration.md). This page is the design those rules implement.
+| Layer | Files | Does |
+|---|---|---|
+| Entry | `src/index.ts` | `assertHost`, load the options, create the provider, one `register` call, register the skills, dispose everything |
+| Skills | `src/skills.ts` | reads every `skills/<name>/SKILL.md`, parses the front matter as YAML, checks it, and registers each skill through `ctx.skill.transform` |
+| Handlers | `src/handlers/` | one file per method: its description, its input and output schemas, and its work |
+| Provider | `src/provider/` | the only code that runs a program, calls Open-Meteo, reads OpenCode's database or downloads a release file |
+| Domain | `src/domain/` | shared types, the error table and options validation |
 
-## Shape
+`src/handlers/` never touches tools, RPC, permissions or the bus directly: `register` wires every door, and a handler
+reads `call.bus` only to emit `changed`. Every provider endpoint is named in `src/provider/` and only there: the
+Open-Meteo hosts are in `provider/modules/weather/argv.ts` and the release URL in `provider/process/install.ts`. The
+program names (`time-keep`, `weather-signal`, `utilities-speech`) also sit in the native distribution table in
+`src/domain/contract.ts`, because the native build scripts read that table too.
 
-`Plugin.define` registers, synchronously:
+## Skills
 
-- a tool transform for the `utilities` namespace;
-- default ask rules, inserted after each agent's base allow;
-- the `open-meteo` key integration;
-- `/utilities-status`, `/utilities-install` and `/utilities-speech-install`;
-- one RPC method, `status`;
-- the tools RPC `utilities.local.tools`, with one `evaluate` permission hook;
-- four skills.
+The package ships five skills (`skills/utilities`, `-time`, `-weather`, `-speech`, `-sessions`). OpenCode 2.4.1 does not
+scan an installed plugin package's `skills/` folder: its skill roots are the config and agent directories, and
+`ctx.skill.transform` is the only loader a plugin has. `readSkills` reads every directory under `skills/` before
+anything registers, parses each `SKILL.md` front matter with the `yaml` package, and checks the name, the description
+and the body. YAML block scalars (`>`, `|`, `>-`, `|-`) therefore register their folded or literal text, never the
+marker; a plain description containing `': '` must be quoted, because YAML is strict. A missing or malformed file fails
+setup with `SCHEMA_VIOLATION` before a partial registration exists. `registerSkills` then adds every checked skill in
+`ctx.skill.transform` and returns its disposer, which setup disposes on unload. The contract has no skill wiring and the
+manifest has no skills key, so this is the plugin's own code.
 
-The two session stopgaps run in the host's own code, not a module. `utilities_sessions` calls the public `ctx.session.list` and `ctx.session.get` (paged by cursor, so its totals cover the window) and renders status, cost, tokens and time windows. `utilities_sessions_grep` opens OpenCode's database read-only through a dynamic `bun:sqlite` import (`src/modules/sessions/sqlite.ts`), checks the `session_v2`, `session_message` and `session_part` schema first, and matches literal text with `String.includes` in each part's tool name, input values and output text and in each message. Both are read class, both cap their rows and bytes, and both are deleted when OpenCode ships the named feature. The dynamic import is why the Node unit tests can inject a database instead.
+## The provider client
 
-The tools RPC (`src/host/scripting.ts`, on `src/tools-rpc.ts` and the source contract's transport) gives scripts the tools that change nothing, with no model. Each method runs `runTool`, the same function the model's tool runs, after parsing the input with the tool's schema, because OpenCode does not check an RPC method's inner input. It refuses a tool the session's agent or session rules hide, as OpenCode hides it from the model; the tool's own asserts then carry the script call's source id, and the hook turns an ask on one of those ids into a deny, since no one can answer it. Methods are chosen by effect: `compute`, `read-state`, `network` and `read-file`, never `write-state` or `write-file`. `describe` reports a method unavailable with its module's code exactly when the model's tool is not registered. The transport is `@we-the-rebel-alliance/source-contract/tools-rpc`, bundled into `dist/index.js`; `src/tools-rpc.ts` is Utilities' part of it.
+`createProvider` builds the runtime once per plugin instance:
 
-The TUI part `utilities.local.tui` is compiled at build time to `dist/tui.js`. It reads only `status`. OpenCode supplies `@opencode/plugin`, OpenTUI and Solid. The package has no peer dependencies and no install scripts.
+- **The runtime** (`provider/runtime.ts`) parses the input with the module's zod schema, checks availability, admits the
+  call to a per-module queue, starts the module's deadline, stages a private job directory, runs the program and removes
+  the job. A timer write that fails after the program started is `TIMER_STATE_UNKNOWN`, never a retryable failure.
+- **The programs** (`provider/backends.ts`) are read from `manifest/native.json` when the installed package has one;
+  otherwise `readNativeManifest` fetches `native.json` from this version's release, checks it with the same parser, and
+  caches it under `<cacheRoot>/native/<release tag>/native.json`. The programs are cached under
+  `<cacheRoot>/native/<release tag>/<module>/<platform>/<name>`, and verified against their pinned SHA-256 before every
+  run. A linked or non-executable file is refused; a changed one is not the program.
+- **The speech files** (`provider/speech-assets/`) are read from `manifest/speech-assets.json`, cached under
+  `<cacheRoot>/<sha256>/<name>`, and verified the same way. `speech.assetsDir` makes them pre-seeded: nothing is
+  downloaded.
+- **The weather key** (`provider/weather.ts`) is the `open-meteo` OpenCode integration. It is resolved at call time and
+  passed in `OPEN_METEO_API_KEY`; the provider marks it rejected after a 401/403 and clears that after a success.
+- **The session sources** (`provider/modules/sessions/`) bind `ctx.session.list`/`get` and a read-only SQLite
+  connection. The connection is the documented exception to public APIs only (standard §4 rule 1): `readonly: true`,
+  only a schema check and `SELECT`s, a clean `CONTRACT_MISMATCH` on an unknown schema, and masking before anything is
+  returned.
 
-`src/index.ts` and `src/tui.tsx` are bundled by esbuild (`scripts/build.mjs`, splitting off) into exactly `dist/index.js` and `dist/tui.js`. Each is self-contained and neither imports a relative path. The module adapters and zod are inlined in `dist/index.js` only. The RPC contract in `src/rpc.ts` is plain JSON Schema, so `dist/tui.js` carries no zod; the server keeps a zod copy (`src/host/status-schema.ts`) to validate its answer and to type the status tool, and a unit test keeps the two identical. OpenCode reloads an updated plugin in place but keeps module records it already holds, so a sibling file could be stale; with no siblings, that cannot happen. Both files sit in `dist/`, one level below the package root, so `manifest/`, `skills/` and the platform package resolve from there. First-party code and `zod` are inlined; the root `NOTICE` carries zod's licence, and the build fails if it stops matching the bundle. Sources import it as `import * as z from "zod"`, so the bundle keeps the English locale and not the other sixty-three. Only host-provided modules (`@opencode/plugin`, `@opentui/*`, `solid-js`), `node:` built-ins and the `bun:sqlite` built-in stay external; the build fails on anything else. No declaration files ship: OpenCode loads the JavaScript, and nothing consumes plugin types. `exports` lists only `.` (the server part) and `./tui`. No `.tsx` file ships.
+## What is cached
 
-The runtime plans a call, asks for permission, then starts the module deadline. Compute and timer reads assert nothing. Weather, timer writes, synthesis, transcription of a file, and a missing speech download assert before any effect. A late approval cannot start work: the call is fenced against the tool signal after the assert settles. Host permission errors propagate unchanged.
+| Cache | Keeps | For |
+|---|---|---|
+| `<stateRoot>/projects/<hash>/timers` | this project's timers | until deleted |
+| `<stateRoot>/speech/<hash>/*.wav` | default synthesised WAVs | 7 days (swept at setup) |
+| `<cacheRoot>/native/...` | the verified programs | until the release changes |
+| `<cacheRoot>/<sha256>/...` | the verified speech files | until deleted |
+| `<cacheRoot>/weather/weather-signal` | Open-Meteo responses | 30 minutes (forecast), 30 days (places); swept at 31 days |
+| `<stateRoot>/jobs/job-*` | a call's staging | removed when the call ends; a crash leaves one, swept at 10 minutes |
 
-Each module has its own queue. A child is a fixed argument array, `shell: false`, with a scrubbed environment rooted in a private job directory: empty `PATH`, fixed locale, no host credentials. The Open-Meteo key, when connected, is the only extra variable, `OPEN_METEO_API_KEY`. Stdout is capped at 1 MiB and stderr at 64 KiB. Stderr never reaches the model. Cancellation sends `SIGTERM`, then `SIGKILL` after 100 ms, and reaps the process group. Windows is not supported.
+## OpenCode APIs
 
-Integrity of a program or model file is checked once per process and cached by file identity (`dev`, `ino`, `size`, `mtimeMs`, `ctimeMs`). A symbolic link never passes. The roots (state, cache, `speech.assetsDir` and the installed package) are resolved once with `realpath` at startup, so links above them are allowed and links inside them are `UNSAFE_PATH`. The state directory must be mode `0700` and owned by the user.
+Only the public `@opencode/plugin` 2.4.1 context: `ctx.app.version`, `ctx.options`, `ctx.location`, `ctx.session.list`
+and `ctx.session.get`, `ctx.integration` (the `open-meteo` connection), `ctx.skill.transform` for the skills, and what
+`register` uses (`agent`, `tool`, `rpc`, `permission`). The bundle keeps `@opencode/plugin` external and inlines everything else, so a hot reload cannot mix a
+new entry with an old sibling module.
 
-The plugin does not log tool input, paths, transcripts, timer text or child stderr.
+## Errors
 
-## Backends
-
-Time and weather have no public library entry point. Their CLIs are fixed command contracts, so the plugin ships those programs rather than another MCP transport. Speech uses a plugin-owned bridge over aurum-core, because the aurum CLI drops STT fields, has no request IDs, and loads ambient configuration.
-
-Pins, not release tags:
-
-| Program | Source | Commit |
-| --- | --- | --- |
-| time-keep | `https://github.com/joe-broadhead/time-keep` | `0dfc8892f43c7ad36d9fe204f9510e8a3cc3fec8` |
-| weather-signal | `https://github.com/joe-broadhead/weather-signal` | `ae1dc3b644a37bc566e7d1d0de56576aa6ff45c5` |
-| utilities-speech | `native/speech-bridge` over aurum-core `https://github.com/joe-broadhead/aurum` | `8e3b70fbb0c76add3cbcf7291098e88f2c8bea70` |
-
-The commits and the Rust toolchain (`1.96.0`) are in `native/sources.json` and `native/speech-bridge/Cargo.toml`. Lockfiles are in `native/locks/` and `native/speech-bridge/Cargo.lock`. Version strings do not identify the bytes. `manifest/native.json` records the size and SHA-256 of each built program and of its release file.
-
-Weather reads may follow redirects from the fixed starting URLs. Those URLs are always passed on the command line, including the unused historical archive, so the CLI cannot fall back to a default host. A commercial key switches the three URLs to the `customer-*` hosts. The free tier stays on `api.open-meteo.com` and `geocoding-api.open-meteo.com`.
-
-Time's holiday data covers 2000–2030. Timer set is an upstream upsert; the adapter holds the store lock across the existence check and the write so `replace: false` is real. Timer reads can create the database. The timer lock is never stolen. The download lock may be taken over only after the install deadline, because a download is idempotent once the hash matches.
-
-Do not set `AURUM_CACHE`. The pinned aurum core does not implement it. The bridge receives explicit paths and `local_only` behaviour: a missing model fails, it does not download.
-
-## Time and weather programs
-
-`time-keep` and `weather-signal` are built for each platform into `build/native/<platform>/`. Each release file is the gzip of one executable, `<program>-<platform>.gz`, on this repository's GitHub Release. The release commit's `manifest/native.json` pins, for each platform, the file's size and SHA-256 and the executable's size and SHA-256. The package ships that manifest and no program.
-
-The first call that needs a program downloads it, after the `utilities_native_download` permission (resource and save: `github.com`). `/utilities-install` downloads both on request, as the person's own command. Status reads the cache and never downloads. A download is checked twice before anything is installed: the file's size and SHA-256 as it arrives, then the executable's size and SHA-256 after decompression. Only then is it renamed into `$XDG_CACHE_HOME/opencode-utilities/native/<tag>/<program>/<platform>/<program>`.
-
-Before every run the cached executable is verified again. A link is `UNSAFE_PATH`. Bytes that are not the pinned ones are replaced by a download, after the permission. A file without owner execute is `INTEGRITY_MISMATCH`. Each file is hashed once per process and file identity (`dev`, `ino`, `size`, `mtimeMs`, `ctimeMs`).
-
-Time and weather stay registered while their programs are missing, so the first call can download them. Status shows `NATIVE_FILES_MISSING` until then. musl and Windows have no build. macOS x64 has time and weather only.
-
-## Speech assets
-
-The engine and four models are release files, not npm files and not git files. `manifest/speech-assets.json` is generated with each file's name, SHA-256, size and URL:
-
-`https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v<version>/<name>`
-
-Names are unique, so a pre-seed directory is flat. The engine is `utilities-speech-<platform>` and must be executable. The models are `ggml-tiny-q5_1.bin` (MIT), `kitten_tts_nano_v0_8.onnx`, `kitten_tts_nano_v0_8-voices.npz` and `kitten_tts_nano_v0_8-config.json` (Apache-2.0). About 105 MB together. macOS x64 has no engine: ONNX Runtime has no prebuilt static library for that target (`native/onnx-provenance.json`).
-
-The transcription and synthesis tools stay registered while files are missing, on a platform that has an engine. The first call that needs a missing file, and `/utilities-speech-install`, assert `utilities_speech_download` first. The resource is the release host. `metadata.bytes` is the size. Transcription needs the engine and the Whisper model. Synthesis also needs the three Kitten files.
-
-A download goes to a private temporary file in the destination directory, never above the pinned size. Only a file whose size and SHA-256 match is given its mode and renamed into `$XDG_CACHE_HOME/opencode-utilities/<sha256>/<name>`. A cross-instance lock covers each file. Unverified bytes are never executed. `fetch` is the runtime's fetch; a proxy has to be visible to that fetch. The call's abort signal applies. A stall of 60 seconds with no bytes fails the download.
-
-`speech.assetsDir` skips the network. Each `<assetsDir>/<name>` is hash-checked. A miss or a mismatch is `SPEECH_ASSETS_MISSING`, not a download.
-
-Synthesis writes a PCM16 WAV. The default path is `$XDG_DATA_HOME/opencode-utilities/speech/<project>/<id>.wav`, where `<project>` is a hash of the project ID. Files there older than 7 days, and `jobs/job-*` directories older than 10 minutes, are removed at startup. A path the caller chose is not swept. The tool returns the path, size, hash, duration, sample rate, channels and voice. No broker is involved.
-
-Transcription identifies the source before the prompt, re-checks it after approval, and refuses a symbolic link or a file that changed. The WAV parser accepts ancillary chunks (`JUNK`, `LIST`, `FLLR`, `bext` and others) and rejects compressed, float, extensible and malformed files. The bridge does not call ffmpeg.
-
-## Bridge protocol
-
-One process reads one UTF-8 JSON line from stdin and writes one JSON line. The line limit is 32 KiB in and 1 MiB out, including the newline. Unknown fields fail. Native stdout and stderr are diverted; the response uses a saved descriptor, so native diagnostics are not the protocol.
-
-```json
-{"protocolVersion":1,"requestId":"<uuid>","operation":"synthesize","cacheRoot":"<job cache>","payload":{"text":"Example","outputPath":"<job>/output.wav","modelPath":"<model>","voicesPath":"<voices>","configPath":"<config>"}}
-```
-
-`operation` is `transcribe` or `synthesize`. There is no capabilities call. Administrative paths come from the verified manifest or the private job directory, never from an unsanitised tool argument.
-
-| Operation | Payload | Result |
-| --- | --- | --- |
-| `transcribe` | `{inputPath, modelPath, language?}` | Core STT DTO, `schema_version` 2 |
-| `synthesize` | `{text, outputPath, modelPath, voicesPath, configPath, voice?}` | `{meta, outputPath}` with core TTS metadata, `schema_version` 1 |
-
-The three Kitten files are separate paths. The content-addressed cache keeps each file in its own directory, so there is no shared `modelRoot`.
-
-A success is `{"protocolVersion":1,"requestId":"<uuid>","ok":true,"result":...}`. A failure is `{"ok":false,"error":{"code":"..."}}` with the same protocol and request ID. An invalid envelope has an empty request ID. The TypeScript adapter checks the request ID and the output schema. Error codes do not contain input text or paths.
-
-Transcription language defaults to detection. Synthesis defaults to the voice `Luna`. The bridge accepts at most 5,000 characters and writes at most 50 MiB. It also applies a 115-second core deadline. The parent enforces the 120-second module deadline, escalates to `SIGKILL`, and reaps the child. The bridge is not an authorisation boundary.
-
-## Native build
-
-The programs, the speech engine, the models, the notices and both manifests (`manifest/native.json`, `manifest/speech-assets.json`) are build outputs. They are gitignored. A clone does not contain them. Contributors need the Rust 1.96.0 toolchain from rustup, plus a C toolchain. `npm run native:build` builds the host platform. It refuses to run without that toolchain.
-
-```sh
-npm run native:build
-```
-
-`NATIVE_BUILD_ROOT` holds source checkouts and Cargo's target directory. It must be outside the repository and must not contain spaces. The default is `$XDG_CACHE_HOME/opencode-utilities-native-build` (or `~/.cache/opencode-utilities-native-build`). Rust and C paths are remapped (`/cargo`, `/build`, `/utilities`) so a binary we compile does not embed a builder's home directory. Strings already compiled into the pinned ONNX Runtime static library are not rewritten. macOS builds set `MACOSX_DEPLOYMENT_TARGET=14.0` and `GGML_NATIVE=OFF`.
-
-The script checks the pinned commits and lockfiles, builds time-keep and weather-signal into `build/native/<platform>/`, and, where ONNX Runtime has a static library, builds `utilities-speech-<platform>` into `build/speech-assets/`. `scripts/native-models.mjs` fetches the four pinned models into that same directory and checks size and SHA-256. `scripts/native-onnx.mjs` does the same for the ONNX static library. Neither runs on install or during a tool call. The recipe does not claim byte-identical output across linkers. The manifests record the hashes of the bytes just built.
-
-On Linux the release builds the programs and the speech engine on different runners, because they have different glibc floors (`GLIBC_FLOORS` in `src/domain/contract.ts`). `time-keep` and `weather-signal` build on Ubuntu 22.04 and 22.04-arm (glibc 2.35) with `--no-speech --floors`, and require nothing newer than `GLIBC_2.34`, so their floor is 2.34: RHEL 9 and its rebuilds run them too. The speech engine builds on Ubuntu 24.04 and 24.04-arm with `--speech-only --floors`, because the pinned ONNX Runtime static library references glibc 2.38 symbols (`__isoc23_strtoll`) and GCC 13 libstdc++ symbols; its floor is 2.39. The workflow's merge job places both, then `scripts/native-closure.mjs --floors-only` reads each Linux binary's version needs with `readelf` and refuses one that requires a newer glibc than its floor. A build on one machine, such as `npm run native:build` on Ubuntu 24.04, builds everything there, and its programs need that machine's glibc; only the release's split builds meet the 2.34 floor. At run time the plugin reads the system's glibc (`process.report`) and reports `UNSUPPORTED_PLATFORM` for a module whose floor it does not meet, before any prompt or download, as it does for macOS x64's speech.
-
-`npm run check` runs `native:ensure` first. That builds this platform when an output is missing or an input changed, and does nothing when the files are current. Without Rust it fails and names `rustup toolchain install 1.96.0`. CI runs `npm ci --ignore-scripts` and then `npm run check`, so the ensure step builds the files on a clean runner. The `native` workflow builds the release files on `master` and attests them. The release commit pins their hashes, and the release job checks them again before it attaches the files to the GitHub Release. [CONTRIBUTING.md](../CONTRIBUTING.md#releasing) lists the release steps.
-
-## Licences
-
-`licenses/upstream/` holds the committed licence texts for the pinned programs, models and ONNX Runtime. The platform `NOTICE` and `build/speech-assets/utilities-speech-NOTICE.txt` are generated at build time from those texts and the locked Cargo graphs, including build dependencies. They are not committed. Identical texts in one notice are printed once. The npm package does not carry `licenses/`: each licence ships with what it covers. See [licenses/README.md](../licenses/README.md).
-
-Weather data terms are separate from the software licences. Results and the README carry `Weather data by Open-Meteo.com (CC BY 4.0)`.
+`src/domain/common.ts` holds the provider's codes and their one-line messages and next steps. `src/handlers/refusal.ts`
+maps each to the closest contract code (`INPUT_INVALID`, `TOO_LARGE`, `OPTIONS_INVALID`, otherwise `UNAVAILABLE`) and
+keeps the provider's code at the front of the sentence, so the agent sees both. A `RegisterError` and any other error
+pass through untouched.

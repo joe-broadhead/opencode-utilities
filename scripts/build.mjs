@@ -1,52 +1,35 @@
-// Builds dist/ with esbuild: exactly two self-contained files, dist/index.js (the server part) and dist/tui.js (the TUI
-// part). Each inlines all of its first-party code, the RPC contract and zod, with no chunks and no relative imports, so
-// an in-place update can never mix a new entry with a cached old sibling module. No declarations ship.
-// Run it with `node scripts/build.mjs` (npm run build).
+// Builds dist/ with esbuild: one self-contained file, dist/index.js, with all first-party code and zod inlined, no
+// chunks and no relative imports, so an in-place update can never mix a new entry with a cached old sibling module.
+// No declarations ship. Run it with `node scripts/build.mjs` (npm run bundle).
+//
 // Sources import zod as `import * as z`. A named `import { z }` makes the bundler keep every locale.
-import { transformAsync } from "@babel/core"
 import { build } from "esbuild"
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { builtinModules } from "node:module"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 
 const root = fileURLToPath(new URL("../", import.meta.url))
 const dist = join(root, "dist")
-// The host provides these modules to plugins at run time, so they stay imports. Nothing else may stay external.
-const HOST = ["@opencode/plugin", "@opencode/plugin/*", "@opentui/*", "solid-js", "solid-js/*"]
-// A runtime built-in: `bun:sqlite`, which utilities_sessions_grep imports dynamically so a Node unit test can inject a database.
+// The host provides this module to plugins at run time, so it stays an import. Nothing else may stay external.
+const HOST = ["@opencode/plugin", "@opencode/plugin/*"]
+// A runtime built-in: `bun:sqlite`, which sessions_grep imports dynamically so a Node unit test can inject a database.
 const BUILTIN = ["bun:sqlite"]
-const allowed = path => path.startsWith("node:") || BUILTIN.includes(path) || HOST.some(name => name.endsWith("/*") ? path.startsWith(name.slice(0, -1)) : path === name)
-
-// The TUI view is Solid JSX for OpenTUI's universal renderer. It is compiled here, so no .tsx runs from node_modules.
-const solid = {
-  name: "solid-universal",
-  setup(context) {
-    context.onLoad({ filter: /\.tsx$/ }, async ({ path }) => {
-      const result = await transformAsync(readFileSync(path, "utf8"), {
-        filename: path, configFile: false, babelrc: false,
-        presets: [["babel-preset-solid", { moduleName: "@opentui/solid", generate: "universal" }], ["@babel/preset-typescript", { onlyRemoveTypeImports: false }]],
-      })
-      if (!result?.code) throw new Error(`TUI_COMPILE_FAILED: ${path}`)
-      return { contents: result.code, loader: "js" }
-    })
-  },
-}
+const allowed = path => path.startsWith("node:") || builtinModules.includes(path) || BUILTIN.includes(path) || HOST.some(name => name.endsWith("/*") ? path.startsWith(name.slice(0, -1)) : path === name)
 
 // A bundle is only half the plugin: the native files and the manifest that pins them are the other half, and they are
 // build outputs that a checkout does not carry. A dist/ without them loads and then refuses every tool that needs a
-// program, so the build refuses first, before it touches dist/, with the step that produces them.
+// program, so the build says so first, before it touches dist/, with the step that produces them.
 if (!existsSync(join(root, "manifest", "native.json"))) {
-  // The dist holds no program, so a checkout builds without them. Its tools report the time and weather programs not installed,
-  // with the next step, until npm run native:ensure writes the manifest. npm run check runs native:ensure first.
   console.warn(
-    "NATIVE_FILES_MISSING: manifest/native.json is not there, so this build's tools report the time and weather programs not installed. " +
-      "Next step: Run npm run native:ensure, then npm run build. The build continues.",
+    "NATIVE_FILES_MISSING: manifest/native.json is not there, so this build's time and weather tools refuse to run. " +
+      "Next step: Run npm run native:ensure, then npm run bundle. The build continues.",
   )
 }
 rmSync(dist, { recursive: true, force: true })
 const result = await build({
   absWorkingDir: root,
-  entryPoints: { index: "src/index.ts", tui: "src/tui.tsx" },
+  entryPoints: { index: "src/index.ts" },
   outdir: "dist",
   bundle: true,
   splitting: false,
@@ -54,15 +37,16 @@ const result = await build({
   platform: "node",
   target: "es2022",
   external: [...HOST, ...BUILTIN],
-  plugins: [solid],
   legalComments: "none",
   metafile: true,
   logLevel: "warning",
+  // The YAML parser is CommonJS and reads `process` with require(); the bundle is ESM, so give it a real require.
+  banner: { js: `import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);` },
 })
 
 const outputs = Object.keys(result.metafile.outputs).sort()
-if (JSON.stringify(outputs) !== JSON.stringify(["dist/index.js", "dist/tui.js"])) {
-  console.error(`BUILD_OUTPUTS: the build wrote ${outputs.join(", ")}. Next step: Keep exactly dist/index.js and dist/tui.js, with splitting off.`)
+if (JSON.stringify(outputs) !== JSON.stringify(["dist/index.js"])) {
+  console.error(`BUILD_OUTPUTS: the build wrote ${outputs.join(", ")}. Next step: Keep exactly dist/index.js, with splitting off.`)
   process.exit(1)
 }
 const unexpected = Object.entries(result.metafile.outputs).flatMap(([file, output]) => output.imports.filter(entry => entry.external && !allowed(entry.path)).map(entry => `${file}: ${entry.path}`))
@@ -71,19 +55,18 @@ if (unexpected.length) {
   process.exit(1)
 }
 
-// NOTICE carries the licence of every package inlined into dist/, and names the bundles that contain it, from each
-// output's own inputs. The build fails when the checked-in NOTICE no longer matches; `node scripts/build.mjs --notice`
-// rewrites it.
-const inlined = new Map()
-for (const [file, output] of Object.entries(result.metafile.outputs)) for (const input of Object.keys(output.inputs)) {
+// NOTICE carries the licence of every package inlined into dist/, from the bundle's own inputs. The build fails when
+// the checked-in NOTICE no longer matches; `node scripts/build.mjs --notice` rewrites it.
+const inlined = new Set()
+for (const output of Object.values(result.metafile.outputs)) for (const input of Object.keys(output.inputs)) {
   const name = /(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/]+)\//.exec(input)?.[1]
-  if (name) inlined.set(name, new Set([...inlined.get(name) ?? [], file]))
+  if (name) inlined.add(name)
 }
-const notices = [...inlined.keys()].sort().map(name => {
+const notices = [...inlined].sort().map(name => {
   const dir = join(root, "node_modules", name), { version, license } = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"))
   const file = readdirSync(dir).find(file => /^licen[cs]e(?:\.md|\.txt)?$/i.test(file))
   if (!file) throw new Error(`NOTICE_MISSING: ${name} ships no licence file`)
-  return `## ${name} ${version} (${license}), in ${[...inlined.get(name)].sort().join(" and ")}\n\n${readFileSync(join(dir, file), "utf8").trim()}\n`
+  return `## ${name} ${version} (${license}), in dist/index.js\n\n${readFileSync(join(dir, file), "utf8").trim()}\n`
 })
 const notice = `@we-the-rebel-alliance/utilities-plugin bundles this third-party code into dist/.\n\n${notices.join("\n")}`
 const noticePath = join(root, "NOTICE")

@@ -1,7 +1,12 @@
-# The one local check, on Node 24: `npm ci --ignore-scripts`, then `npm run check`. The check builds the native files it
-# needs (scripts/native-ensure.mjs) and runs the unit, kit, build, host, TUI and pack stages; the pack stage installs
-# stock OpenCode 2.4.1 itself, the tested host in src/host/versions.ts.
-name: CI
+# The one check, on Node 24: `npm ci --ignore-scripts`, then `npm run check`. The check builds the native files it needs
+# (scripts/native-ensure.mjs) and runs the typecheck, the unit tests (including the real 2.4.1 host skill test), the
+# build, the pack test and `plugin-kit check` (T0, T1 on OpenCode 2.4.1, the generated docs, the forbidden patterns, no
+# bundled kit).
+#
+# The runner rule is the family's: the org's `CI_RUNNER_PUBLIC` (the public self-hosted runner) when it is set, and
+# `ubuntu-24.04` otherwise or for a pull request from a fork. The native prerequisites step keeps the no-root fallback,
+# because that runner grants no passwordless sudo.
+name: ci
 on:
   pull_request:
   push:
@@ -86,17 +91,10 @@ jobs:
                 ;;
             esac
           done
-      # The workflows are tools too: `npm run lint` lints them with actionlint when it is installed, and this puts it on
-      # PATH so a workflow GitHub would refuse fails the run.
-      - name: actionlint
-        run: |
-          set -euo pipefail
-          version=1.7.12
-          base="https://github.com/rhysd/actionlint/releases/download/v${version}"
-          curl -sSfLO "${base}/actionlint_${version}_linux_amd64.tar.gz"
-          curl -sSfLO "${base}/actionlint_${version}_checksums.txt"
-          grep " actionlint_${version}_linux_amd64.tar.gz$" "actionlint_${version}_checksums.txt" | sha256sum -c -
-          tar xzf "actionlint_${version}_linux_amd64.tar.gz" actionlint
-          echo "ACTIONLINT_BIN=$PWD/actionlint" >> "$GITHUB_ENV"
       - run: npm ci --ignore-scripts
+      - name: The committed dist/ is current
+        run: npm run bundle && git diff --exit-code dist/
+      # Strict: CI has Rust 1.96.0 and the native prerequisites, so the full native gate runs and nothing skips.
+      - name: Build the native files (strict)
+        run: npm run native:ensure
       - run: npm run check

@@ -3,17 +3,22 @@
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
+import { existsSync } from "node:fs"
 import { chmod, copyFile, mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { createRuntime } from "../../src/runtime.js"
+import { createRuntime } from "../../src/provider/runtime.js"
 import type { Runtime } from "../../src/domain/contract.js"
-import { detectTarget } from "../../src/domain/backends.js"
-import { timeFailure } from "../../src/modules/time/failures.js"
-import { invocation, VERSION } from "../fixtures.js"
+import { detectTarget } from "../../src/provider/backends.js"
+import { timeFailure } from "../../src/provider/modules/time/failures.js"
+import { signal, VERSION } from "../fixtures.js"
 
 const repo = fileURLToPath(new URL("../../", import.meta.url))
+// The real program is what these tests pin. A clean clone without Rust has no build: skip the file, and say why.
+const realBuild = existsSync(join(repo, "manifest", "native.json")) && existsSync(join(repo, "build/native", detectTarget(), "time-keep"))
+if (!realBuild) console.warn(`SKIP the real time-keep tests: no build/native/${detectTarget()}/time-keep. Run npm run native:ensure with Rust 1.96.0; CI and the release always run these tests.`)
+describe.skipIf(!realBuild)("the real time-keep program", () => {
 /** The release copy this platform's build made, where the first-use path looks for it under a cache root. */
 async function seedCache(cache: string) {
   const program = join(cache, "native", `v${VERSION}`, "time-keep", detectTarget(), "time-keep")
@@ -25,51 +30,50 @@ beforeAll(async () => {
   await mkdir(join(root, "state"), { mode: 0o700 }); await mkdir(join(root, "project"))
   await seedCache(join(root, "cache"))
   runtime = await createRuntime({
-    location: { project: "project-real", directory: join(root, "project"), projectDirectory: join(root, "project") }, authorize: async () => {},
-    modules: { time: true, weather: false, speech: false }, stateRoot: join(root, "state"), cacheRoot: join(root, "cache"), packageRoot: repo,
+    location: { project: "project-real", directory: join(root, "project"), projectDirectory: join(root, "project") },     modules: { time: true, weather: false, speech: false }, stateRoot: join(root, "state"), cacheRoot: join(root, "cache"), packageRoot: repo,
   })
   // Fail loudly when the native files are not built: these tests never skip.
   expect((await runtime.status()).modules.time).toEqual({ availability: "AVAILABLE" })
 })
 afterAll(async () => { await runtime?.close(); if (root) await rm(root, { recursive: true, force: true }) })
-const call = (tool: Parameters<Runtime["invoke"]>[0], input: object) => runtime.invoke(tool, input, invocation())
+const call = (tool: Parameters<Runtime["invoke"]>[0], input: object) => runtime.invoke(tool, input, signal())
 
 describe("daylight-saving changes and coverage get their own codes (UTIL-3, LIVE-4)", () => {
   test("a local time in a spring-forward gap is TIME_NONEXISTENT, naming the zone", async () => {
     for (const datetime of ["2026-03-29T02:30", "2026-03-29T02:30:00"]) {
-      const error = await call("time_convert", { datetime, from_timezone: "Europe/Amsterdam", to_timezone: "UTC" }).catch(e => e)
+      const error = await call("time_convert", { datetime, from_timezone: "Europe/Amsterdam", to_timezone: "UTC" }).catch((e: any) => e)
       expect(error).toMatchObject({ code: "TIME_NONEXISTENT", message: "That local time is skipped by a daylight-saving change in Europe/Amsterdam, so it does not exist there.", hint: "Use a time outside the change, or add the UTC offset the user means to the datetime." })
     }
   })
   test("a local time in a fall-back overlap is TIME_AMBIGUOUS with both UTC offsets, and an offset settles it", async () => {
-    const error = await call("time_convert", { datetime: "2026-10-25T02:30", from_timezone: "Europe/Amsterdam", to_timezone: "UTC" }).catch(e => e)
+    const error = await call("time_convert", { datetime: "2026-10-25T02:30", from_timezone: "Europe/Amsterdam", to_timezone: "UTC" }).catch((e: any) => e)
     expect(error).toMatchObject({
       code: "TIME_AMBIGUOUS",
       message: "That local time happens twice in Europe/Amsterdam, at a daylight-saving change: first at UTC+02:00 (2026-10-25T00:30:00Z), then at UTC+01:00 (2026-10-25T01:30:00Z).",
       hint: "Add the offset the user means to the datetime (+02:00 or +01:00), or ask the user which one they mean.",
     })
     const later = await call("time_convert", { datetime: "2026-10-25T02:30+01:00", from_timezone: "Europe/Amsterdam", to_timezone: "UTC" })
-    expect(later.output).toMatchObject({ target: { utc_datetime: "2026-10-25T01:30:00Z" } })
-    const west = await call("time_convert", { datetime: "2026-11-01 01:30:00", from_timezone: "America/New_York", to_timezone: "UTC" }).catch(e => e)
+    expect(later).toMatchObject({ target: { utc_datetime: "2026-10-25T01:30:00Z" } })
+    const west = await call("time_convert", { datetime: "2026-11-01 01:30:00", from_timezone: "America/New_York", to_timezone: "UTC" }).catch((e: any) => e)
     expect(west).toMatchObject({ code: "TIME_AMBIGUOUS", message: expect.stringContaining("first at UTC-04:00 (2026-11-01T05:30:00Z), then at UTC-05:00 (2026-11-01T06:30:00Z)") })
   })
   test("an offset the zone does not use is TIME_OFFSET_MISMATCH, naming the zone's offset", async () => {
-    const error = await call("time_convert", { datetime: "2026-07-01T12:00:00+05:00", from_timezone: "Europe/Amsterdam", to_timezone: "UTC" }).catch(e => e)
+    const error = await call("time_convert", { datetime: "2026-07-01T12:00:00+05:00", from_timezone: "Europe/Amsterdam", to_timezone: "UTC" }).catch((e: any) => e)
     expect(error).toMatchObject({ code: "TIME_OFFSET_MISMATCH", message: "The datetime's UTC offset is not the one Europe/Amsterdam uses at that moment (UTC+02:00)." })
   })
   test("a business day past the holiday data is HOLIDAY_COVERAGE, not BACKEND_FAILED", async () => {
-    const error = await call("time_business_days", { mode: "next", date: "2030-12-31", country: "GB" }).catch(e => e)
+    const error = await call("time_business_days", { mode: "next", date: "2030-12-31", country: "GB" }).catch((e: any) => e)
     expect(error).toMatchObject({ code: "HOLIDAY_COVERAGE", message: "Holiday data covers 2000–2030, and this call needs a year outside it.", hint: "Use dates from 2000 to 2030, or leave out country to count weekends only." })
-    await expect(call("time_business_days", { mode: "next", date: "2030-12-31" })).resolves.toMatchObject({ output: { business_date: "2031-01-01" } })
+    await expect(call("time_business_days", { mode: "next", date: "2030-12-31" })).resolves.toMatchObject({ business_date: "2031-01-01" } )
   })
 })
 
 test("date-times without seconds work everywhere the schemas accept them", async () => {
-  await expect(call("time_convert", { datetime: "2026-10-30T12:00", from_timezone: "UTC", to_timezone: "Asia/Tokyo" })).resolves.toMatchObject({ output: { target: { local_datetime: "2026-10-30T21:00:00+09:00" } } })
-  await expect(call("time_add", { date: "2026-10-30 12:00", operation: "add", amount: 1, unit: "hours" })).resolves.toMatchObject({ output: { result: "2026-10-30T13:00:00" } })
-  await expect(call("time_between", { from: "2026-10-30T12:00Z", to: "2026-10-30T13:30+00:00" })).resolves.toMatchObject({ output: { signed_minutes: 90 } })
-  await expect(call("time_format", { input: "2026-10-30T12:00Z", output_format: "epoch" })).resolves.toMatchObject({ output: { formatted: "1793361600" } })
-  await expect(call("timer_set", { name: "minutes", deadline: "2026-11-02T09:00Z" })).resolves.toMatchObject({ output: { deadline_utc: "2026-11-02T09:00:00Z" } })
+  await expect(call("time_convert", { datetime: "2026-10-30T12:00", from_timezone: "UTC", to_timezone: "Asia/Tokyo" })).resolves.toMatchObject({ target: { local_datetime: "2026-10-30T21:00:00+09:00" } } )
+  await expect(call("time_add", { date: "2026-10-30 12:00", operation: "add", amount: 1, unit: "hours" })).resolves.toMatchObject({ result: "2026-10-30T13:00:00" } )
+  await expect(call("time_between", { from: "2026-10-30T12:00Z", to: "2026-10-30T13:30+00:00" })).resolves.toMatchObject({ signed_minutes: 90 } )
+  await expect(call("time_format", { input: "2026-10-30T12:00Z", output_format: "epoch" })).resolves.toMatchObject({ formatted: "1793361600" } )
+  await expect(call("timer_set", { name: "minutes", deadline: "2026-11-02T09:00Z" })).resolves.toMatchObject({ deadline_utc: "2026-11-02T09:00:00Z" } )
   await expect(call("time_convert", { datetime: "2026-10-30T12:00:00.5", from_timezone: "UTC", to_timezone: "UTC" })).rejects.toMatchObject({ code: "INPUT_INVALID", message: "The tool input is invalid. datetime: may have fractional seconds only with an offset, such as 2026-10-29T15:30:00.5+01:00." })
 })
 
@@ -77,20 +81,20 @@ test("time_now names this machine's time zone, whatever zones it reports (UTIL-R
   const before = process.env.TZ
   try {
     process.env.TZ = "Asia/Tokyo"
-    await expect(call("time_now", {})).resolves.toMatchObject({ output: { machine_timezone: "Asia/Tokyo", times: [{ timezone: "UTC" }] } })
+    await expect(call("time_now", {})).resolves.toMatchObject({ machine_timezone: "Asia/Tokyo", times: [{ timezone: "UTC" }] } )
     process.env.TZ = "America/Sao_Paulo"
-    await expect(call("time_now", { timezones: ["Europe/London"] })).resolves.toMatchObject({ output: { machine_timezone: "America/Sao_Paulo" } })
+    await expect(call("time_now", { timezones: ["Europe/London"] })).resolves.toMatchObject({ machine_timezone: "America/Sao_Paulo" } )
   } finally { if (before === undefined) delete process.env.TZ; else process.env.TZ = before }
 })
 
 test("a date-time without Z or an offset is read as UTC, and epoch is the one Unix timestamp format (UTIL-R2)", async () => {
   const naive = await call("time_format", { input: "2026-11-04T12:00:00", output_format: "epoch" })
   const utc = await call("time_format", { input: "2026-11-04T12:00:00Z", output_format: "epoch" })
-  expect(naive.output).toMatchObject({ input_kind: "naive_datetime", formatted: "1793793600", timezone_present: false })
-  expect((utc.output as { formatted: string }).formatted).toBe("1793793600")
-  await expect(call("time_format", { input: "2026-11-04T12:00:00", output_format: "rfc3339" })).resolves.toMatchObject({ output: { formatted: "2026-11-04T12:00:00Z" } })
+  expect(naive).toMatchObject({ input_kind: "naive_datetime", formatted: "1793793600", timezone_present: false })
+  expect((utc as { formatted: string }).formatted).toBe("1793793600")
+  await expect(call("time_format", { input: "2026-11-04T12:00:00", output_format: "rfc3339" })).resolves.toMatchObject({ formatted: "2026-11-04T12:00:00Z" } )
   // A clock time with no zone has no daylight-saving changes: 24 hours across Europe's spring change is still one day.
-  await expect(call("time_between", { from: "2026-03-28T12:00:00", to: "2026-03-29T12:00:00" })).resolves.toMatchObject({ output: { signed_hours: 24 } })
+  await expect(call("time_between", { from: "2026-03-28T12:00:00", to: "2026-03-29T12:00:00" })).resolves.toMatchObject({ signed_hours: 24 } )
   await expect(call("time_format", { input: "2026-11-04T12:00:00", output_format: "unix-timestamp" })).rejects.toMatchObject({ code: "INPUT_INVALID", message: expect.stringContaining("output_format") })
 })
 
@@ -120,50 +124,50 @@ test("the other time-keep messages map by prefix, and unknown ones stay BACKEND_
 describe("regional holidays (UTIL-4)", () => {
   const days = (output: unknown) => (output as { holidays: { date: string; nationwide: boolean; regions: string[] }[] }).holidays
   test("lists keep regional holidays, marked with a regions field; a region keeps only its own and the nationwide ones", async () => {
-    const all = days((await call("time_holidays", { mode: "list", year: 2026, country: "GB" })).output)
+    const all = days((await call("time_holidays", { mode: "list", year: 2026, country: "GB" })))
     expect(all).toHaveLength(14)
     expect(all.find(h => h.date === "2026-12-25")).toMatchObject({ name: "Christmas Day", nationwide: true, regions: [] })
     expect(all.find(h => h.date === "2026-08-03")).toMatchObject({ name: "Summer Bank Holiday [Scotland]", nationwide: false, regions: ["Scotland"] })
     expect(all.find(h => h.date === "2026-04-06")).toMatchObject({ nationwide: false, regions: ["England", "Wales", "Northern Ireland"] })
     const scotland = await call("time_holidays", { mode: "list", year: 2026, country: "GB", region: "Scotland" })
-    expect(scotland.output).toMatchObject({ region: "Scotland", count: 10 })
-    expect(days(scotland.output).map(h => h.date)).not.toContain("2026-04-06")
+    expect(scotland).toMatchObject({ region: "Scotland", count: 10 })
+    expect(days(scotland).map(h => h.date)).not.toContain("2026-04-06")
     // One row joins a regional and a nationwide holiday: the row is nationwide.
-    expect(days((await call("time_holidays", { mode: "list", year: 2023, country: "GB" })).output).find(h => h.date === "2023-01-02"))
+    expect(days((await call("time_holidays", { mode: "list", year: 2023, country: "GB" }))).find(h => h.date === "2023-01-02"))
       .toMatchObject({ name: "New Year Holiday [Scotland], New Year's Day (Observed)", nationwide: true, regions: [] })
     // A bracket elsewhere is an English name, not a region.
-    expect(days((await call("time_holidays", { mode: "list", year: 2026, country: "AR" })).output).every(h => h.nationwide && h.regions.length === 0)).toBe(true)
-    expect(days((await call("time_holidays", { mode: "list", year: 2026, country: "IM" })).output).find(h => h.date === "2026-11-30")).toMatchObject({ nationwide: false, regions: ["Scotland"] })
+    expect(days((await call("time_holidays", { mode: "list", year: 2026, country: "AR" }))).every(h => h.nationwide && h.regions.length === 0)).toBe(true)
+    expect(days((await call("time_holidays", { mode: "list", year: 2026, country: "IM" }))).find(h => h.date === "2026-11-30")).toMatchObject({ nationwide: false, regions: ["Scotland"] })
   })
   test("check marks the holiday; with a region, another region's holiday is not one", async () => {
-    await expect(call("time_holidays", { mode: "check", date: "2026-08-03", country: "GB" })).resolves.toMatchObject({ output: { is_holiday: true, region: null, holiday: { regions: ["Scotland"], nationwide: false } } })
-    const england = (await call("time_holidays", { mode: "check", date: "2026-08-03", country: "GB", region: "England" })).output
+    await expect(call("time_holidays", { mode: "check", date: "2026-08-03", country: "GB" })).resolves.toMatchObject({ is_holiday: true, region: null, holiday: { regions: ["Scotland"], nationwide: false } } )
+    const england = (await call("time_holidays", { mode: "check", date: "2026-08-03", country: "GB", region: "England" }))
     expect(england).toMatchObject({ is_holiday: false, region: "England" }); expect(england).not.toHaveProperty("holiday")
-    await expect(call("time_holidays", { mode: "check", date: "2026-08-03", country: "GB", region: "Scotland" })).resolves.toMatchObject({ output: { is_holiday: true } })
+    await expect(call("time_holidays", { mode: "check", date: "2026-08-03", country: "GB", region: "Scotland" })).resolves.toMatchObject({ is_holiday: true } )
   })
   test("business days skip only nationwide holidays by default, and a region's own with region", async () => {
     const one = await call("time_business_days", { mode: "between", from: "2026-08-03", to: "2026-08-03", country: "GB" })
-    expect(one.output).toMatchObject({ business_days: 1, holidays_skipped: [], regional_holidays_not_skipped: [{ date: "2026-08-03", regions: ["Scotland"] }] })
-    await expect(call("time_business_days", { mode: "between", from: "2026-08-03", to: "2026-08-03", country: "GB", region: "Scotland" })).resolves.toMatchObject({ output: { business_days: 0, region: "Scotland" } })
-    await expect(call("time_business_days", { mode: "between", from: "2026-08-01", to: "2026-08-31", country: "GB" })).resolves.toMatchObject({ output: { business_days: 21 } })
-    await expect(call("time_business_days", { mode: "between", from: "2026-08-31", to: "2026-08-01", country: "GB", region: "England" })).resolves.toMatchObject({ output: { business_days: -20, holidays_skipped: [{ date: "2026-08-31" }] } })
-    await expect(call("time_business_days", { mode: "between", from: "2026-12-21", to: "2026-12-31", country: "GB" })).resolves.toMatchObject({ output: { business_days: 7 } })
+    expect(one).toMatchObject({ business_days: 1, holidays_skipped: [], regional_holidays_not_skipped: [{ date: "2026-08-03", regions: ["Scotland"] }] })
+    await expect(call("time_business_days", { mode: "between", from: "2026-08-03", to: "2026-08-03", country: "GB", region: "Scotland" })).resolves.toMatchObject({ business_days: 0, region: "Scotland" } )
+    await expect(call("time_business_days", { mode: "between", from: "2026-08-01", to: "2026-08-31", country: "GB" })).resolves.toMatchObject({ business_days: 21 } )
+    await expect(call("time_business_days", { mode: "between", from: "2026-08-31", to: "2026-08-01", country: "GB", region: "England" })).resolves.toMatchObject({ business_days: -20, holidays_skipped: [{ date: "2026-08-31" }] } )
+    await expect(call("time_business_days", { mode: "between", from: "2026-12-21", to: "2026-12-31", country: "GB" })).resolves.toMatchObject({ business_days: 7 } )
     // A country without regional rows keeps time-keep's own count.
-    await expect(call("time_business_days", { mode: "between", from: "2026-12-21", to: "2026-12-31", country: "NL" })).resolves.toMatchObject({ output: { business_days: 8, regional_holidays_not_skipped: [] } })
+    await expect(call("time_business_days", { mode: "between", from: "2026-12-21", to: "2026-12-31", country: "NL" })).resolves.toMatchObject({ business_days: 8, regional_holidays_not_skipped: [] } )
   })
   test("next and previous step over nationwide holidays, and a region's own with region", async () => {
-    const next = (date: string, extra: object = {}) => call("time_business_days", { mode: "next", date, country: "GB", ...extra }).then(r => r.output)
+    const next = (date: string, extra: object = {}) => call("time_business_days", { mode: "next", date, country: "GB", ...extra })
     await expect(next("2026-08-02")).resolves.toMatchObject({ business_date: "2026-08-03", days_moved: 1, mode: "country_holidays", country_code: "GB", region: null, coverage: { end_year: 2030 } })
     await expect(next("2026-08-02", { region: "Scotland" })).resolves.toMatchObject({ business_date: "2026-08-04", days_moved: 2 })
     await expect(next("2026-12-24")).resolves.toMatchObject({ business_date: "2026-12-29", days_moved: 5 })
     await expect(next("2026-12-31")).resolves.toMatchObject({ business_date: "2027-01-04" })
     await expect(next("2026-12-31", { region: "Scotland" })).resolves.toMatchObject({ business_date: "2027-01-05" })
-    await expect(call("time_business_days", { mode: "prev", date: "2026-12-29", country: "GB" })).resolves.toMatchObject({ output: { business_date: "2026-12-24", direction: "previous", days_moved: 5 } })
+    await expect(call("time_business_days", { mode: "prev", date: "2026-12-29", country: "GB" })).resolves.toMatchObject({ business_date: "2026-12-24", direction: "previous", days_moved: 5 } )
     await expect(call("time_business_days", { mode: "prev", date: "2000-01-03", country: "GB" })).rejects.toMatchObject({ code: "HOLIDAY_COVERAGE" })
     // Easter Monday is not nationwide in GB (Scotland does not observe it), so without region it is a working day (UTIL-R25).
     await expect(next("2026-04-02")).resolves.toMatchObject({ business_date: "2026-04-06" })
     await expect(next("2026-04-02", { region: "England" })).resolves.toMatchObject({ business_date: "2026-04-07", days_moved: 5 })
-    await expect(call("time_business_days", { mode: "prev", date: "2026-04-07", country: "GB", region: "Wales" })).resolves.toMatchObject({ output: { business_date: "2026-04-02" } })
+    await expect(call("time_business_days", { mode: "prev", date: "2026-04-07", country: "GB", region: "Wales" })).resolves.toMatchObject({ business_date: "2026-04-02" } )
   })
   test("region is only for GB", async () => {
     await expect(call("time_holidays", { mode: "list", year: 2026, country: "US", region: "England" })).rejects.toMatchObject({ code: "INPUT_INVALID", message: "The tool input is invalid. region: is only for country GB, the one country whose holiday data has regions." })
@@ -186,19 +190,19 @@ describe("timers belong to the project (UTIL-5)", () => {
     await mkdir(state, { mode: 0o700 }); await mkdir(dir, { recursive: true }); cleanups.push(() => rm(base, { recursive: true, force: true }))
     const open = async (location: string) => {
       await seedCache(join(base, "cache"))
-      const r = await createRuntime({ location: { project: name, directory: join(base, location), projectDirectory: join(base, "repo") }, authorize: async () => {}, modules: { time: true, weather: false, speech: false }, stateRoot: state, cacheRoot: join(base, "cache"), packageRoot: repo })
+      const r = await createRuntime({ location: { project: name, directory: join(base, location), projectDirectory: join(base, "repo") }, modules: { time: true, weather: false, speech: false }, stateRoot: state, cacheRoot: join(base, "cache"), packageRoot: repo })
       cleanups.push(() => r.close()); return r
     }
     return { base, state, open }
   }
   const cleanups: (() => Promise<unknown>)[] = []
   afterAll(async () => { for (const c of cleanups.reverse()) await c() })
-  const list = async (r: Runtime) => ((await r.invoke("timer_list", { limit: 100 }, invocation())).output as { timers: { name: string; description?: string; tags: string[]; created_at_utc: string; deadline_utc: string }[] }).timers
+  const list = async (r: Runtime) => (await r.invoke("timer_list", { limit: 100 }, signal()) as { timers: { name: string; description?: string; tags: string[]; created_at_utc: string; deadline_utc: string }[] }).timers
 
   test("a timer set at the project root is seen from a subfolder, and the reverse", async () => {
     const p = await project("p-sub", "repo/sub"), root = await p.open("repo"), sub = await p.open("repo/sub")
-    await root.invoke("timer_set", { name: "from-root", deadline: "2027-01-01T00:00:00Z" }, invocation())
-    await sub.invoke("timer_set", { name: "from-sub", deadline: "2027-01-01T00:00:00Z" }, invocation())
+    await root.invoke("timer_set", { name: "from-root", deadline: "2027-01-01T00:00:00Z" }, signal())
+    await sub.invoke("timer_set", { name: "from-sub", deadline: "2027-01-01T00:00:00Z" }, signal())
     expect((await list(sub)).map(t => t.name).sort()).toEqual(["from-root", "from-sub"])
     expect((await list(root)).map(t => t.name).sort()).toEqual(["from-root", "from-sub"])
     expect((await root.status()).timers.directory).toBe((await sub.status()).timers.directory)
@@ -213,3 +217,4 @@ describe("timers belong to the project (UTIL-5)", () => {
   })
 })
 const present = (store: string) => readdir(store).then(names => names.filter(name => name.startsWith("timers.db")))
+})

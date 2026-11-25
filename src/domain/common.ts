@@ -1,6 +1,5 @@
 import * as z from "zod"
 import type { FailureCode, UtilitiesFailure } from "./contract.js"
-import { HOST_RANGE, TESTED_TEXT } from "../host/versions.js"
 
 /** Per-module bounds. Each module has its own queue; the deadline starts after admission and approval. */
 export const LIMITS = {
@@ -33,23 +32,20 @@ export const zone = z.string().max(80).regex(/^(?:UTC|[A-Za-z_+-]+(?:\/[A-Za-z0-
 export const FAILURES: { readonly [C in FailureCode]: readonly [message: string, hint?: string] } = {
   DISABLED: ["This module is turned off in the plugin options.", "Set modules.<name> to true in the Utilities plugin options in opencode.json."],
   CLOSED: ["The Utilities plugin is shutting down.", "Retry after OpenCode has reloaded the plugin."],
-  HOST_UNTESTED: [`Utilities supports OpenCode ${HOST_RANGE}.`, `Use ${TESTED_TEXT}, or set the plugin option allowUntestedHost: true to run anyway.`],
-  UNSUPPORTED_PLATFORM: ["This module has no build for this platform.", "Call utilities_status to see which modules work here."],
-  BINARY_MISSING: ["A program the plugin needs is missing or is not the pinned file.", "Call the tool again to download it, or reinstall the plugin, then restart OpenCode."],
+  UNSUPPORTED_PLATFORM: ["This module has no build for this platform.", "Call tools.utilities.diagnose to see which modules work here."],
+  BINARY_MISSING: ["A program the plugin needs is missing or is not the pinned file.", "Call tools.utilities.native_install to download it, then call the tool again."],
   INTEGRITY_MISMATCH: ["A program or model file does not match its pinned SHA-256 hash.", "Reinstall the plugin, then restart OpenCode."],
-  CONTRACT_MISMATCH: ["The plugin's files, or a program's output, do not match what this plugin version expects.", "Reinstall the plugin. If it persists, report it with the utilities_status output."],
-  NATIVE_FILES_MISSING: ["The time or weather program is not downloaded yet, or this copy of the plugin has no release manifest.", "Call the time or weather tool with permission to download it, or run /utilities-install. In a checkout, run npm run native:ensure."],
-  SPEECH_ASSETS_MISSING: ["The speech engine or model files are not installed.", "Allow the utilities_speech_download request, run /utilities-speech-install, or pre-seed the files in speech.assetsDir."],
+  CONTRACT_MISMATCH: ["The plugin's files, or a program's output, do not match what this plugin version expects.", "Reinstall the plugin. If it persists, report it with the tools.utilities.diagnose output."],
+  NATIVE_FILES_MISSING: ["The time or weather program is not downloaded yet, or this copy of the plugin has no release manifest.", "Call tools.utilities.native_install to download it. In a checkout, run npm run native:ensure, then build."],
+  SPEECH_ASSETS_MISSING: ["The speech engine or model files are not installed.", "Call tools.utilities.speech_install, or pre-seed the files in speech.assetsDir."],
   OPTIONS_INVALID: ["The plugin options are invalid.", "Fix the named option in the Utilities plugin options in opencode.json."],
-  STATUS_UNAVAILABLE: ["Utilities status could not be read.", "Run /utilities-status in a session to see the error, or check the OpenCode server log."],
-  SKILLS_INVALID: ["A Utilities skill file is missing or malformed, so that skill was skipped.", "Reinstall the plugin."],
   INPUT_INVALID: ["The tool input is invalid.", "Correct the named fields and call the tool again."],
   INPUT_LIMIT: ["The tool input is too large.", "Send less text and call the tool again."],
   OUTPUT_LIMIT: ["The result is too large to return.", "Narrow the request, for example fewer days, hours or results."],
   QUEUE_FULL: ["Too many calls to this module are waiting.", "Wait for earlier calls to finish, then retry."],
   CANCELLED: ["The call was cancelled.", "Call the tool again if you still need the result."],
   DEADLINE_EXCEEDED: ["The call took longer than its time limit.", "Retry, or narrow the request."],
-  SPAWN_FAILED: ["The plugin could not start the program behind this tool.", "Call utilities_status, and reinstall the plugin if a module is unavailable."],
+  SPAWN_FAILED: ["The plugin could not start the program behind this tool.", "Call tools.utilities.diagnose, and reinstall the plugin if a module is unavailable."],
   BACKEND_FAILED: ["The program behind this tool reported an error.", "Check the input and retry."],
   BACKEND_JSON_INVALID: ["The program behind this tool returned unreadable output.", "Retry. If it persists, reinstall the plugin."],
   STDOUT_LIMIT: ["The program behind this tool returned more output than the plugin accepts.", "Narrow the request."],
@@ -70,19 +66,19 @@ export const FAILURES: { readonly [C in FailureCode]: readonly [message: string,
   WAV_INVALID: ["The file is not a valid WAV file.", "Convert it to 16-bit PCM WAV, for example with `ffmpeg -i input.m4a -ac 1 -ar 16000 -c:a pcm_s16le output.wav`, then call the tool again."],
   WAV_UNSUPPORTED: ["Only 16-bit PCM WAV at 8-48 kHz, mono or stereo, is supported.", "Convert it to 16-bit PCM WAV, for example with `ffmpeg -i input.m4a -ac 1 -ar 16000 -c:a pcm_s16le output.wav`, then call the tool again."],
   AUDIO_DURATION_LIMIT: ["The audio is longer than ten minutes.", "Split it into shorter files."],
-  SPEECH_FAILED: ["The speech engine failed.", "Retry. If it persists, call utilities_status."],
-  BRIDGE_CORRELATION: ["The speech engine answered a different request.", "Retry. If it persists, delete the speech cache and run /utilities-speech-install."],
+  SPEECH_FAILED: ["The speech engine failed.", "Retry. If it persists, call tools.utilities.diagnose."],
+  BRIDGE_CORRELATION: ["The speech engine answered a different request.", "Retry. If it persists, delete the speech cache and call tools.utilities.speech_install."],
   OUTPUT_EXISTS: ["A file already exists at the output path.", "Choose another path, or delete the file first."],
-  OUTPUT_PATH_MISMATCH: ["The speech engine wrote its output somewhere unexpected.", "Retry. If it persists, delete the speech cache and run /utilities-speech-install."],
+  OUTPUT_PATH_MISMATCH: ["The speech engine wrote its output somewhere unexpected.", "Retry. If it persists, delete the speech cache and call tools.utilities.speech_install."],
   DOWNLOAD_FAILED: ["Downloading a file the plugin needs failed.", "Check the network and proxy settings and retry. A speech file can also be pre-seeded in speech.assetsDir."],
   UNSAFE_PATH: ["A file or folder inside the plugin's own directories (stateRoot, the speech cache, speech.assetsDir or the installed package) is a symbolic link, or not the expected type. Links above those directories are fine.", "Replace the link with the real file or folder, or reinstall the plugin."],
   STATE_NOT_PRIVATE: ["The plugin's state directory is accessible to other users.", "Run chmod 700 on the stateRoot directory."],
   STATE_FILE_UNSAFE: ["A timer store file is a link or not a regular file.", "Remove the unexpected file from this project's timer directory."],
   FILE_REJECTED: ["A file the plugin reads is not a regular file, or is too large.", "Reinstall the plugin."],
   FILE_CHANGED: ["A file changed while the plugin was reading it.", "Retry."],
-  UNSAFE_CLEANUP: ["The plugin refused to delete a path outside its own directories.", "Report this with the utilities_status output."],
+  UNSAFE_CLEANUP: ["The plugin refused to delete a path outside its own directories.", "Report this with the tools.utilities.diagnose output."],
   CLEANUP_FAILED: ["The plugin could not remove its temporary files.", "Retry. Leftover job directories are removed the next time the plugin starts."],
-  OPERATION_FAILED: ["The tool failed unexpectedly.", "Retry. If it persists, call utilities_status."],
+  OPERATION_FAILED: ["The tool failed unexpectedly.", "Retry. If it persists, call tools.utilities.diagnose."],
 }
 
 /** The one error text: `CODE: what happened. Next step: What to do.` */

@@ -3,7 +3,10 @@
 // missing or an input changed, and does nothing otherwise. Without Rust it fails and names npm run native:build; it
 // never skips.
 // Usage:
-//   node scripts/native-ensure.mjs                       ensure this platform
+//   node scripts/native-ensure.mjs                       ensure this platform (strict: a missing toolchain fails)
+//   node scripts/native-ensure.mjs --allow-missing        npm run check: skip with a NATIVE_FILES_MISSING notice when
+//                                                         the toolchain or the outputs are absent, so a clean clone
+//                                                         without Rust can still run the rest of the check
 //   node scripts/native-ensure.mjs --record <platform>    (native-build.sh) record the inputs of a finished build
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -28,7 +31,9 @@ function inputs(platform) {
   return hash.digest('hex');
 }
 
-const [mode,recorded]=process.argv.slice(2);
+const optional=process.argv.includes('--allow-missing');
+const args=process.argv.slice(2).filter(arg=>arg!=='--allow-missing');
+const [mode,recorded]=args;
 if(mode==='--record') {
   if(!TARGETS[recorded])throw new Error(`unknown platform: ${recorded}`);
   mkdirSync(join(root,'build'),{recursive:true});
@@ -38,7 +43,10 @@ if(mode==='--record') {
 if(mode!==undefined)throw new Error('usage: native-ensure.mjs [--record <platform>]');
 
 const platform=process.platform==='linux' ? `linux-${process.arch}-gnu` : `${process.platform}-${process.arch}`;
-if(!TARGETS[platform]) { console.error(`There is no native build for ${process.platform}-${process.arch}, so the native files cannot be built here.`); process.exit(1); }
+if(!TARGETS[platform]) {
+  if(optional) { console.log(`NATIVE_FILES_MISSING: there is no native build for ${process.platform}-${process.arch}, so the real native tests are skipped. CI and the release build linux-x64-gnu.`); process.exit(0); }
+  console.error(`There is no native build for ${process.platform}-${process.arch}, so the native files cannot be built here.`); process.exit(1);
+}
 const pkg=`build/native/${platform}`;
 const engine=Boolean(json('native/onnx-provenance.json').distributions[TARGETS[platform]]);
 const outputs=[`${pkg}/time-keep`,`${pkg}/weather-signal`,`${pkg}/NOTICE`,'manifest/native.json',
@@ -56,6 +64,10 @@ if(!stale) { console.log(`The ${platform} native files are up to date.`); proces
 console.log(`The ${platform} native files need a build: ${stale}`);
 const rust=json('native/sources.json').rust;
 if(spawnSync('rustup',['run',rust,'cargo','--version'],{stdio:'ignore'}).status!==0) {
+  if(optional) {
+    console.log(`NATIVE_FILES_MISSING: the native files for ${platform} are not built, so the real time-keep and weather-signal tests are skipped. Run npm run native:ensure with the Rust ${rust} toolchain and the native prerequisites; CI and the release always build them.`);
+    process.exit(0);
+  }
   console.error(`The native files cannot be built: the Rust ${rust} toolchain is not installed. Install rustup (https://rustup.rs), run rustup toolchain install ${rust}, then run npm run native:build.`);
   process.exit(1);
 }
