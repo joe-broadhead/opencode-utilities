@@ -37,7 +37,7 @@ checksum = "1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0"
 [[package]]
 name = "aurum-core"
 version = "0.0.23"
-source = "git+https://github.com/joe-broadhead/aurum?rev=8e3b70fbb0c76add3cbcf7291098e88f2c8bea70#8e3b70fbb0c76add3cbcf7291098e88f2c8bea70"
+source = "git+https://github.com/we-the-rebel-alliance/aurum?rev=8e3b70fbb0c76add3cbcf7291098e88f2c8bea70#8e3b70fbb0c76add3cbcf7291098e88f2c8bea70"
 dependencies = [
  "async-trait",
  "base64 0.23.1",

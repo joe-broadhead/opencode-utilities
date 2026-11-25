@@ -1,3 +1,1 @@
 # The kit's one denylist, narrowed only where this repository must name the thing it is about.
-licenses/upstream/misaki-original-README.md.txt:main-branch verbatim upstream licence copy; its third-party blob/main and tree/main links (lines 45, 76, 78) are not ours to rewrite
-licenses/upstream/whisper-model-card.md:main-branch verbatim upstream licence copy; its third-party tree/main link (line 8) is not ours to rewrite

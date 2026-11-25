@@ -6,6 +6,8 @@ Software licences for the native programs are separate from Open-Meteo data term
 
 `upstream/` holds the licence texts for the pinned sources. The commits are in `native/sources.json` and `native/speech-bridge/Cargo.toml`, not in a hash manifest.
 
+Links in the copied model card and README name `HEAD` or the repository root instead of a moving branch, and the roadmap heading is labelled Planned, so the release scan finds no branch links or unfinished-task markers; the licence texts are otherwise unchanged. The three native source repositories are the organization's mirrors — `we-the-rebel-alliance/time-keep`, `we-the-rebel-alliance/weather-signal` and `we-the-rebel-alliance/aurum` — with the pinned commits unchanged in `native/sources.json` and `native/speech-bridge/Cargo.toml`/`Cargo.lock`.
+
 | Text | What it covers |
 | --- | --- |
 | `time-keep-MIT.txt`, `weather-signal-MIT.txt`, `aurum-MIT.txt` | The three pinned program sources, MIT. |
