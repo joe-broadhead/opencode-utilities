@@ -1,5 +1,4 @@
 import * as z from "zod"
-import { redactReason } from "@we-the-rebel-alliance/plugin-contract/accounts"
 import { AVAILABILITY, MODULES, SPEECH_MODEL_ROLES, STATES, STOPGAPS, WEATHER_ATTRIBUTION, type DiagnoseView, type Module, type RuntimeStatus } from "../domain/contract.js"
 
 /** `diagnose`'s answer, checked before the register checks it again: the shape a person and an agent read. */
@@ -34,8 +33,6 @@ export interface DiagnoseInput {
   readonly access: DiagnoseView["access"]
   readonly runtime: RuntimeStatus
   readonly weather: DiagnoseView["weather"]
-  /** What setup could not finish, such as a skill file that was skipped: the first is the next step. */
-  readonly problems: readonly string[]
 }
 
 const NOTHING_TO_DO = "Nothing to do."
@@ -57,7 +54,6 @@ function stateOf(runtime: RuntimeStatus): DiagnoseView["state"] {
  * `Nothing to do.` Their rows keep the hint. Missing pre-seeded files are a misconfiguration and do drive it.
  */
 function nextStep(input: DiagnoseInput): string {
-  if (input.problems.length > 0) return redactReason(input.problems[0])
   const speech = input.runtime.modules.speech.availability === "SPEECH_ASSETS_MISSING" && !input.runtime.speech.preseeded ? undefined : input.runtime.modules.speech.next
   return input.runtime.platform.next ?? input.runtime.modules.time.next ?? input.runtime.modules.weather.next
     ?? (input.weather.key === "rejected" ? input.weather.next : undefined) ?? input.runtime.timers.next ?? speech ?? NOTHING_TO_DO

@@ -9,8 +9,6 @@ export interface StatusDeps {
   readonly manifest: Manifest
   readonly version: string
   readonly hostVersion: string
-  /** What setup could not finish, such as a skill file that was skipped; the contract's status reports it as `error`. */
-  readonly problems: readonly string[]
 }
 
 /**
@@ -28,7 +26,6 @@ export function status(deps: StatusDeps): MethodHandler {
         version: deps.version,
         hostVersion: deps.hostVersion,
         accounts: NO_ACCOUNTS,
-        problems: deps.problems,
         unguardedAgents: await unguarded(call),
       })
     },

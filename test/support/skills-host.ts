@@ -46,8 +46,8 @@ export const description = (name: string) => {
   return parsed.description
 }
 
-/** A copy of the installed package: the built bundle, its manifest, and every skill, one of them with an empty body. */
-export function packageCopy(name: string, broken?: string): string {
+/** A copy of the installed package: the built bundle, its manifest, and every skill. */
+export function packageCopy(name: string): string {
   const directory = join(root, name)
   mkdirSync(join(directory, "dist"), { recursive: true }); mkdirSync(join(directory, "skills"), { recursive: true })
   cpSync(bundle, join(directory, "dist", "index.js"))
@@ -56,8 +56,7 @@ export function packageCopy(name: string, broken?: string): string {
   for (const skill of SKILLS) {
     const to = join(directory, "skills", skill, "SKILL.md")
     mkdirSync(dirname(to), { recursive: true })
-    if (skill === broken) writeFileSync(to, `---\nname: ${skill}\ndescription: A synthetic skill with no body.\n---\n\n   \n`)
-    else cpSync(join(repo, "skills", skill, "SKILL.md"), to)
+    cpSync(join(repo, "skills", skill, "SKILL.md"), to)
   }
   return directory
 }
@@ -67,7 +66,7 @@ export function packageCopy(name: string, broken?: string): string {
  * A separate process is what keeps a skill registered by another test's host out of this answer.
  */
 export interface HostSkills {
-  readonly skills: readonly { id: string; description?: string; autoinvoke?: boolean }[]
+  readonly skills: readonly { id: string; name: string; description?: string; path: string; content: string }[]
   readonly commands: readonly { id?: string; name?: string }[]
   readonly integrations: readonly { id?: string; name?: string }[]
   readonly status: unknown

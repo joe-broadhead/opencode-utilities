@@ -1,78 +1,98 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { describe, expect, test } from "vitest"
-import { loadSkills, parseSkill } from "../../src/skills.js"
+import type { Plugin } from "@opencode/plugin"
+import { readSkills, registerSkills } from "../../src/skills.js"
 
 /** The skill directories the package ships, read at test time so a new one is never missed. */
 const shipped = readdirSync(join(process.cwd(), "skills"), { withFileTypes: true })
-  .filter(entry => entry.isDirectory())
+  .filter(entry => entry.isDirectory() && entry.name !== "node_modules")
   .map(entry => entry.name)
   .sort()
 
+/** A temporary `skills/` directory holding one file per entry. */
+function fixture(files: Readonly<Record<string, string>>): string {
+  const directory = mkdtempSync(join(tmpdir(), "utilities-skills-"))
+  for (const [name, text] of Object.entries(files)) {
+    mkdirSync(join(directory, name), { recursive: true })
+    writeFileSync(join(directory, name, "SKILL.md"), text)
+  }
+  return directory
+}
+
 describe("the skill loader", () => {
-  test("parses name, description and body from a shipped file", () => {
-    const name = "utilities-time"
-    const path = join(process.cwd(), "skills", name, "SKILL.md")
-    const info = parseSkill(name, path, readFileSync(path, "utf8"))
-    expect(info.id).toBe(name)
-    expect(info.name).toBe(name)
-    expect(info.description).toContain("Exact times")
-    expect(info.content).toContain("# Time, dates and timers")
-    expect(info.autoinvoke).toBe(true)
-  })
-  test("every shipped skill directory parses, and the loader misses none of them", async () => {
+  test("checks every shipped skill, with its YAML description, name, path and body", () => {
+    const skills = readSkills()
     expect(shipped.length).toBeGreaterThan(0)
-    const { skills, problems } = await loadSkills(join(process.cwd(), "skills"))
-    expect(problems).toEqual([])
-    expect(skills.map(skill => skill.id).sort()).toEqual(shipped)
+    expect(skills.map(skill => skill.id)).toEqual(shipped)
+    for (const skill of skills) {
+      expect(skill.name).toBe(skill.id)
+      expect(skill.description.length).toBeGreaterThan(0)
+      expect(["", ">", "|", ">-", "|-", ">+", "|+"].includes(skill.description.trim()), skill.id).toBe(false)
+      expect(skill.content.trim().length).toBeGreaterThan(0)
+      expect(skill.path).toBe(join(process.cwd(), "skills", skill.id, "SKILL.md"))
+    }
   })
-  test("an empty body is skipped and recorded, with SKILLS_INVALID", async () => {
-    const root = mkdtempSync(join(tmpdir(), "utilities-skills-empty-"))
-    try {
-      const name = "utilities-empty"
-      mkdirSync(join(root, name), { recursive: true })
-      writeFileSync(join(root, name, "SKILL.md"), `---\nname: ${name}\ndescription: A synthetic skill with no body.\n---\n\n   \n`)
-      const { skills, problems } = await loadSkills(root)
-      expect(skills).toEqual([])
-      expect(problems).toHaveLength(1)
-      expect(problems[0]).toMatch(/^SKILLS_INVALID: The utilities-empty skill was not loaded: skills\/utilities-empty\/SKILL\.md has an empty body\. Next step: /)
-    } finally { rmSync(root, { recursive: true, force: true }) }
+  test("YAML block scalars are folded, literal or stripped as YAML specifies", () => {
+    const cases: readonly [string, string, string][] = [
+      ["folded", ">", "first line second line\n"],
+      ["literal", "|", "first line\nsecond line\n"],
+      ["folded-strip", ">-", "first line second line"],
+      ["literal-strip", "|-", "first line\nsecond line"],
+    ]
+    for (const [name, marker, expected] of cases) {
+      const directory = fixture({ [name]: `---\nname: ${name}\ndescription: ${marker}\n  first line\n  second line\n---\n\n# Body\n` })
+      try {
+        expect(readSkills(directory)[0]?.description, name).toBe(expected)
+      } finally { rmSync(directory, { recursive: true, force: true }) }
+    }
   })
-  test.each([[""], [">\n  A folded line.\n"], ["|\n  A literal line.\n"], [">-\n  A chomped folded line.\n"]])("a description of %j is skipped, never registered as a marker", async description => {
-    const root = mkdtempSync(join(tmpdir(), "utilities-skills-description-"))
-    try {
-      const name = "utilities-description"
-      mkdirSync(join(root, name), { recursive: true })
-      writeFileSync(join(root, name, "SKILL.md"), `---\nname: ${name}\ndescription: ${description}${description.endsWith("\n") ? "" : "\n"}---\nBody.\n`)
-      const { skills, problems } = await loadSkills(root)
-      expect(skills).toEqual([])
-      expect(problems).toHaveLength(1)
-      expect(problems[0]).toMatch(description === "" ? /has no description/ : /has a YAML block scalar description, which this loader does not fold/)
-    } finally { rmSync(root, { recursive: true, force: true }) }
+  test("a marker-only or empty description is refused", () => {
+    const marker = fixture({ marker: "---\nname: marker\ndescription: '>'\n---\n\n# Body\n" })
+    try { expect(() => readSkills(marker)).toThrow(/only a block marker/) } finally { rmSync(marker, { recursive: true, force: true }) }
+    const empty = fixture({ empty: "---\nname: empty\ndescription: >\n---\n\n# Body\n" })
+    try { expect(() => readSkills(empty)).toThrow(/has no frontmatter description/) } finally { rmSync(empty, { recursive: true, force: true }) }
   })
-  test("a missing, malformed or misnamed file is skipped and recorded, never thrown", async () => {
-    const root = mkdtempSync(join(tmpdir(), "utilities-skills-unit-"))
-    try {
-      for (const name of shipped) {
-        const directory = join(root, name); mkdirSync(directory, { recursive: true })
-        const body = `---\nname: ${name}\ndescription: A synthetic ${name} skill.\n---\nBody.\n`
-        writeFileSync(join(directory, "SKILL.md"), name === "utilities-time" ? "---\ndescription: no name\n---\n" : name === "utilities-weather" ? "" : name === "utilities-speech" ? body.replace(`name: ${name}`, "name: other") : body)
-      }
-      rmSync(join(root, "utilities-sessions"), { recursive: true, force: true })
-      const { skills, problems } = await loadSkills(root)
-      expect(skills.map(skill => skill.id)).toEqual(["utilities"])
-      expect(problems).toHaveLength(3)
-      for (const problem of problems) expect(problem).toMatch(/^SKILLS_INVALID: The utilities-(?:time|weather|speech) skill was not loaded: .* Next step: /)
-    } finally { rmSync(root, { recursive: true, force: true }) }
+  test("invalid YAML is a SCHEMA_VIOLATION, not a partial load", () => {
+    const broken = fixture({ broken: "---\nname: broken\ndescription: [unclosed\n---\n\n# Body\n" })
+    try { expect(() => readSkills(broken)).toThrow(/SCHEMA_VIOLATION: skills\/broken\/SKILL\.md has frontmatter that is not valid YAML/) } finally { rmSync(broken, { recursive: true, force: true }) }
   })
-  test("a missing skills folder is one problem, never a failed setup", async () => {
-    const root = mkdtempSync(join(tmpdir(), "utilities-skills-absent-"))
+  test("a skill file must have the frontmatter shape the plugin registers", () => {
+    const cases: readonly [string, Readonly<Record<string, string>>, RegExp][] = [
+      ["no frontmatter", { broken: "# Broken\n" }, /SCHEMA_VIOLATION: skills\/broken\/SKILL\.md has no frontmatter\. Next step: /],
+      ["no name", { broken: "---\ndescription: A description.\n---\n\n# Body\n" }, /has no frontmatter name/],
+      ["another name", { broken: "---\nname: other\ndescription: A description.\n---\n\n# Body\n" }, /names "other", not its directory "broken"/],
+      ["no description", { broken: "---\nname: broken\n---\n\n# Body\n" }, /has no frontmatter description/],
+      ["empty content", { broken: "---\nname: broken\ndescription: A description.\n---\n\n" }, /has no content below its frontmatter/],
+    ]
+    for (const [name, files, expected] of cases) {
+      const directory = fixture(files)
+      try { expect(() => readSkills(directory), name).toThrow(expected) } finally { rmSync(directory, { recursive: true, force: true }) }
+    }
+    const missing = mkdtempSync(join(tmpdir(), "utilities-skills-"))
     try {
-      const { skills, problems } = await loadSkills(join(root, "skills"))
-      expect(skills).toEqual([])
-      expect(problems).toHaveLength(1)
-      expect(problems[0]).toMatch(/^SKILLS_INVALID: The skills folder was not read: it is missing\. Next step: /)
-    } finally { rmSync(root, { recursive: true, force: true }) }
+      mkdirSync(join(missing, "empty"), { recursive: true })
+      expect(() => readSkills(missing)).toThrow(/skills\/empty\/SKILL\.md is missing/)
+    } finally { rmSync(missing, { recursive: true, force: true }) }
+    const none = mkdtempSync(join(tmpdir(), "utilities-skills-"))
+    try { expect(() => readSkills(none)).toThrow(/skills\/ holds no <name>\/SKILL\.md/) } finally { rmSync(none, { recursive: true, force: true }) }
+  })
+  test("registerSkills adds every checked skill and returns a disposer", async () => {
+    const added: { id: string; name: string; description?: string; path: string; content: string }[] = []
+    let disposed = false
+    const context = {
+      skill: {
+        async transform(callback: (editor: { add: (skill: (typeof added)[number]) => void }) => void) {
+          callback({ add: skill => added.push(skill) })
+          return { async dispose() { disposed = true } }
+        },
+      },
+    } as unknown as Plugin.Context
+    const registration = await registerSkills(context)
+    expect(added.map(skill => skill.id)).toEqual(shipped)
+    expect(added.every(skill => (skill.description ?? "").length > 0 && skill.content.trim().length > 0)).toBe(true)
+    await registration.dispose()
+    expect(disposed).toBe(true)
   })
 })

@@ -5,7 +5,7 @@
 | Layer | Files | Does |
 |---|---|---|
 | Entry | `src/index.ts` | `assertHost`, load the options, create the provider, one `register` call, register the skills, dispose everything |
-| Skills | `src/skills.ts` | reads `skills/<name>/SKILL.md`, parses the front matter and registers each skill through `ctx.skill.transform` |
+| Skills | `src/skills.ts` | reads every `skills/<name>/SKILL.md`, parses the front matter as YAML, checks it, and registers each skill through `ctx.skill.transform` |
 | Handlers | `src/handlers/` | one file per method: its description, its input and output schemas, and its work |
 | Provider | `src/provider/` | the only code that runs a program, calls Open-Meteo, reads OpenCode's database or downloads a release file |
 | Domain | `src/domain/` | shared types, the error table and options validation |
@@ -20,11 +20,13 @@ program names (`time-keep`, `weather-signal`, `utilities-speech`) also sit in th
 
 The package ships five skills (`skills/utilities`, `-time`, `-weather`, `-speech`, `-sessions`). OpenCode 2.4.1 does not
 scan an installed plugin package's `skills/` folder: its skill roots are the config and agent directories, and
-`ctx.skill.transform` is the only loader a plugin has. So `loadSkills` reads each file before the doors are wired,
-`parseSkill` checks the `name` and `description` front matter, and `registerSkills` adds every parsed skill with
-`autoinvoke: true` after `register`. A missing or malformed file never fails setup: it is skipped, and the reason is the first
-problem in `status` (state `error`) and in `diagnose.nextStep`. The contract has no skill wiring and the manifest has no
-skills key, so this is the plugin's own code.
+`ctx.skill.transform` is the only loader a plugin has. `readSkills` reads every directory under `skills/` before
+anything registers, parses each `SKILL.md` front matter with the `yaml` package, and checks the name, the description
+and the body. YAML block scalars (`>`, `|`, `>-`, `|-`) therefore register their folded or literal text, never the
+marker; a plain description containing `': '` must be quoted, because YAML is strict. A missing or malformed file fails
+setup with `SCHEMA_VIOLATION` before a partial registration exists. `registerSkills` then adds every checked skill in
+`ctx.skill.transform` and returns its disposer, which setup disposes on unload. The contract has no skill wiring and the
+manifest has no skills key, so this is the plugin's own code.
 
 ## The provider client
 

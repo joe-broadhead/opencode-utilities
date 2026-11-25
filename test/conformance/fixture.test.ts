@@ -32,7 +32,7 @@ const provider: Provider = {
   close: async () => {},
 }
 
-const handlers = createHandlers({ provider, manifest, version, hostVersion: "2.4.1", access: "all", skillProblems: [] })
+const handlers = createHandlers({ provider, manifest, version, hostVersion: "2.4.1", access: "all" })
 
 /** One handler call, with only what the recorded methods read. */
 function call(emitted: string[]): Pick<MethodCall, "account" | "signal" | "unguardedAgents" | "bus"> {

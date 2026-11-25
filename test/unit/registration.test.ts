@@ -7,7 +7,7 @@ import type { Provider } from "../../src/provider/index.js"
 
 /** A provider that is never called: this suite checks the table and its schemas. */
 const provider = new Proxy({} as Provider, { get: () => async () => { throw new Error("the table is not run here") } })
-const handlers = createHandlers({ provider, manifest, version, hostVersion: "2.4.1", access: "all", skillProblems: [] })
+const handlers = createHandlers({ provider, manifest, version, hostVersion: "2.4.1", access: "all" })
 
 describe("the manifest and the handler table", () => {
   test("declare the same methods, and nothing else", () => {

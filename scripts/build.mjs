@@ -5,6 +5,7 @@
 // Sources import zod as `import * as z`. A named `import { z }` makes the bundler keep every locale.
 import { build } from "esbuild"
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { builtinModules } from "node:module"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 
@@ -14,7 +15,7 @@ const dist = join(root, "dist")
 const HOST = ["@opencode/plugin", "@opencode/plugin/*"]
 // A runtime built-in: `bun:sqlite`, which sessions_grep imports dynamically so a Node unit test can inject a database.
 const BUILTIN = ["bun:sqlite"]
-const allowed = path => path.startsWith("node:") || BUILTIN.includes(path) || HOST.some(name => name.endsWith("/*") ? path.startsWith(name.slice(0, -1)) : path === name)
+const allowed = path => path.startsWith("node:") || builtinModules.includes(path) || BUILTIN.includes(path) || HOST.some(name => name.endsWith("/*") ? path.startsWith(name.slice(0, -1)) : path === name)
 
 // A bundle is only half the plugin: the native files and the manifest that pins them are the other half, and they are
 // build outputs that a checkout does not carry. A dist/ without them loads and then refuses every tool that needs a
@@ -39,6 +40,8 @@ const result = await build({
   legalComments: "none",
   metafile: true,
   logLevel: "warning",
+  // The YAML parser is CommonJS and reads `process` with require(); the bundle is ESM, so give it a real require.
+  banner: { js: `import { createRequire } from "node:module";\nconst require = createRequire(import.meta.url);` },
 })
 
 const outputs = Object.keys(result.metafile.outputs).sort()

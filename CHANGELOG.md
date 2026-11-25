@@ -15,10 +15,11 @@
 - The two session stopgaps, `sessions` and `sessions_grep`: read-only status, spend, tokens and time windows over
   OpenCode's public session API, and exact-text search over OpenCode's SQLite database with masking and byte caps.
 - `changed` after every write (`utilities.timers`, `utilities.speech`, `utilities.native`).
-- Five skills (`utilities`, `utilities-time`, `utilities-weather`, `utilities-speech`, `utilities-sessions`), registered
-  through `ctx.skill.transform` because OpenCode 2.4.1 does not load a plugin package's `skills/` folder itself.
+- Five skills (`utilities`, `utilities-time`, `utilities-weather`, `utilities-speech`, `utilities-sessions`), read from
+  their `SKILL.md` front matter (YAML, including `>` and `|` block descriptions) and registered through
+  `ctx.skill.transform` because OpenCode 2.4.1 does not load a plugin package's `skills/` folder itself.
 - Generated documentation from the manifest, unit tests, a recorded conformance fixture, real 2.4.1 host tests for the
-  skills and the parity with v0.0.7, and a pack test.
+  skill descriptions, the block-scalar case and the parity with v0.0.7, and a pack test.
 
 ### Removed since v0.0.7
 

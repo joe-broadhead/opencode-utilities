@@ -37,8 +37,6 @@ export interface HandlerDeps {
   readonly version: string
   readonly hostVersion: string
   readonly access: "all" | "ask-changes" | "read-only"
-  /** What setup could not finish, such as a skill file that was skipped; status and diagnose report it. */
-  readonly skillProblems: readonly string[]
 }
 
 /**
@@ -48,10 +46,10 @@ export interface HandlerDeps {
 export function createHandlers(deps: HandlerDeps): HandlerTable {
   const { provider, manifest } = deps
   return {
-    status: status({ manifest, version: deps.version, hostVersion: deps.hostVersion, problems: deps.skillProblems }),
+    status: status({ manifest, version: deps.version, hostVersion: deps.hostVersion }),
     diagnose: diagnose({
       provider, version: deps.version, hostVersion: deps.hostVersion,
-      range: manifest.plugin.host.opencode, tested: manifest.plugin.host.tested, access: deps.access, problems: deps.skillProblems,
+      range: manifest.plugin.host.opencode, tested: manifest.plugin.host.tested, access: deps.access,
     }),
     sessions: sessions(provider),
     sessions_grep: sessionsGrep(provider),

@@ -12,8 +12,6 @@ export interface DiagnoseDeps {
   readonly range: string
   readonly tested: readonly string[]
   readonly access: "all" | "ask-changes" | "read-only"
-  /** What setup could not finish, such as a skill file that was skipped. */
-  readonly problems: readonly string[]
 }
 
 /** What this machine can do with Utilities, and why not: the module files, the weather key, the timers. */
@@ -30,7 +28,6 @@ export function diagnose(deps: DiagnoseDeps): MethodHandler {
         access: deps.access,
         runtime,
         weather,
-        problems: deps.problems,
       }))
     }),
   }

@@ -27,7 +27,7 @@ function provider(overrides: Partial<Provider> = {}): Provider {
     ...overrides,
   }
 }
-const handlers = (overrides: Partial<Provider> = {}) => createHandlers({ provider: provider(overrides), manifest, version, hostVersion: "2.4.1", access: "all", skillProblems: [] })
+const handlers = (overrides: Partial<Provider> = {}) => createHandlers({ provider: provider(overrides), manifest, version, hostVersion: "2.4.1", access: "all" })
 type Unguarded = { readonly ok: true; readonly agents: readonly string[] } | { readonly ok: false; readonly error: string }
 function call(emitted: { event: string; data: unknown }[] = [], agents: () => Promise<Unguarded> = async () => ({ ok: true, agents: [] })) {
   return {

@@ -1,5 +1,6 @@
-// Every `skills/` directory registers on the real embedded OpenCode 2.4.1 host, with its description and autoinvoke.
-// The expected ids come from the directories at test time; see test/support/skills-host.ts for the isolated home.
+// Every `skills/` directory registers on the real embedded OpenCode 2.4.1 host, with the description a real YAML
+// parser reads from its front matter (never a block marker), its name, path and body. The host runs on an empty
+// temporary project, so nothing is discovered from the package or repository; see test/support/skills-host.ts.
 import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { afterAll, describe, expect, test } from "vitest"
@@ -8,20 +9,20 @@ import { cleanup, description, packageCopy, skillsOf, SKILLS, root } from "../su
 afterAll(cleanup)
 
 describe("the skills on the real host", () => {
-  test("the built plugin registers every skills/ directory, with its description and autoinvoke", () => {
+  test("the built plugin registers every skills/ directory with its YAML description, name, path and body", () => {
     expect(SKILLS.length).toBeGreaterThan(0)
     const packageRoot = packageCopy("package")
     const directory = join(root, "project"); mkdirSync(directory, { recursive: true }); writeFileSync(join(directory, "opencode.json"), "{}")
     const { skills } = skillsOf(join(packageRoot, "dist/index.js"), directory)
-    const found = skills.filter(skill => SKILLS.includes(skill.id))
-    expect(found.map(skill => skill.id).sort()).toEqual([...SKILLS].sort())
-    for (const skill of found) {
-      const expected = description(skill.id)
-      expect(skill.description, skill.id).toBe(expected)
-      // A YAML block scalar must never reach an agent as the marker itself.
-      expect(["", ">", "|"].includes(skill.description ?? ""), `${skill.id} description`).toBe(false)
-      expect(/^[>|]/.test(skill.description ?? ""), `${skill.id} block marker`).toBe(false)
+    for (const id of SKILLS) {
+      const skill = skills.find(candidate => candidate.id === id)
+      expect(skill, `the host registered ${id}`).toBeDefined()
+      expect(skill!.name).toBe(id)
+      expect(skill!.path).toBe(join(packageRoot, "skills", id, "SKILL.md"))
+      expect((skill!.content ?? "").trim().length).toBeGreaterThan(0)
+      const expected = description(id)
+      expect(skill!.description, `${id} description`).toBe(expected)
+      expect(["", ">", "|", ">-", "|-", ">+", "|+"].includes(expected.trim()), id).toBe(false)
     }
-    expect(found.every(skill => skill.autoinvoke === true), "autoinvoke").toBe(true)
   }, 120_000)
 })

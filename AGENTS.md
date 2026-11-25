@@ -59,10 +59,11 @@ fixtures/                conformance evidence
 1. **The manifest is the source of truth.** Add or change a method in `package.json` `capabilities.methods` first, then
    its handler in `src/handlers/`, then its test. Never register a tool or an RPC method by hand: `register` does it.
 2. **Register the skills.** OpenCode 2.4.1 does not scan an installed plugin package's `skills/` folder: its roots are
-   the config and agent directories, and `ctx.skill.transform` is the only loader. `src/skills.ts` reads each
-   `skills/*/SKILL.md`, parses the front matter and registers it after `register`; a missing or malformed file is
-   skipped and reported in `status` and `diagnose`, never thrown. The contract has no skill wiring, so every plugin
-   does this itself.
+   the config and agent directories, and `ctx.skill.transform` is the only loader. `src/skills.ts` reads every
+   `skills/*/SKILL.md`, parses the front matter with YAML (so `>` and `|` block descriptions fold to their text) and
+   registers each after `register`. Every skill is checked before anything registers, so a missing or malformed file
+   fails setup with `SCHEMA_VIOLATION`, not with a partial registration. The contract has no skill wiring, so every
+   plugin does this itself.
 3. **No accounts.** Do not add an `account` field, an `accounts` option or a sign-in. The Open-Meteo key is an OpenCode
    integration, not an account.
 4. **Classify every method truthfully.** Reads read; `timer_set` is `write`, `timer_delete` is `delete`,
