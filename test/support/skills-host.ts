@@ -63,7 +63,14 @@ export function packageCopy(name: string, broken?: string): string {
  * One SDK host in a fresh process, with the plugin at `entry`, on the inherited isolated home: its skills and status.
  * A separate process is what keeps a skill registered by another test's host out of this answer.
  */
-export function skillsOf(entry: string, directory: string): { skills: readonly { id: string; description?: string; autoinvoke?: boolean }[]; status: unknown } {
+export interface HostSkills {
+  readonly skills: readonly { id: string; description?: string; autoinvoke?: boolean }[]
+  readonly commands: readonly { id?: string; name?: string }[]
+  readonly integrations: readonly { id?: string; name?: string }[]
+  readonly status: unknown
+}
+
+export function skillsOf(entry: string, directory: string): HostSkills {
   const output = execFileSync(process.execPath, [join(repo, "test/support/skills-host-probe.mjs"), entry, directory], { env: process.env, encoding: "utf8", timeout: 120_000 })
-  return JSON.parse(output) as { skills: readonly { id: string; description?: string; autoinvoke?: boolean }[]; status: unknown }
+  return JSON.parse(output) as HostSkills
 }

@@ -17,5 +17,17 @@
 - `changed` after every write (`utilities.timers`, `utilities.speech`, `utilities.native`).
 - Five skills (`utilities`, `utilities-time`, `utilities-weather`, `utilities-speech`, `utilities-sessions`), registered
   through `ctx.skill.transform` because OpenCode 2.4.1 does not load a plugin package's `skills/` folder itself.
-- Generated documentation from the manifest, unit tests, a recorded conformance fixture, a real 2.4.1 host test for the
-  skills, and a pack test.
+- Generated documentation from the manifest, unit tests, a recorded conformance fixture, real 2.4.1 host tests for the
+  skills and the parity with v0.0.7, and a pack test.
+
+### Removed since v0.0.7
+
+- The `/utilities` TUI dialog (id `utilities.local.tui`): the status dialog is optional in the plugin standard, and the
+  status is on RPC now. `diagnose` is the detailed view for an agent.
+- The `/utilities-status` command: its job is `status` (the contract's own answer) and `diagnose`, reachable as a tool,
+  in Code Mode, over RPC and from automations.
+- The `/utilities-install` command: its job is `native_install`, which an agent, a script or an automation can call.
+- The `/utilities-speech-install` command: its job is `speech_install`, with the same reach.
+- The `utilities.local` and `utilities.local.tools` RPC ids: renamed to `utilities` (one RPC id for every method, as
+  contract §3 requires), not removed. The deprecated `utilities.tools` alias from v0.0.7 is gone with the contract-1
+  compatibility paths.

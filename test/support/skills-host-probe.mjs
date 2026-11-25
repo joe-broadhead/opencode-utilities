@@ -28,8 +28,10 @@ try {
     await new Promise(resolve => setTimeout(resolve, 100))
   }
   const skills = await host.skill.list({ location: { directory } })
+  const commands = await host.command.list({ location: { directory } })
+  const integrations = await host.integration.list({ location: { directory } })
   const answer = await host.rpc.call({ rpcID: "utilities", method: "status", input: { sessionID: session.id, input: {} }, location: { directory } })
-  process.stdout.write(JSON.stringify({ skills: skills.data, status: answer.output }))
+  process.stdout.write(JSON.stringify({ skills: skills.data, commands: commands.data, integrations: integrations.data, status: answer.output }))
 } finally {
   await host.close().catch(() => undefined)
 }
