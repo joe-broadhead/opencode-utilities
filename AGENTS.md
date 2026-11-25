@@ -28,7 +28,7 @@ event is `changed`. The programs are downloaded from this repository's GitHub re
 | Command | Does |
 |---|---|
 | `npm ci` | installs dev tooling only; there are no runtime dependencies |
-| `npm run check` | everything: native files, typecheck, unit, build, pack, `plugin-kit check` |
+| `npm run check` | everything: native files, typecheck, build, unit, pack, `plugin-kit check` |
 | `npm run kit:check` | T0, T1 on 2.4.1, the docs sections, forbidden patterns, no bundled kit |
 | `npx plugin-kit docs` | regenerates the generated doc sections from the manifest |
 | `npm run typecheck`, `npm test`, `npm run build`, `npm run test:pack` | the smaller loops |
@@ -41,6 +41,7 @@ src/
   index.ts               Plugin.define → assertHost, createProvider, one register call, and the
                          skills through ctx.skill.transform (the host wiring the contract does not own)
   manifest.ts            package.json's version and capabilities
+  skills.ts              reads skills/*/SKILL.md and registers them through ctx.skill.transform
   handlers/              one file per method, plus the handler table
   provider/              the provider client: runtime, backends, weather key, diagnostics,
                          modules/{time,weather,speech,sessions}, process/, artifacts/, speech-assets/
@@ -48,7 +49,7 @@ src/
 scripts/                 only this plugin's native and speech build and its one bundle script
 skills/                  utilities (main), utilities-time, utilities-weather, utilities-speech, utilities-sessions
 docs/                    capabilities, configuration, accounts, automations, architecture, security
-test/unit                handlers, provider mapping, the mask and the stopgaps
+test/unit                handlers, provider mapping, the mask, the stopgaps, and the real 2.4.1 skill host test
 test/pack                the packed tarball installs and its entry loads
 fixtures/                conformance evidence
 ```

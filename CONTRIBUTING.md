@@ -26,7 +26,7 @@ The committed speech manifest (`manifest/speech-assets.json`) is written only by
 npm run check
 ```
 
-It runs `native:ensure`, the typecheck, the unit tests, the build, the pack test, and `plugin-kit check` (T0, T1 on
+It runs `native:ensure`, the typecheck, the build, the unit tests, the pack test, and `plugin-kit check` (T0, T1 on
 OpenCode 2.4.1, the generated docs, the forbidden patterns and the no-bundled-kit check). Host and pack tests read
 and write an isolated home, but run one repository's check at a time.
 

@@ -21,8 +21,8 @@ Open-Meteo's `customer-` hosts; without one, the free tier (non-commercial, rate
 ## Downloads
 
 Every release file is pinned by size and SHA-256 in `manifest/native.json` or `manifest/speech-assets.json`. A download
-goes to a temporary file, is checked as it arrives and after decompression, and is renamed into place only when both
-match; a failed check is discarded and never executed. A cached program is checked again before every run: it must be
+goes to a temporary file and is checked as it arrives, and for a program again after decompression; it is renamed into
+place only when every check matches, and a failed check is discarded and never executed. A cached program is checked again before every run: it must be
 a regular file, executable, and the pinned bytes. A symbolic link inside the plugin's folders is `UNSAFE_PATH`.
 
 A read never downloads. With the programs or speech files missing, the read refuses `NATIVE_FILES_MISSING` or

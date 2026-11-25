@@ -77,5 +77,6 @@ jobs:
         run: |
           notes="$RUNNER_TEMP/notes.md"
           printf '# %s\n\n%s\n' "${{ github.ref_name }}" "$(git log -1 --format='%s')" > "$notes"
-          gh release create "${{ github.ref_name }}" "$RUNNER_TEMP"/assets/* \
+          mapfile -t files < <(find "$RUNNER_TEMP/assets" -type f | sort)
+          gh release create "${{ github.ref_name }}" "${files[@]}" \
             --repo "${{ github.repository }}" --title "${{ github.ref_name }}" --notes-file "$notes"

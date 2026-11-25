@@ -11,16 +11,18 @@
 | Domain | `src/domain/` | shared types, the error table and options validation |
 
 `src/handlers/` never touches tools, RPC, permissions or the bus directly: `register` wires every door, and a handler
-reads `call.bus` only to emit `changed`. `src/provider/` is the only place a URL or a binary name appears: the
-Open-Meteo hosts are in `provider/modules/weather/argv.ts` and the release URL in `provider/process/install.ts`.
+reads `call.bus` only to emit `changed`. Every provider endpoint is named in `src/provider/` and only there: the
+Open-Meteo hosts are in `provider/modules/weather/argv.ts` and the release URL in `provider/process/install.ts`. The
+program names (`time-keep`, `weather-signal`, `utilities-speech`) also sit in the native distribution table in
+`src/domain/contract.ts`, because the native build scripts read that table too.
 
 ## Skills
 
 The package ships five skills (`skills/utilities`, `-time`, `-weather`, `-speech`, `-sessions`). OpenCode 2.4.1 does not
 scan an installed plugin package's `skills/` folder: its skill roots are the config and agent directories, and
-`ctx.skill.transform` is the only loader a plugin has. So `loadSkills` reads each file before `register` returns its
-registration, `parseSkill` checks the `name` and `description` front matter, and `registerSkills` adds every parsed skill
-with `autoinvoke: true`. A missing or malformed file never fails setup: it is skipped, and the reason is the first
+`ctx.skill.transform` is the only loader a plugin has. So `loadSkills` reads each file before the doors are wired,
+`parseSkill` checks the `name` and `description` front matter, and `registerSkills` adds every parsed skill with
+`autoinvoke: true` after `register`. A missing or malformed file never fails setup: it is skipped, and the reason is the first
 problem in `status` (state `error`) and in `diagnose.nextStep`. The contract has no skill wiring and the manifest has no
 skills key, so this is the plugin's own code.
 
@@ -32,7 +34,7 @@ skills key, so this is the plugin's own code.
   call to a per-module queue, starts the module's deadline, stages a private job directory, runs the program and removes
   the job. A timer write that fails after the program started is `TIMER_STATE_UNKNOWN`, never a retryable failure.
 - **The programs** (`provider/backends.ts`) are read from `manifest/native.json`, cached under
-  `<cacheRoot>/native/v<version>/<module>/<platform>/`, and verified against their pinned SHA-256 before every run. A
+  `<cacheRoot>/native/<release tag>/<module>/<platform>/<name>`, and verified against their pinned SHA-256 before every run. A
   linked or non-executable file is refused; a changed one is not the program.
 - **The speech files** (`provider/speech-assets/`) are read from `manifest/speech-assets.json`, cached under
   `<cacheRoot>/<sha256>/<name>`, and verified the same way. `speech.assetsDir` makes them pre-seeded: nothing is
@@ -58,8 +60,8 @@ skills key, so this is the plugin's own code.
 ## OpenCode APIs
 
 Only the public `@opencode/plugin` 2.4.1 context: `ctx.app.version`, `ctx.options`, `ctx.location`, `ctx.session.list`
-and `ctx.session.get`, `ctx.integration` (the `open-meteo` connection), and what `register` uses (`agent`, `tool`, `rpc`,
-`permission`). The bundle keeps `@opencode/plugin` external and inlines everything else, so a hot reload cannot mix a
+and `ctx.session.get`, `ctx.integration` (the `open-meteo` connection), `ctx.skill.transform` for the skills, and what
+`register` uses (`agent`, `tool`, `rpc`, `permission`). The bundle keeps `@opencode/plugin` external and inlines everything else, so a hot reload cannot mix a
 new entry with an old sibling module.
 
 ## Errors

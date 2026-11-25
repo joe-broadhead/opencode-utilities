@@ -19,6 +19,8 @@ The first release on plugin-contract v0.
   so `read-only` never downloads.
 - `changed` after every write: `utilities.timers` for a timer write, `utilities.speech` for synthesis and a speech
   install, `utilities.native` for a program install.
+- The five skills are registered on the host through `ctx.skill.transform`, because OpenCode 2.4.1 does not load a
+  plugin package's `skills/` folder itself. A missing or malformed skill is skipped and reported in status.
 
 ### Changed
 
