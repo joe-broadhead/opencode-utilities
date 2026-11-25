@@ -6,12 +6,13 @@ import { join } from "node:path"
 import { afterEach, describe, expect, test } from "vitest"
 import { pinnedNames, pinnedPaths } from "../../scripts/release-assets.mjs"
 import { releaseManifestProblems } from "../../scripts/release-manifest.mjs"
+import { VERSION } from "../fixtures.js"
 
 // The native manifest is built, not committed. CI always has it; a clean clone without Rust uses this synthetic one for
 // the generic checks, and the shipped-name assertion is skipped with the reason below.
 const shipped = existsSync("manifest/native.json") ? JSON.parse(readFileSync("manifest/native.json", "utf8")) : undefined
 if (shipped === undefined) console.warn("SKIP the shipped native-name assertion: no manifest/native.json. Run npm run native:ensure with Rust 1.96.0; CI and the release always run it.")
-const version = "0.0.0"
+const version = VERSION
 const synthetic = {
   schema: 1, plugin: "utilities", repository: "we-the-rebel-alliance/utilities-plugin", tag: `v${version}`,
   built: { commit: "0".repeat(40), run: 1, workflow: "native" },
@@ -81,7 +82,7 @@ describe("the candidate release manifest", () => {
     expect(releaseManifestProblems(built, { tag: native.tag, commit, repository: native.repository })).toEqual([])
   })
   test("refuses another tag, another commit, a zero run and an empty module set", () => {
-    expect(releaseManifestProblems(built, { tag: "v9.9.9", commit, repository: native.repository })).toContain("tag is v0.0.0; the release tag is v9.9.9")
+    expect(releaseManifestProblems(built, { tag: "v9.9.9", commit, repository: native.repository })).toContain(`tag is v${version}; the release tag is v9.9.9`)
     expect(releaseManifestProblems(built, { tag: native.tag, commit: "1".repeat(40), repository: native.repository }).some(problem => problem.includes("built.commit"))).toBe(true)
     const zero = JSON.parse(JSON.stringify(built)); zero.built.run = 0
     expect(releaseManifestProblems(zero, { tag: native.tag, commit, repository: native.repository })).toContain("built.run must be a positive run id")

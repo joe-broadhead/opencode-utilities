@@ -83,7 +83,7 @@ export async function fixture(o: FixtureOptions = {}) {
   const root = await mkdtemp(join(await realpath(tmpdir()), "utilities-synthetic-")), calls = join(root, "calls.jsonl")
   const code = program(calls, o.body)
   await mkdir(join(root, "manifest")); await mkdir(join(root, "state"), { mode: 0o700 }); await mkdir(join(root, "project"))
-  await writeFile(join(root, "package.json"), JSON.stringify({ name: "github:we-the-rebel-alliance/utilities-plugin#v0.0.0", version: VERSION }))
+  await writeFile(join(root, "package.json"), JSON.stringify({ name: `github:we-the-rebel-alliance/utilities-plugin#v${VERSION}`, version: VERSION }))
   const gz = gzipSync(Buffer.from(code), { level: 9 })
   const native = (module: string) => ({ name: `${module}-darwin-arm64.gz`, url: `https://github.com/we-the-rebel-alliance/utilities-plugin/releases/download/v${VERSION}/${module}-darwin-arm64.gz`, bytes: gz.length, sha256: sha(gz), executable: { name: module, bytes: Buffer.byteLength(code), sha256: sha(code) } })
   await writeFile(join(root, "manifest/native.json"), JSON.stringify({ schema: 1, plugin: "utilities", repository: "we-the-rebel-alliance/utilities-plugin", tag: `v${VERSION}`, built: { commit: "0".repeat(40), run: 0, workflow: "native" }, modules: { "time-keep": { "darwin-arm64": native("time-keep") }, "weather-signal": { "darwin-arm64": native("weather-signal") } } }))

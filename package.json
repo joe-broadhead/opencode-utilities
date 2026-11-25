@@ -1,6 +1,6 @@
 {
   "name": "@we-the-rebel-alliance/utilities-plugin",
-  "version": "0.0.0",
+  "version": "0.0.8",
   "private": true,
   "description": "Local time, date, holiday, timer, weather and on-device speech tools for an OpenCode agent.",
   "keywords": [

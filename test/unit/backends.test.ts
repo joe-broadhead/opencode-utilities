@@ -30,7 +30,7 @@ const built = (): { tag: string; modules: Record<string, Record<string, { execut
 function packageRoot(manifest: string | undefined): { root: string; cache: string } {
   const root = realpathSync(mkdtempSync(join(TEMP, "utilities-native-")))
   mkdirSync(join(root, "manifest"), { recursive: true })
-  writeFileSync(join(root, "package.json"), JSON.stringify({ name: "native-test", version: "0.0.0" }))
+  writeFileSync(join(root, "package.json"), JSON.stringify({ name: "native-test", version: VERSION }))
   if (manifest !== undefined) writeFileSync(join(root, "manifest", "native.json"), manifest)
   return { root, cache: join(root, "cache") }
 }

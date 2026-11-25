@@ -21,7 +21,7 @@ Every module on, changes asked for:
 ```json
 {
   "plugins": [
-    { "package": "github:we-the-rebel-alliance/utilities-plugin#v0.0.0", "options": { "access": "ask-changes" } }
+    { "package": "github:we-the-rebel-alliance/utilities-plugin#v0.0.8", "options": { "access": "ask-changes" } }
   ]
 }
 ```
@@ -32,7 +32,7 @@ Reads only, with time and weather on and speech off, and timers under a chosen f
 {
   "plugins": [
     {
-      "package": "github:we-the-rebel-alliance/utilities-plugin#v0.0.0",
+      "package": "github:we-the-rebel-alliance/utilities-plugin#v0.0.8",
       "options": {
         "access": "read-only",
         "modules": { "speech": false },
@@ -49,7 +49,7 @@ A folder of pre-seeded speech files, so nothing is ever downloaded:
 {
   "plugins": [
     {
-      "package": "github:we-the-rebel-alliance/utilities-plugin#v0.0.0",
+      "package": "github:we-the-rebel-alliance/utilities-plugin#v0.0.8",
       "options": { "speech": { "assetsDir": "/srv/utilities-speech" } }
     }
   ]
