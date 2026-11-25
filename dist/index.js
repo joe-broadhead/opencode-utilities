@@ -25891,6 +25891,7 @@ function convert(schema, io) {
   return cleaned["type"] === void 0 && (cleaned["oneOf"] !== void 0 || cleaned["anyOf"] !== void 0) ? { ...cleaned, type: "object" } : cleaned;
 }
 var DROPPED = /* @__PURE__ */ new Set(["$schema", "$comment", "pattern", "format"]);
+var NAMED_MAPS = /* @__PURE__ */ new Set(["properties", "patternProperties", "$defs", "definitions"]);
 function strip(value) {
   if (Array.isArray(value)) return value.map(strip);
   if (value === null || typeof value !== "object") return value;
@@ -25899,6 +25900,12 @@ function strip(value) {
     if (DROPPED.has(key)) continue;
     if (key === "default" && typeof held === "object" && held !== null) {
       out[key] = held;
+      continue;
+    }
+    if (NAMED_MAPS.has(key) && held !== null && typeof held === "object" && !Array.isArray(held)) {
+      const names = {};
+      for (const [name2, schema] of Object.entries(held)) names[name2] = strip(schema);
+      out[key] = names;
       continue;
     }
     out[key] = strip(held);

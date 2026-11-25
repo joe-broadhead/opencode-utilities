@@ -3,9 +3,10 @@
 # `plugin-kit release` checks the repository, writes the local tag, and refuses anything but the 0.0.x line; pushing the
 # tag is the owner's step. This workflow then checks the tagged commit again, packs it, records the conformance report,
 # and creates the Release with the tarball, the report, SHA256SUMS and, when the tagged commit has a successful native
-# run, that run's vetted `native.json` and the pinned native/speech files. Every one is named from `manifest/native.json`
-# and `manifest/speech-assets.json`: the release never passes the native directory or a wildcard for those files, so a
-# directory cannot be uploaded as an asset. A tag with no native run on its commit attaches the three core assets only.
+# run, that run's vetted `native.json` and the native programs `manifest/native.json` pins. The release never passes the
+# native directory or a wildcard, so a directory cannot be uploaded as an asset. Speech files are not attached here: the
+# release owner's bot carries the pinned speech engine/model bytes across a re-cut, verified against
+# `manifest/speech-assets.json`. A tag with no native run on its commit attaches the three core assets only.
 #
 # The tag is the owner's approval: there is no `release` environment, so the release bot can publish once the tag exists.
 name: release
@@ -71,7 +72,7 @@ jobs:
           test "v${version}" = "$TAG"
       # The native workflow uploads the manifest it built for every platform, with the run id the files are pinned to.
       # It must be the run on the tagged commit: the release uses that manifest and those artifacts, never a locally
-      # generated placeholder (native:ensure writes one with run 0). No successful run means no native or speech extras.
+      # generated placeholder (native:ensure writes one with run 0). No successful run means no native extras.
       - name: Fetch the pinned native manifest from the tagged commit's native run
         id: native
         env:
@@ -101,10 +102,10 @@ jobs:
           npx plugin-kit check --json > release/conformance.json
           npm pack --pack-destination release
           sha256sum release/*.tgz release/conformance.json > release/SHA256SUMS
-      # The programs and speech files the release manifests pin, verified against them and attested by the native run.
-      # A tag whose commit has no native run has nothing to attach; `native_install` then reports the file missing with
-      # the install step, and the installer can still fetch a `native.json` published by a later release.
-      - name: Attach the pinned native and speech files
+      # The native programs `manifest/native.json` pins, verified against it and attested by the native run. Speech is
+      # not staged here: the release owner's bot carries the pinned speech bytes across a re-cut. A tag whose commit has
+      # no native run has nothing to attach; `native_install` then reports the file missing with the install step.
+      - name: Attach the pinned native files
         if: steps.native.outputs.present == 'true'
         env:
           GH_TOKEN: ${{ github.token }}

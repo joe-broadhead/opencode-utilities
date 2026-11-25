@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-// Downloads the artifacts of the native run the release manifest pins, verifies every file against the manifest, and
-// stages the verified files for the GitHub Release (NATIVE-DESIGN §4, step 4). It never builds a binary: the release
-// re-verifies the bytes that were pinned.
+// Downloads the artifacts of the native run the release manifest pins, verifies every NATIVE file against the manifest,
+// and stages those files for the GitHub Release (NATIVE-DESIGN §4, step 4). It never builds a binary: the release
+// re-verifies the bytes that were pinned. Speech files are not staged here: the release owner's bot carries the pinned
+// speech engine/model bytes across a re-cut, verified against `manifest/speech-assets.json`.
 //
 //   node scripts/attach-native.mjs --out <dir> [--repo owner/name] [--manifest manifest/native.json]
 //
@@ -12,7 +13,7 @@ import { createHash } from "node:crypto"
 import { spawnSync } from "node:child_process"
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs"
 import { gunzipSync } from "node:zlib"
-import { dirname, join } from "node:path"
+import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { fileURLToPath } from "node:url"
 import { assetUrl, manifestProblems, MANIFEST_PATH } from "./native-manifest.mjs"
@@ -89,23 +90,6 @@ function main() {
       ghOutput(["attestation", "verify", path, "--repo", options.repo], { inherit: true })
       copyFileSync(path, join(options.out, entry.name))
       console.log(`ok   ${label}: ${entry.name} (${bytes.length} bytes, attested) from ${assetUrl(manifest, entry)}`)
-    }
-    // The speech files are pinned in their own committed manifest. They are not attested: the native run uploads them
-    // as artifacts, and the pins in manifest/speech-assets.json are the check.
-    const speechPath = join(dirname(options.manifest), "speech-assets.json")
-    if (existsSync(speechPath)) {
-      const speech = JSON.parse(readFileSync(speechPath, "utf8"))
-      const files = [...Object.values(speech.engines ?? {}), ...Object.values(speech.models ?? {})]
-      for (const entry of files) {
-        const candidates = found.get(entry.name) ?? []
-        if (candidates.length !== 1) throw new Error(`speech ${entry.name}: the run's artifacts hold ${candidates.length} files with that name; one is needed`)
-        const bytes = readFileSync(candidates[0])
-        if (bytes.length !== entry.bytes) throw new Error(`speech ${entry.name}: ${bytes.length} bytes; the manifest pins ${entry.bytes}`)
-        if (sha256(bytes) !== entry.sha256) throw new Error(`speech ${entry.name}: does not match the manifest's sha256`)
-        copyFileSync(candidates[0], join(options.out, entry.name))
-        console.log(`ok   speech ${entry.name}: ${bytes.length} bytes, verified against manifest/speech-assets.json`)
-      }
-      entries.push(...files.map(entry => ({ label: `speech ${entry.name}`, entry, gzipped: false })))
     }
     staged = entries.length
   } finally {
