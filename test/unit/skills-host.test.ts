@@ -1,16 +1,20 @@
 // The skills on the real embedded OpenCode 2.4.1 host: the built bundle registers its five skills through
 // `ctx.skill.transform`, and a malformed file is skipped (and reported in status) instead of failing setup.
 //
-// The host must not read the user's own OpenCode state, so HOME, the XDG variables and TMPDIR point at a temporary root
-// before anything under `@opencode/*` is imported. Every such import is dynamic, after that setup.
+// The bundle is `dist/index.js`, the artifact the check builds (`npm run check` builds before it tests). A plain
+// `npm test` without one builds it once here, so the test never depends on a stale checkout. The host must not read the
+// user's own OpenCode state, so HOME, the XDG variables and TMPDIR point at a temporary root before anything under
+// `@opencode/*` is imported; every such import is dynamic, after that setup.
 import { afterAll, describe, expect, test } from "vitest"
+import { execFileSync } from "node:child_process"
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath, pathToFileURL } from "node:url"
 
 const repo = fileURLToPath(new URL("../../", import.meta.url))
-const realHome = realpathSync(tmpdir() === "/tmp" ? "/tmp" : tmpdir())
+const bundle = join(repo, "dist", "index.js")
+if (!existsSync(bundle)) execFileSync(process.execPath, [join(repo, "scripts", "build.mjs")], { cwd: repo, stdio: "ignore" })
+
 const root = realpathSync(mkdtempSync(join(repo, "test", ".skills-host-")))
 const home = join(root, "home")
 for (const directory of [home, join(home, ".config"), join(home, ".local/share"), join(home, ".cache"), join(home, ".local/state"), join(root, "tmp")]) mkdirSync(directory, { recursive: true })
@@ -30,9 +34,9 @@ afterAll(() => {
   process.chdir(previous)
   rmSync(root, { recursive: true, force: true })
 })
-void realHome
 
 const SKILLS = ["utilities", "utilities-time", "utilities-weather", "utilities-speech", "utilities-sessions"] as const
+
 const description = (name: string) => {
   const text = readFileSync(join(repo, "skills", name, "SKILL.md"), "utf8").replace(/\r\n/g, "\n")
   const front = /^---\n([\s\S]*?)\n---/.exec(text)![1]!
@@ -40,7 +44,23 @@ const description = (name: string) => {
   return line.slice("description:".length).trim()
 }
 
-/** One SDK host with the plugin from `entry`, on the isolated home, and the skill list after activation. */
+/** A copy of the installed package: the built bundle, its manifest, and the five skills, one of them broken if named. */
+function packageCopy(name: string, broken?: string): string {
+  const directory = join(root, name)
+  mkdirSync(join(directory, "dist"), { recursive: true }); mkdirSync(join(directory, "skills"), { recursive: true })
+  cpSync(bundle, join(directory, "dist", "index.js"))
+  cpSync(join(repo, "package.json"), join(directory, "package.json"))
+  if (existsSync(join(repo, "manifest"))) cpSync(join(repo, "manifest"), join(directory, "manifest"), { recursive: true })
+  for (const skill of SKILLS) {
+    const to = join(directory, "skills", skill, "SKILL.md")
+    mkdirSync(dirname(to), { recursive: true })
+    if (skill === broken) writeFileSync(to, `---\nname: ${skill}\n---\nThis file has no description.\n`)
+    else cpSync(join(repo, "skills", skill, "SKILL.md"), to)
+  }
+  return directory
+}
+
+/** One SDK host with the plugin at `entry`, on the isolated home, and the skill list after activation. */
 async function skillsOf(entry: string, directory: string) {
   const { OpenCode } = await import("@opencode/sdk")
   const plugin = (await import(`${pathToFileURL(entry).href}?v=${encodeURIComponent(entry)}`)).default
@@ -73,31 +93,21 @@ async function skillsOf(entry: string, directory: string) {
 
 describe("the skills on the real host", () => {
   test("the built plugin registers utilities and the four topic skills, with their descriptions", async () => {
+    const packageRoot = packageCopy("package")
     const directory = join(root, "project"); mkdirSync(directory, { recursive: true }); writeFileSync(join(directory, "opencode.json"), "{}")
-    const { host, skills } = await skillsOf(join(repo, "dist/index.js"), directory)
+    const { host, skills } = await skillsOf(join(packageRoot, "dist/index.js"), directory)
     try {
       const found = skills.filter((skill: { id: string }) => (SKILLS as readonly string[]).includes(skill.id))
       expect(found.map((skill: { id: string }) => skill.id).sort()).toEqual([...SKILLS].sort())
       for (const skill of found) expect(skill.description, skill.id).toBe(description(skill.id))
       expect(found.every((skill: { autoinvoke?: boolean }) => skill.autoinvoke === true), "autoinvoke").toBe(true)
     } finally { await host.close() }
-  }, 60_000)
+  }, 120_000)
 
   test("a malformed skill is skipped, reported in status, and setup still succeeds", async () => {
-    // A copy of the installed package with one of its skill files malformed: the bundle reads its skills beside itself.
-    const copy = join(root, "broken-package")
-    mkdirSync(join(copy, "dist"), { recursive: true }); mkdirSync(join(copy, "skills"), { recursive: true })
-    cpSync(join(repo, "dist/index.js"), join(copy, "dist/index.js"))
-    cpSync(join(repo, "package.json"), join(copy, "package.json"))
-    if (existsSync(join(repo, "manifest"))) cpSync(join(repo, "manifest"), join(copy, "manifest"), { recursive: true })
-    for (const name of SKILLS) {
-      const from = join(repo, "skills", name, "SKILL.md"), to = join(copy, "skills", name, "SKILL.md")
-      mkdirSync(dirname(to), { recursive: true })
-      if (name === "utilities-time") writeFileSync(to, "---\nname: utilities-time\n---\nA description is missing.\n")
-      else cpSync(from, to)
-    }
+    const packageRoot = packageCopy("broken-package", "utilities-time")
     const directory = join(root, "broken-project"); mkdirSync(directory, { recursive: true }); writeFileSync(join(directory, "opencode.json"), "{}")
-    const { host, sessionID, skills } = await skillsOf(join(copy, "dist/index.js"), directory)
+    const { host, sessionID, skills } = await skillsOf(join(packageRoot, "dist/index.js"), directory)
     try {
       const ids = skills.map((skill: { id: string }) => skill.id)
       expect(ids).toContain("utilities")
@@ -108,5 +118,5 @@ describe("the skills on the real host", () => {
       expect(status.state).toBe("error")
       expect(String(status.nextStep)).toContain("utilities-time skill was not loaded")
     } finally { await host.close() }
-  }, 60_000)
+  }, 120_000)
 })
