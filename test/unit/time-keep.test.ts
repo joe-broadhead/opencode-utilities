@@ -1,5 +1,6 @@
 // The real time-keep program from this machine's native build (build/native), which `npm run check` builds first
 // (native:ensure). These tests pin what the synthetic fixture cannot: time-keep's own parsing and error messages.
+import * as z from "zod"
 import { afterAll, beforeAll, describe, expect, test } from "vitest"
 import { execFileSync } from "node:child_process"
 import { createHash } from "node:crypto"
@@ -9,6 +10,10 @@ import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { createRuntime } from "../../src/provider/runtime.js"
+import { createHandlers } from "../../src/handlers/index.js"
+import { manifest, version } from "../../src/manifest.js"
+import type { Provider } from "../../src/provider/index.js"
+import type { MethodCall } from "@we-the-rebel-alliance/plugin-contract/register"
 import type { Runtime } from "../../src/domain/contract.js"
 import { detectTarget } from "../../src/provider/backends.js"
 import { timeFailure } from "../../src/provider/modules/time/failures.js"
@@ -17,6 +22,7 @@ import { signal, VERSION } from "../fixtures.js"
 const repo = fileURLToPath(new URL("../../", import.meta.url))
 // The real program is what these tests pin. A clean clone without Rust has no build: skip the file, and say why.
 const realBuild = existsSync(join(repo, "manifest", "native.json")) && existsSync(join(repo, "build/native", detectTarget(), "time-keep"))
+if (!realBuild && process.env["CI"]) throw new Error(`the real time-keep suite must run in CI: no build/native/${detectTarget()}/time-keep. Run npm run native:ensure with Rust 1.96.0 first.`)
 if (!realBuild) console.warn(`SKIP the real time-keep tests: no build/native/${detectTarget()}/time-keep. Run npm run native:ensure with Rust 1.96.0; CI and the release always run these tests.`)
 describe.skipIf(!realBuild)("the real time-keep program", () => {
 /** The release copy this platform's build made, where the first-use path looks for it under a cache root. */
@@ -37,6 +43,43 @@ beforeAll(async () => {
 })
 afterAll(async () => { await runtime?.close(); if (root) await rm(root, { recursive: true, force: true }) })
 const call = (tool: Parameters<Runtime["invoke"]>[0], input: object) => runtime.invoke(tool, input, signal())
+
+/** A MethodCall for a handler's run: no accounts, and a bus that accepts the write event. */
+const handlerCall = () => ({
+  account: "default",
+  signal: signal(),
+  unguardedAgents: async () => ({ ok: true as const, agents: [] }),
+  bus: { name: "utilities", emit: async (event: string) => ({ ok: true as const, event }) },
+}) as unknown as MethodCall
+
+test("every offline time and timer answer parses with the output schema its handler publishes", async () => {
+  const handlers = createHandlers({
+    provider: { invoke: (tool: Parameters<Runtime["invoke"]>[0], input: unknown, callSignal: AbortSignal) => runtime.invoke(tool, input, callSignal) } as unknown as Provider,
+    manifest, version, hostVersion: "2.4.1", access: "all",
+  }) as unknown as Record<string, { output: unknown; run: (input: unknown, call: MethodCall) => Promise<unknown> }>
+  const cases: Array<[Parameters<Runtime["invoke"]>[0], object]> = [
+    ["time_now", { format: "rfc3339", timezones: ["UTC"] }],
+    ["time_convert", { datetime: "2026-10-30T12:00:00Z", from_timezone: "UTC", to_timezone: "Asia/Tokyo" }],
+    ["time_add", { date: "2026-10-30", operation: "add", amount: 1, unit: "days" }],
+    ["time_between", { from: "2026-10-30", to: "2026-11-02" }],
+    ["time_business_days", { mode: "next", date: "2026-10-30" }],
+    ["time_holidays", { mode: "check", date: "2026-10-30", country: "GB" }],
+    ["time_zone_info", { timezone: "Europe/London" }],
+    ["time_zones", {}],
+    ["time_calendar", { date: "2026-10-30" }],
+    ["time_format", { input: "2026-10-30T12:00:00Z", output_format: "epoch" }],
+    ["timer_set", { name: "schema-check", deadline: "2027-01-01T00:00:00Z" }],
+    ["timer_get", { name: "schema-check" }],
+    ["timer_list", {}],
+    ["timer_check", {}],
+    ["timer_delete", { name: "schema-check" }],
+  ]
+  for (const [method, input] of cases) {
+    const answer = await handlers[method]!.run(input, handlerCall())
+    const parser = z.fromJSONSchema(handlers[method]!.output as never)
+    expect(parser.safeParse(answer).success, method).toBe(true)
+  }
+})
 
 describe("daylight-saving changes and coverage get their own codes (UTIL-3, LIVE-4)", () => {
   test("a local time in a spring-forward gap is TIME_NONEXISTENT, naming the zone", async () => {

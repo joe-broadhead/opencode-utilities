@@ -53,19 +53,21 @@ there is no `release` environment in the way, so the release bot can publish onc
 
 ## Release assets
 
-The Release carries the pinned native programs and speech files because `native_install` and `speech_install` download
-them from it: `time-keep` and `weather-signal` (gzipped, per platform), the `utilities-speech` engine for each platform,
-and the Whisper and Kitten model files. It also carries `native.json` itself: a tag installed with
-`github:we-the-rebel-alliance/utilities-plugin#v<version>` has no `manifest/native.json` in its tree, so `readNativeManifest`
-fetches this asset, checks it with the same parser, and caches it under `<cacheRoot>/native/<tag>/native.json` for the
-next process. A 404, an offline fetch or invalid JSON is a clean `NATIVE_FILES_MISSING`/`CONTRACT_MISMATCH` refusal with
-the install next step.
+The Release carries the native programs and the manifest that pins them. `native_install` downloads `time-keep` and
+`weather-signal` from it. A tag installed with `github:we-the-rebel-alliance/utilities-plugin#v<version>` has no
+`manifest/native.json` in its tree, so `readNativeManifest` also fetches the release's `native.json`, checks it with the
+same parser and caches it under `<cacheRoot>/native/<tag>/native.json`. A 404, an offline fetch or invalid JSON is a
+clean `NATIVE_FILES_MISSING`/`CONTRACT_MISMATCH` refusal with the install next step.
 
-Before tagging, run the `native` workflow on the release commit on `master`. The release job finds that successful run,
-downloads its `native-manifest` artifact, checks it names this tag, repository and commit, and attaches it as
-`release/native.json`; the native and speech files are then staged from that run's artifacts and verified against the
-SHA-256 pins in `manifest/native.json` and `manifest/speech-assets.json`. A tag whose commit has no successful native run
-attaches no native manifest, native files or speech files: just the tarball, `release/conformance.json` and
-`release/SHA256SUMS`. `gh release create` receives every native and speech file by its exact manifest name
-(`scripts/release-assets.mjs`) — never a directory, `release/*` or a `find` listing. The three core assets and
-`release/native.json` are named directly as well; `SHA256SUMS` covers the tarball and the report.
+The `native` workflow runs on every push to master (and manually), so the tagged commit has a native run. The release job
+finds that successful run, downloads its `native-manifest` artifact, checks it names this tag, repository and commit,
+attaches it as `release/native.json`, and stages the native programs from that run's artifacts, verified against the
+SHA-256 pins in `manifest/native.json`. A tag whose commit has no successful native run attaches only the tarball,
+`release/conformance.json` and `release/SHA256SUMS`.
+
+Speech files are not attached by the release workflow. The release owner's bot carries the pinned `utilities-speech`
+engines and model files across a re-cut, verified against `manifest/speech-assets.json`; the native run still builds and
+attests them for its own checks, but the release job ignores those artifacts. `scripts/release-assets.mjs` names only the
+native and manifest files. `gh release create` receives `release/*.tgz`, `release/conformance.json`,
+`release/SHA256SUMS` and, when the native run exists, `release/native.json` plus every native file by its exact manifest
+name — never a directory, `release/*` or a `find` listing. `SHA256SUMS` covers the tarball and the report.

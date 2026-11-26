@@ -16,6 +16,14 @@
 - The two session stopgaps, `sessions` and `sessions_grep`: read-only status, spend, tokens and time windows over
   OpenCode's public session API, and exact-text search over OpenCode's SQLite database with masking and byte caps.
 - `changed` after every write (`utilities.timers`, `utilities.speech`, `utilities.native`).
+- The published JSON schema keeps a property named `format`: `time_now`'s answer includes it, and every zod-backed
+  method's published schema is checked against its canonical property names. A real-binary matrix parses every offline
+  time and timer answer with the register's own `z.fromJSONSchema` check.
+- The real time-keep suite fails in CI when the native build is absent; a local checkout without Rust skips it with an
+  explicit reason. CI runs the strict native build first.
+- The release workflow attaches only `native.json` and the native programs from the tagged commit's native run. The
+  release owner's bot carries the pinned speech engine/model bytes across a re-cut, and `native` runs on every master
+  push so the run exists.
 - Five skills (`utilities`, `utilities-time`, `utilities-weather`, `utilities-speech`, `utilities-sessions`), read from
   their `SKILL.md` front matter (YAML, including `>` and `|` block descriptions) and registered through
   `ctx.skill.transform` because OpenCode 2.4.1 does not load a plugin package's `skills/` folder itself.

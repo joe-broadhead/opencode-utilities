@@ -8,11 +8,15 @@ name: native
 # programs, writes manifest/native.json from the same bytes, checks every platform, attests the gzips and uploads them.
 # It publishes nothing: the release job reads this run's artifacts and checks them against the pins.
 #
-# Only a run on master makes release files: it attests them and uploads the artifacts the release job reads, and the
-# release planner refuses a run on any other branch. A run on another branch builds and checks everything the same way,
-# to prove a change to the builds before it lands, and attests and stages nothing.
+# Every push to master (and every manual run) builds and checks this way, so the tagged commit always has the run the
+# release needs. The release workflow attaches only the native programs and `native.json` from that run; the release
+# owner's bot carries the pinned speech engine/model bytes across a re-cut, verified against
+# manifest/speech-assets.json. A manual run on another branch builds and checks everything the same way, to prove a
+# change to the builds before it lands, and attests and stages nothing.
 
 on:
+  push:
+    branches: [master]
   workflow_dispatch:
 
 permissions:

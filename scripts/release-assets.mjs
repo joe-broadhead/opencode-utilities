@@ -1,27 +1,25 @@
 #!/usr/bin/env node
-// Prints the exact asset paths `gh release create` must upload for the pinned native and speech files, one per line:
-// every `name` in `manifest/native.json` (each module platform and each licence) and every `name` in
-// `manifest/speech-assets.json` (engines and models). The release never passes `release/native`, `release/native/*` or
-// a `find` listing, so a directory can never reach `gh release create` as an asset. Every listed file must be staged,
-// and a staged file no manifest names is refused: the release carries exactly what the pins describe.
+// Prints the exact asset paths `gh release create` must upload for the pinned native files, one per line: every `name`
+// in `manifest/native.json` (each module platform and each licence). The release never passes `release/native`,
+// `release/native/*` or a `find` listing, so a directory can never reach `gh release create` as an asset. Every listed
+// file must be staged, and a staged file no manifest names is refused: the release carries exactly what the pins
+// describe. Speech files are not listed: the release owner's bot carries the pinned speech bytes across a re-cut.
 //
 //   node scripts/release-assets.mjs <staging directory>
 //
-// A repository with no `manifest/native.json` prints nothing and exits 0: it has no native or speech extras.
+// A repository with no `manifest/native.json` prints nothing and exits 0: it has no native extras.
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { MANIFEST_PATH } from "./native-manifest.mjs"
 
-/** Every file name the two manifests pin, in a stable order: modules, licences, speech engines, speech models. */
-export function pinnedNames(manifest, speech) {
+/** Every file name `manifest/native.json` pins, in a stable order: modules, then licences. */
+export function pinnedNames(manifest) {
   const names = []
   for (const platforms of Object.values(manifest.modules ?? {})) {
     for (const entry of Object.values(platforms ?? {})) names.push(entry.name)
   }
   for (const licence of manifest.licences ?? []) names.push(licence.name)
-  for (const entry of Object.values(speech?.engines ?? {})) names.push(entry.name)
-  for (const entry of Object.values(speech?.models ?? {})) names.push(entry.name)
   const duplicate = names.find((name, index) => names.indexOf(name) !== index)
   if (duplicate) throw new Error(`the manifests pin ${duplicate} twice`)
   if (names.some(name => typeof name !== "string" || !name || name.includes("/"))) {
@@ -45,13 +43,11 @@ function main() {
   const directory = process.argv[2]
   if (!directory) throw new Error("usage: node scripts/release-assets.mjs <staging directory>")
   if (!existsSync(MANIFEST_PATH)) {
-    console.error(`release-assets: no ${MANIFEST_PATH}, so this release has no native or speech extras`)
+    console.error(`release-assets: no ${MANIFEST_PATH}, so this release has no native extras`)
     return
   }
   const manifest = JSON.parse(readFileSync(MANIFEST_PATH, "utf8"))
-  const speechPath = join("manifest", "speech-assets.json")
-  const speech = existsSync(speechPath) ? JSON.parse(readFileSync(speechPath, "utf8")) : undefined
-  for (const path of pinnedPaths(directory, pinnedNames(manifest, speech))) console.log(path)
+  for (const path of pinnedPaths(directory, pinnedNames(manifest))) console.log(path)
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
