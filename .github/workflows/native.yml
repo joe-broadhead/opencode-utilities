@@ -38,7 +38,7 @@ jobs:
             artifact: build-linux-x64-gnu
           - platform: linux-x64-gnu
             part: speech
-            runner: ubuntu-24.04
+            runner: boxd-public
             flags: --speech-only --floors
             artifact: speech-linux-x64-gnu
           - platform: linux-arm64-gnu
@@ -113,7 +113,7 @@ jobs:
   release-files:
     name: release files
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: boxd-public
     timeout-minutes: 30
     permissions:
       contents: read

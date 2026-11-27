@@ -3,8 +3,7 @@
 # build, the pack test and `plugin-kit check` (T0, T1 on OpenCode 2.4.1, the generated docs, the forbidden patterns, no
 # bundled kit).
 #
-# The runner rule is the family's: the org's `CI_RUNNER_PUBLIC` (the public self-hosted runner) when it is set, and
-# `ubuntu-24.04` otherwise or for a pull request from a fork. The native prerequisites step keeps the no-root fallback,
+# Every job asks for the org's public self-hosted runner, `boxd-public`, by name. The native prerequisites step keeps the no-root fallback,
 # because that runner grants no passwordless sudo.
 name: ci
 on:
@@ -21,7 +20,7 @@ concurrency:
 jobs:
   ci:
     name: ci
-    runs-on: ${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && (vars.CI_RUNNER_PUBLIC || 'ubuntu-24.04') || 'ubuntu-24.04' }}
+    runs-on: boxd-public
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
