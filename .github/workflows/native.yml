@@ -40,6 +40,7 @@ jobs:
           - platform: linux-x64-gnu
             part: speech
             runner: boxd-public
+            container: ubuntu@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b # 24.04, as before
             flags: --speech-only --floors
             artifact: speech-linux-x64-gnu
           # The arm64 entries stay on GitHub's runners: our scale sets are X64 only. Pending the owner's decision
@@ -66,21 +67,19 @@ jobs:
             artifact: build-darwin-x64
     runs-on: ${{ matrix.runner }}
     container: ${{ matrix.container }}
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 90
     steps:
-      # Our runners carry the build tools but not rustup, which the hosted images do. The 22.04 container is bare, so it
-      # also gets the build tools (as root); a runner without a container only gets rustup, into its own home.
-      - name: Rust prerequisites
-        if: startsWith(matrix.runner, 'boxd')
-        shell: bash
-        env:
-          CONTAINER: ${{ matrix.container }}
+      # Our runners carry the build tools but neither rustup, cmake nor libclang, which the hosted images do, and a job
+      # there has no root. So the two Linux builds run in a pinned Ubuntu container, where this step installs them.
+      - name: Build prerequisites
+        if: matrix.container
         run: |
           set -euo pipefail
-          if [ -n "$CONTAINER" ]; then
-            apt-get update
-            apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config xz-utils
-          fi
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config xz-utils cmake clang libclang-dev
           curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
