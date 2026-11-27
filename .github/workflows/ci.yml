@@ -3,8 +3,8 @@
 # build, the pack test and `plugin-kit check` (T0, T1 on OpenCode 2.4.1, the generated docs, the forbidden patterns, no
 # bundled kit).
 #
-# Every job asks for the org's public self-hosted runner, `boxd-public`, by name. The native prerequisites step keeps the no-root fallback,
-# because that runner grants no passwordless sudo.
+# The job asks for the org's public self-hosted runner, `boxd-public`, by name. The native prerequisites step keeps
+# the no-root fallback, because that runner grants no passwordless sudo.
 name: ci
 on:
   pull_request:
