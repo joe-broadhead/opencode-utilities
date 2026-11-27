@@ -72,14 +72,14 @@ jobs:
         shell: bash
     timeout-minutes: 90
     steps:
-      # Our runners carry the build tools but neither rustup, cmake nor libclang, which the hosted images do, and a job
+      # Our runners carry the build tools but neither rustup, python3, cmake nor libclang, which the hosted images do, and a job
       # there has no root. So the two Linux builds run in a pinned Ubuntu container, where this step installs them.
       - name: Build prerequisites
         if: matrix.container
         run: |
           set -euo pipefail
           apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config xz-utils cmake clang libclang-dev
+          apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config xz-utils python3 cmake clang libclang-dev
           curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
