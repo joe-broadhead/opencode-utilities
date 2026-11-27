@@ -43,9 +43,9 @@ jobs:
             container: ubuntu@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b # 24.04, as before
             flags: --speech-only --floors
             artifact: speech-linux-x64-gnu
-          # The arm64 entries stay on GitHub's runners for now: our scale sets are X64 only, and no decision records an
-          # exception to decision 0025 for them yet. The owner has to choose an arm64 scale set in ci-runners, a
-          # cross-build on boxd-public, or an amendment to decision 0025; this comment goes when that is done.
+          # The arm64 entries stay on GitHub's hosted arm64 runners, as principles decision 0026 says: boxd offers no
+          # arm64 machines, so a job that needs arm64 Linux stays hosted until boxd offers arm64 or a cross-build
+          # replaces it.
           - platform: linux-arm64-gnu
             part: programs
             runner: ubuntu-22.04-arm
