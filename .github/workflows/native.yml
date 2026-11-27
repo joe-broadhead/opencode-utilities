@@ -43,8 +43,9 @@ jobs:
             container: ubuntu@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b # 24.04, as before
             flags: --speech-only --floors
             artifact: speech-linux-x64-gnu
-          # The arm64 entries stay on GitHub's runners: our scale sets are X64 only. Pending the owner's decision
-          # (ci-runners#24): an arm64 scale set, a cross-build, or a recorded exception to decision 0025.
+          # The arm64 entries stay on GitHub's runners for now: our scale sets are X64 only, and no decision records an
+          # exception to decision 0025 for them yet. The owner has to choose an arm64 scale set in ci-runners, a
+          # cross-build on boxd-public, or an amendment to decision 0025; this comment goes when that is done.
           - platform: linux-arm64-gnu
             part: programs
             runner: ubuntu-22.04-arm
@@ -80,7 +81,12 @@ jobs:
           set -euo pipefail
           apt-get update
           apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config xz-utils python3 cmake clang libclang-dev
-          curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+          # rustup-init is pinned by version and SHA-256, as the toolchain is (1.96.0, below).
+          curl --proto '=https' --tlsv1.2 -fsSL -o "$RUNNER_TEMP/rustup-init" \
+            https://static.rust-lang.org/rustup/archive/1.29.3/x86_64-unknown-linux-gnu/rustup-init
+          echo "b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55  $RUNNER_TEMP/rustup-init" | sha256sum --check
+          chmod +x "$RUNNER_TEMP/rustup-init"
+          "$RUNNER_TEMP/rustup-init" -y --profile minimal --default-toolchain none
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Checkout
