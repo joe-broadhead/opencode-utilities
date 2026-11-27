@@ -68,13 +68,19 @@ jobs:
     container: ${{ matrix.container }}
     timeout-minutes: 90
     steps:
-      # The 22.04 container is bare: it has the build tools and rustup the hosted 22.04 image carries.
-      - name: Container prerequisites
-        if: matrix.container
+      # Our runners carry the build tools but not rustup, which the hosted images do. The 22.04 container is bare, so it
+      # also gets the build tools (as root); a runner without a container only gets rustup, into its own home.
+      - name: Rust prerequisites
+        if: startsWith(matrix.runner, 'boxd')
+        shell: bash
+        env:
+          CONTAINER: ${{ matrix.container }}
         run: |
           set -euo pipefail
-          apt-get update
-          apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config xz-utils
+          if [ -n "$CONTAINER" ]; then
+            apt-get update
+            apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config xz-utils
+          fi
           curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
