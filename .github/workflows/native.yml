@@ -33,14 +33,19 @@ jobs:
         include:
           - platform: linux-x64-gnu
             part: programs
-            runner: ubuntu-22.04
+            runner: boxd-public
+            container: ubuntu@sha256:b000e69a50ff940390233025e7a337fb8469b509e2334fa4d018ac30f3e18cdb # 22.04, for the glibc floor
             flags: --no-speech --floors
             artifact: build-linux-x64-gnu
           - platform: linux-x64-gnu
             part: speech
-            runner: ubuntu-24.04
+            runner: boxd-public
+            container: ubuntu@sha256:562111b88caa79c71391c0c4d3c2114a7d5c35915c20561fd893cb1e07929e6b # 24.04, as before
             flags: --speech-only --floors
             artifact: speech-linux-x64-gnu
+          # The arm64 entries stay on GitHub's hosted arm64 runners, as principles decision 0026 says: boxd offers no
+          # arm64 machines, so a job that needs arm64 Linux stays hosted until boxd offers arm64 or a cross-build
+          # replaces it.
           - platform: linux-arm64-gnu
             part: programs
             runner: ubuntu-22.04-arm
@@ -62,8 +67,28 @@ jobs:
             flags: ""
             artifact: build-darwin-x64
     runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    defaults:
+      run:
+        shell: bash
     timeout-minutes: 90
     steps:
+      # Our runners carry the build tools but neither rustup, python3, cmake nor libclang, which the hosted images do, and a job
+      # there has no root. So the two Linux builds run in a pinned Ubuntu container, where this step installs them.
+      - name: Build prerequisites
+        if: matrix.container
+        run: |
+          set -euo pipefail
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config xz-utils python3 cmake clang libclang-dev
+          # rustup-init is pinned by version and SHA-256, as the toolchain is (1.96.0, below).
+          curl --proto '=https' --tlsv1.2 -fsSL -o "$RUNNER_TEMP/rustup-init" \
+            https://static.rust-lang.org/rustup/archive/1.29.3/x86_64-unknown-linux-gnu/rustup-init
+          echo "b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55  $RUNNER_TEMP/rustup-init" | sha256sum --check
+          chmod +x "$RUNNER_TEMP/rustup-init"
+          "$RUNNER_TEMP/rustup-init" -y --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -113,7 +138,7 @@ jobs:
   release-files:
     name: release files
     needs: build
-    runs-on: ubuntu-24.04
+    runs-on: boxd-public
     timeout-minutes: 30
     permissions:
       contents: read
